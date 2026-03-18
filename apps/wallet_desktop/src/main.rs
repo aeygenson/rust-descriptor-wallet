@@ -1,3 +1,3 @@
 fn main() {
-    println!("Hello, world!");
+    println!("wallet_desktop placeholder");
 }

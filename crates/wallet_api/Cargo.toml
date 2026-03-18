@@ -1,6 +1,13 @@
 [package]
 name = "wallet_api"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 
 [dependencies]
+anyhow.workspace = true
+serde.workspace = true
+wallet_core={path="../wallet_core"}
+wallet_sync={path="../wallet_sync"}
+wallet_storage={path="../wallet_storage"}

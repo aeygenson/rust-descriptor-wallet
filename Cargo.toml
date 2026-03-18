@@ -1,0 +1,24 @@
+[workspace]
+    members = [
+        "crates/wallet_core",
+        "crates/wallet_sync",
+        "crates/wallet_storage",
+        "crates/wallet_api",
+        "apps/wallet_cli",
+        "apps/wallet_desktop",
+    ]
+resolver = "2"
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+authors = ["Alex Eygenson"]
+[workspace.dependencies]
+anyhow = "1"
+serde = {version = "1",features = ["derive"]}
+serde_json = "1"
+thiserror = "2"
+tokio = {version = "1", features = ["rt-multi-thread","macros"]}
+bdk_wallet = "2.3.0"
+bdk_esplora = {version = "0.22.1",features = ["blocking"]}
+bdk_file_store = "0.22.0"
