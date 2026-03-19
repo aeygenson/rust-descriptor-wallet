@@ -1,223 +1,145 @@
-# 🦀 Rust Descriptor Wallet  
-### BDK • Tauri • Production-Grade Architecture
+# Rust Descriptor Wallet
 
-![Rust](https://img.shields.io/badge/Rust-1.75+-orange)
+![Rust](https://img.shields.io/badge/Rust-2021-orange)
 ![BDK](https://img.shields.io/badge/BDK-2.x-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-in--progress-yellow)
+![Status](https://img.shields.io/badge/status-actively--developing-yellow)
 
-A modern **Bitcoin descriptor-based wallet** written in **Rust**, powered by **BDK (Bitcoin Dev Kit)** with a **Tauri desktop UI**.
+A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundaries, BDK-based wallet logic, and a path toward a desktop wallet with a clear separation between core logic, sync, storage, API, and UI.
 
----
+This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-## 🚀 Overview
+## Vision
 
-This project is a **production-style Bitcoin wallet** designed to demonstrate real-world architecture:
+The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 
-- Descriptor wallets (`wpkh`, `tr`)
-- UTXO model
-- PSBT workflow (create → sign → finalize)
-- Coin selection & fee handling
-- Clean modular Rust design
+- clean Rust workspace architecture
+- explicit separation of wallet logic, sync, storage, and presentation
+- a practical PSBT-oriented transaction flow
+- a codebase that can evolve from CLI-first development into a desktop application
 
-Built as:
-- 📚 Learning project  
-- 💼 Interview showcase  
-- 🧠 Deep dive into Bitcoin internals  
-
----
-
-## 🎯 Goals
-
-- Understand Bitcoin at system level
-- Build interview-ready architecture
-- Demonstrate production-grade Rust design
-
----
-
-## 🏗 Architecture
-
-### High-Level Diagram
+## Architecture
 
 ![Architecture](docs/architecture.svg)
 
----
+### Components
 
-### 🔧 Components
+- `wallet_core (BDK)`: descriptor handling, wallet state, address derivation, transaction construction, and PSBT flow
+- `wallet_sync`: blockchain synchronization layer
+- `wallet_storage`: local persistence layer
+- `wallet_api`: orchestration boundary shared by apps
+- `wallet_cli`: command-line entry point
+- `wallet_desktop`: desktop app entry point
 
-#### 🖥 Tauri UI
-- Desktop frontend
-- Calls Rust commands via `wallet_api`
-
-#### 🔌 wallet_api
-- Command layer (CLI + UI bridge)
-- Input validation
-- Orchestration
-
-#### 🧠 wallet_core (BDK)
-- Descriptor handling
-- Address derivation
-- UTXO tracking
-- Transaction builder
-- PSBT workflow
-
-#### 🌐 wallet_sync
-- Esplora client
-- Supports Signet / Testnet / Mainnet
-
-#### 🗄 wallet_storage
-- Local persistence (file / SQLite)
-
-#### 🔐 signer
-- Software signer (current)
-- Hardware wallet support (planned)
-
----
-
-## ⚙️ Features
-
-### ✅ MVP
-
-- Descriptor wallet (`wpkh`)
-- Address generation
-- External/internal chains (`/0/*`, `/1/*`)
-- Sync via Esplora (Signet)
-- UTXO tracking
-- Balance calculation
-- Transaction builder
-- PSBT creation & signing
-
----
-
-### 🔜 Planned
-
-- 🖥 Full Tauri UI
-- 👁 Watch-only wallets
-- 🌳 Taproot (`tr`)
-- 🔐 Hardware wallet support
-- 🔄 RBF (fee bumping)
-- 🧾 PSBT import/export
-- 🧠 Miniscript policies
-
----
-
-## 🧠 Concepts Demonstrated
-
-### Bitcoin
-- UTXO model
-- Transaction lifecycle
-- Fee calculation
-
-### Wallet Design
-- Descriptor wallets
-- HD wallets (BIP32 / BIP84)
-- Change address management
-- Gap limit scanning
-
-### Advanced
-- PSBT workflow
-- Coin selection
-- Watch-only vs signing separation
-
----
-
-## 📦 Project Structure
+## Project Structure
 
 ![Project Structure](docs/project-structure.svg)
 
----
+## Current Progress
 
-## ▶️ Getting Started
+### Implemented
+
+- Rust workspace with separate crates and app entry points
+- `wallet_cli`, `wallet_desktop`, `wallet_api`, `wallet_core`, `wallet_sync`, and `wallet_storage` crates wired into the workspace
+- architecture and project-structure documentation
+- CLI executable that builds and runs
+- API-to-core integration scaffold
+
+### In Progress
+
+- wallet logic inside `wallet_core`
+- sync integration inside `wallet_sync`
+- persistence layer in `wallet_storage`
+- richer command surface in `wallet_api`
+- CLI feature expansion
+
+### Expected Shortly
+
+- real wallet actions exposed through the CLI
+- descriptor-driven wallet state
+- sync and storage integration
+- first end-to-end wallet flow across the workspace layers
+
+## Planned Capabilities
+
+The intended feature set includes:
+
+- descriptor wallets with `wpkh` and later `tr`
+- external and internal derivation paths
+- blockchain sync through Esplora
+- balance and UTXO tracking
+- transaction building
+- PSBT creation and signing flow
+- watch-only support
+- hardware signer support
+- desktop UI built on the same API boundary
+
+## Getting Started
+
+### Prerequisites
+
+- Rust toolchain
+- Cargo
+
+### Build
 
 ```bash
-git clone https://github.com/aeygenson/rust-descriptor-wallet.git
-cd rust-descriptor-wallet
 cargo build
+```
+
+### Run the Current CLI
+
+```bash
 cargo run -p wallet_cli
 ```
 
----
+Current output:
 
-## 🧪 Example Usage
-
-```bash
-wallet address
-wallet sync
-wallet balance
-wallet utxos
-wallet send --to bc1... --amount 0.01
+```text
+Welcome to rust-descriptor-wallet
 ```
 
----
+The CLI is still at the scaffold stage, so the workspace structure and architecture are ahead of the implemented wallet commands.
 
-## 🌐 Network
+## Why Descriptor Wallets
 
-Default: **Signet**
+Descriptor-based wallets make wallet behavior explicit and easier to reason about:
 
-https://blockstream.info/signet/api/
+- script structure is declared directly
+- derivation paths are clearer
+- watch-only and signing roles can be separated more cleanly
+- wallet policy becomes easier to evolve over time
 
----
-
-## 🔐 Security Model
-
-- Descriptor-based architecture
-- PSBT signing workflow (no raw key exposure)
-- Separation of:
-  - wallet logic
-  - UI layer
-  - signing layer
-- Hardware wallet–ready design
-
----
-
-## 🧪 Example Descriptor
+## Example Descriptor Shape
 
 External:
-```
+
+```text
 wpkh([fingerprint/84'/1'/0']tpub.../0/*)
 ```
 
 Internal:
-```
+
+```text
 wpkh([fingerprint/84'/1'/0']tpub.../1/*)
 ```
 
----
+## Development Roadmap
 
-## 🧭 Roadmap
+1. implement wallet primitives in `wallet_core`
+2. integrate sync in `wallet_sync`
+3. add persistence in `wallet_storage`
+4. expose real operations through `wallet_api`
+5. expand `wallet_cli` into a usable development interface
+6. build out `wallet_desktop`
 
-- Phase 1 → Wallet core, CLI, Sync  
-- Phase 2 → Transactions + PSBT  
-- Phase 3 → Persistence  
-- Phase 4 → Tauri UI  
-- Phase 5 → Taproot + Hardware wallet  
+## Development Notes
 
----
+- workspace edition: Rust 2021
+- resolver: Cargo resolver v2
+- BDK dependencies are already declared at the workspace level
+- the repository is currently in active build-out rather than feature-complete state
 
-## 🎯 Why This Project Matters
+## Author
 
-This project demonstrates:
-
-- Real-world Bitcoin wallet architecture
-- Production-quality Rust engineering
-- Clean modular system design
-- Deep understanding of:
-  - descriptors
-  - PSBT
-  - UTXO model
-
----
-
-## 👤 Author
-
-**Alex Eygenson**  
-Rust • Finance • Trading Systems  
-
----
-
-## ⭐ Support
-
-If you find this useful:
-
-- ⭐ Star the repo  
-- 👀 Follow development  
+Alex Eygenson
