@@ -74,6 +74,18 @@ The intended feature set includes:
 - hardware signer support
 - desktop UI built on the same API boundary
 
+## PSBT Flow
+
+![PSBT Flow](docs/psbt-flow.svg)
+
+The intended transaction flow is:
+
+1. wallet state and descriptors define spendable coins and change policy
+2. the builder selects inputs and constructs outputs
+3. a PSBT is created as the signing handoff format
+4. a signer adds signatures without owning the full wallet application layer
+5. the finalized transaction is broadcast to the network
+
 ## Getting Started
 
 ### Prerequisites

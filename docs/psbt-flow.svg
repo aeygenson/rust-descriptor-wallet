@@ -1,0 +1,73 @@
+<svg width="1600" height="760" viewBox="0 0 1600 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#EEF2F7" />
+    </linearGradient>
+    <linearGradient id="accentFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#DBEAFE" />
+      <stop offset="100%" stop-color="#E0F2FE" />
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#EEF4FF" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.10" />
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#334155" />
+    </marker>
+    <style>
+      .title { font-family: Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #0F172A; letter-spacing: 0.04em; }
+      .label { font-family: Helvetica, Arial, sans-serif; font-size: 17px; font-weight: 600; fill: #0F172A; }
+      .subtle { font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; fill: #475569; }
+      .small { font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #0369A1; letter-spacing: 0.06em; }
+      .edge { stroke: #334155; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .card { fill: url(#cardFill); stroke: #0F172A; stroke-width: 3; filter: url(#shadow); }
+      .accent { fill: url(#accentFill); stroke: #0F172A; stroke-width: 3; filter: url(#shadow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="760" fill="url(#bg)" />
+  <circle cx="130" cy="130" r="150" fill="#DCEAFE" opacity="0.45" />
+  <circle cx="1470" cy="630" r="210" fill="#E2E8F0" opacity="0.45" />
+
+  <text x="800" y="64" text-anchor="middle" class="title">PSBT FLOW</text>
+
+  <rect class="card" x="70" y="220" rx="28" ry="28" width="240" height="130" />
+  <text x="190" y="278" text-anchor="middle" class="small">INPUT</text>
+  <text x="190" y="308" text-anchor="middle" class="label">Descriptor Wallet</text>
+  <text x="190" y="336" text-anchor="middle" class="subtle">utxos, policy, change path</text>
+
+  <rect class="card" x="360" y="220" rx="28" ry="28" width="250" height="130" />
+  <text x="485" y="278" text-anchor="middle" class="small">BUILD</text>
+  <text x="485" y="308" text-anchor="middle" class="label">Tx Builder</text>
+  <text x="485" y="336" text-anchor="middle" class="subtle">select inputs and outputs</text>
+
+  <rect class="accent" x="660" y="220" rx="28" ry="28" width="250" height="130" />
+  <text x="785" y="278" text-anchor="middle" class="small">CREATE</text>
+  <text x="785" y="308" text-anchor="middle" class="label">PSBT</text>
+  <text x="785" y="336" text-anchor="middle" class="subtle">unsigned transaction package</text>
+
+  <rect class="card" x="960" y="220" rx="28" ry="28" width="250" height="130" />
+  <text x="1085" y="278" text-anchor="middle" class="small">SIGN</text>
+  <text x="1085" y="308" text-anchor="middle" class="label">Signer</text>
+  <text x="1085" y="336" text-anchor="middle" class="subtle">software or hardware signer</text>
+
+  <rect class="card" x="1260" y="220" rx="28" ry="28" width="250" height="130" />
+  <text x="1385" y="278" text-anchor="middle" class="small">FINALIZE</text>
+  <text x="1385" y="308" text-anchor="middle" class="label">Broadcast Tx</text>
+  <text x="1385" y="336" text-anchor="middle" class="subtle">final transaction to network</text>
+
+  <rect class="card" x="675" y="500" rx="28" ry="28" width="220" height="110" />
+  <text x="785" y="555" text-anchor="middle" class="label">wallet_storage</text>
+  <text x="785" y="583" text-anchor="middle" class="subtle">persist drafts and state</text>
+
+  <path class="edge" d="M310 285H360" />
+  <path class="edge" d="M610 285H660" />
+  <path class="edge" d="M910 285H960" />
+  <path class="edge" d="M1210 285H1260" />
+
+  <path class="edge" d="M785 350V500" />
+</svg>
