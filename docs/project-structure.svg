@@ -1,0 +1,69 @@
+<svg width="1600" height="860" viewBox="0 0 1600 860" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cardFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#EEF2F7" />
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#F8FAFC" />
+      <stop offset="100%" stop-color="#EEF4FF" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.10" />
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10V0Z" fill="#334155" />
+    </marker>
+    <style>
+      .title { font-family: Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #0F172A; letter-spacing: 0.04em; }
+      .label { font-family: Helvetica, Arial, sans-serif; font-size: 17px; font-weight: 600; fill: #0F172A; }
+      .subtle { font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; fill: #475569; }
+      .edge { stroke: #334155; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
+      .card { fill: url(#cardFill); stroke: #0F172A; stroke-width: 3; filter: url(#shadow); }
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="860" fill="url(#bg)" />
+  <circle cx="140" cy="180" r="170" fill="#DCEAFE" opacity="0.45" />
+  <circle cx="1450" cy="700" r="230" fill="#E2E8F0" opacity="0.50" />
+
+  <text x="800" y="68" text-anchor="middle" class="title">PROJECT STRUCTURE</text>
+
+  <rect class="card" x="585" y="110" rx="28" ry="28" width="430" height="120" />
+  <text x="800" y="180" text-anchor="middle" class="label">rust-descriptor-wallet</text>
+
+  <rect class="card" x="280" y="320" rx="28" ry="28" width="320" height="120" />
+  <text x="440" y="390" text-anchor="middle" class="label">crates/</text>
+
+  <rect class="card" x="1000" y="320" rx="28" ry="28" width="320" height="120" />
+  <text x="1160" y="390" text-anchor="middle" class="label">apps/</text>
+
+  <rect class="card" x="40" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="150" y="670" text-anchor="middle" class="label">wallet_core</text>
+
+  <rect class="card" x="300" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="410" y="670" text-anchor="middle" class="label">wallet_sync</text>
+
+  <rect class="card" x="560" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="670" y="670" text-anchor="middle" class="label">wallet_storage</text>
+
+  <rect class="card" x="820" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="930" y="670" text-anchor="middle" class="label">wallet_api</text>
+
+  <rect class="card" x="1080" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="1190" y="670" text-anchor="middle" class="label">wallet_cli</text>
+
+  <rect class="card" x="1340" y="600" rx="28" ry="28" width="220" height="120" />
+  <text x="1450" y="670" text-anchor="middle" class="label">wallet_desktop</text>
+
+  <path class="edge" d="M790 230L470 320" />
+  <path class="edge" d="M810 230L1130 320" />
+
+  <path class="edge" d="M430 440L150 600" />
+  <path class="edge" d="M455 440L410 600" />
+  <path class="edge" d="M480 440L670 600" />
+  <path class="edge" d="M505 440L930 600" />
+
+  <path class="edge" d="M1140 440L1190 600" />
+  <path class="edge" d="M1180 440L1450 600" />
+</svg>

@@ -39,7 +39,7 @@ Built as:
 
 ### High-Level Diagram
 
-![Architecture](docs/architecture.png)
+![Architecture](docs/architecture.svg)
 
 ---
 
@@ -123,7 +123,7 @@ Built as:
 
 ## 📦 Project Structure
 
-![Project Structure](docs/project-structure.png)
+![Project Structure](docs/project-structure.svg)
 
 ---
 
