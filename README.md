@@ -9,6 +9,8 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
+Current milestone: wallet metadata can now be stored and queried through the storage and API layers.
+
 ## Vision
 
 The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
@@ -42,22 +44,24 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - Rust workspace with separate crates and app entry points
 - `wallet_cli`, `wallet_desktop`, `wallet_api`, `wallet_core`, `wallet_sync`, and `wallet_storage` crates wired into the workspace
 - architecture and project-structure documentation
-- CLI executable that builds and runs
-- API-to-core integration scaffold
+- SQLite-backed wallet registry in `wallet_storage`
+- automatic storage initialization and migration on API startup
+- wallet import, listing, lookup, and deletion through `wallet_api`
+- CLI commands for wallet metadata management
 
 ### In Progress
 
 - wallet logic inside `wallet_core`
 - sync integration inside `wallet_sync`
-- persistence layer in `wallet_storage`
+- per-wallet runtime behavior beyond stored metadata
 - richer command surface in `wallet_api`
-- CLI feature expansion
+- desktop bootstrap alignment with the async API construction
 
 ### Expected Shortly
 
 - real wallet actions exposed through the CLI
 - descriptor-driven wallet state
-- sync and storage integration
+- sync integration on top of persisted wallet info
 - first end-to-end wallet flow across the workspace layers
 
 ## Planned Capabilities
@@ -67,6 +71,7 @@ The intended feature set includes:
 - descriptor wallets with `wpkh` and later `tr`
 - external and internal derivation paths
 - blockchain sync through Esplora
+- persisted wallet metadata and per-wallet database paths
 - balance and UTXO tracking
 - transaction building
 - PSBT creation and signing flow
@@ -96,22 +101,47 @@ The intended transaction flow is:
 ### Build
 
 ```bash
-cargo build
+cargo build -p wallet_cli
 ```
 
 ### Run the Current CLI
 
 ```bash
-cargo run -p wallet_cli
+cargo run -p wallet_cli -- --help
 ```
 
 Current output:
 
 ```text
-Welcome to rust-descriptor-wallet
+Rust Descriptor Wallet CLI
+Usage: wallet_cli <COMMAND>
 ```
 
-The CLI is still at the scaffold stage, so the workspace structure and architecture are ahead of the implemented wallet commands.
+Current wallet-management commands:
+
+```bash
+cargo run -p wallet_cli -- import-wallet --file wallet.json
+cargo run -p wallet_cli -- list-wallets
+cargo run -p wallet_cli -- get-wallet signet-dev
+cargo run -p wallet_cli -- delete-wallet signet-dev
+```
+
+What is stored right now:
+
+- wallet name
+- network
+- external descriptor
+- internal descriptor
+- Esplora URL
+- watch-only flag
+- derived per-wallet database path
+
+Storage location:
+
+- app database: `~/.rust-descriptor-wallet/app.db`
+- per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
+
+The CLI now manages wallet metadata, while full wallet runtime operations are still being filled in.
 
 ## Why Descriptor Wallets
 
@@ -134,6 +164,19 @@ Internal:
 
 ```text
 wpkh([fingerprint/84'/1'/0']tpub.../1/*)
+```
+
+## Example Import File
+
+```json
+{
+  "name": "signet-dev",
+  "network": "signet",
+  "esplora_url": "https://blockstream.info/signet/api/",
+  "external_descriptor": "tr([fingerprint/86'/1'/0']tpub.../0/*)#checksum",
+  "internal_descriptor": "tr([fingerprint/86'/1'/0']tpub.../1/*)#checksum",
+  "is_watch_only": true
+}
 ```
 
 ## Development Roadmap
