@@ -6,8 +6,11 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-anyhow.workspace = true
-serde.workspace = true
+thiserror.workspace = true
 wallet_core={path="../wallet_core"}
 wallet_sync={path="../wallet_sync"}
 wallet_storage={path="../wallet_storage"}
+tokio.workspace = true
+sqlx = "0.8.6"
+serde_json.workspace = true
+serde.workspace = true

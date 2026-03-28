@@ -6,6 +6,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-anyhow.workspace = true
+thiserror.workspace = true
 bdk_esplora.workspace = true
 bdk_wallet.workspace = true
+wallet_core={path="../wallet_core"}

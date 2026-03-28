@@ -1,3 +1,6 @@
+use wallet_api::WalletApi;
+
 fn main() {
-    println!("wallet_desktop placeholder");
+    let _api = WalletApi::default();
+    println!("wallet_desktop bootstrap");
 }

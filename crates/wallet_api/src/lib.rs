@@ -1,3 +1,10 @@
-pub fn app_banner() -> String {
-    format!("Welcome to {}", wallet_core::project_name())
-}
+pub mod error;
+mod api;
+mod factory;
+mod services;
+pub mod dto;
+
+pub use api::WalletApi;
+pub use error::WalletApiError;
+
+pub type WalletApiResult<T> = Result<T, WalletApiError>;
