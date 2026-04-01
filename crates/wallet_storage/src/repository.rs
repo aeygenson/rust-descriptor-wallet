@@ -1,6 +1,6 @@
 use crate::db::default_wallet_db_path;
 use crate::{WalletRecord, WalletStorageError, WalletStorageResult};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{SqlitePool};
 use crate::models::ImportWalletFile;
 use std::fs;
 /// Fetch wallet by name

@@ -11,3 +11,4 @@ thiserror.workspace = true
 bdk_wallet.workspace = true
 bdk_file_store.workspace = true
 bitcoin.workspace = true
+tracing.workspace = true

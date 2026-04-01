@@ -13,4 +13,5 @@ sqlx.workspace = true
 tokio.workspace = true
 dirs.workspace = true
 bitcoin.workspace = true
+tracing.workspace = true
 

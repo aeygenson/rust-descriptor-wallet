@@ -20,9 +20,12 @@ serde_json = "1"
 thiserror = "2"
 tokio = {version = "1", features = ["rt-multi-thread","macros"]}
 sqlx = {version = "0.8", features = ["sqlite","runtime-tokio-rustls","macros"]}
-bdk_wallet = "2.3.0"
+bdk_wallet = { version = "2.3.0", features = ["file_store"] }
 bdk_esplora = {version = "0.22.1",features = ["blocking"]}
-bdk_file_store = "0.22.0"
+bdk_file_store = "0.21"
+bdk_chain = "0.23.3"
 bitcoin = "0.32"
 clap = {version = "4",features = ["derive"]}
 dirs = "6"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

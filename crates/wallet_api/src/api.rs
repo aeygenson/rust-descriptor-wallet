@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::factory::build_default_api;
-use crate::services::{markers, status, wallets};
+use crate::services::{runtime, status, wallets};
 use crate::WalletApiResult;
 
 use crate::dto::{WalletDetailsDto, WalletSummaryDto};
@@ -31,11 +31,7 @@ impl WalletApi {
     }
 
     pub async fn status(&self) -> WalletApiResult<String> {
-        status::status(&self.core, &self.storage, &self.sync).await
-    }
-
-    pub async fn load_marker(&self, key: &str) -> WalletApiResult<String> {
-        markers::load_marker(&self.storage, key).await
+        status::status(&self.core, &self.storage).await
     }
 
     pub async fn list_wallets(&self) -> WalletApiResult<Vec<WalletSummaryDto>> {
@@ -52,6 +48,18 @@ impl WalletApi {
 
     pub async fn delete_wallet(&self, name: &str) -> WalletApiResult<()> {
         wallets::delete_wallet(&self.storage, name).await
+    }
+
+    pub async fn address(&self, name: &str) -> WalletApiResult<String> {
+        runtime::address(&self.storage, name).await
+    }
+
+    pub async fn sync_wallet(&self, name: &str) -> WalletApiResult<()> {
+        runtime::sync(&self.storage, name).await
+    }
+
+    pub async fn balance(&self, name: &str) -> WalletApiResult<u64> {
+        runtime::balance(&self.storage, name).await
     }
 
     pub fn core(&self) -> &Arc<WalletCore> {

@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: wallet metadata can now be stored and queried through the storage and API layers.
+Current milestone: persisted wallets can now be loaded at runtime for address generation, chain sync, and balance queries.
 
 ## Vision
 
@@ -48,20 +48,22 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - automatic storage initialization and migration on API startup
 - wallet import, listing, lookup, and deletion through `wallet_api`
 - CLI commands for wallet metadata management
+- runtime wallet loading and creation backed by per-wallet BDK file stores
+- receive-address generation for stored wallets
+- Esplora-based wallet sync
+- balance queries over persisted wallet state
 
 ### In Progress
 
-- wallet logic inside `wallet_core`
-- sync integration inside `wallet_sync`
-- per-wallet runtime behavior beyond stored metadata
+- descriptor validation and richer domain logic inside `wallet_core`
+- transaction building and PSBT workflow
 - richer command surface in `wallet_api`
-- desktop bootstrap alignment with the async API construction
+- desktop integration on top of the same runtime API
 
 ### Expected Shortly
 
-- real wallet actions exposed through the CLI
-- descriptor-driven wallet state
-- sync integration on top of persisted wallet info
+- send / PSBT-oriented wallet actions exposed through the CLI
+- richer runtime inspection such as UTXOs and transaction history
 - first end-to-end wallet flow across the workspace layers
 
 ## Planned Capabilities
@@ -72,7 +74,8 @@ The intended feature set includes:
 - external and internal derivation paths
 - blockchain sync through Esplora
 - persisted wallet metadata and per-wallet database paths
-- balance and UTXO tracking
+- runtime address derivation and balance tracking
+- UTXO tracking
 - transaction building
 - PSBT creation and signing flow
 - watch-only support
@@ -101,7 +104,7 @@ The intended transaction flow is:
 ### Build
 
 ```bash
-cargo build -p wallet_cli
+cargo build
 ```
 
 ### Run the Current CLI
@@ -124,6 +127,9 @@ cargo run -p wallet_cli -- import-wallet --file wallet.json
 cargo run -p wallet_cli -- list-wallets
 cargo run -p wallet_cli -- get-wallet signet-dev
 cargo run -p wallet_cli -- delete-wallet signet-dev
+cargo run -p wallet_cli -- address --name signet-dev
+cargo run -p wallet_cli -- sync --name signet-dev
+cargo run -p wallet_cli -- balance --name signet-dev
 ```
 
 What is stored right now:
@@ -136,12 +142,19 @@ What is stored right now:
 - watch-only flag
 - derived per-wallet database path
 
+What works at runtime now:
+
+- load or create a persisted BDK wallet from the stored descriptors
+- reveal the next external receive address and persist the derivation state
+- sync wallet state through the configured Esplora endpoint
+- read total balance from the persisted wallet state
+
 Storage location:
 
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now manages wallet metadata, while full wallet runtime operations are still being filled in.
+The CLI now covers both wallet metadata management and basic runtime operations. Transaction building and PSBT flow are the next major step.
 
 ## Why Descriptor Wallets
 

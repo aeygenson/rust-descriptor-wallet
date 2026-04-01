@@ -10,3 +10,5 @@ anyhow.workspace = true
 wallet_api = { path = "../../crates/wallet_api" }
 clap.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

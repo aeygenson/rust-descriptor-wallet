@@ -1,13 +1,11 @@
 pub mod error;
-pub  use error::WalletCoreError;
-pub  type WalletCoreResult<T> = Result<T, WalletCoreError>;
-#[derive(Debug)]
-pub  struct WalletCore;
-impl WalletCore {
-    pub fn new() -> Self {
-        Self
-    }
-    pub  fn health_check(&self)->WalletCoreResult<&'static str> {
-        Ok("wallet_core OK")
-    }
-}
+pub mod config;
+pub mod core;
+pub mod service;
+
+pub use config::WalletConfig;
+pub use core::WalletCore;
+pub use error::WalletCoreError;
+pub use service::WalletService;
+
+pub type WalletCoreResult<T> = Result<T, WalletCoreError>;

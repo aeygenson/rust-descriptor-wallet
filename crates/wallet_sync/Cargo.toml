@@ -10,3 +10,5 @@ thiserror.workspace = true
 bdk_esplora.workspace = true
 bdk_wallet.workspace = true
 wallet_core={path="../wallet_core"}
+tracing.workspace = true
+bdk_chain.workspace = true

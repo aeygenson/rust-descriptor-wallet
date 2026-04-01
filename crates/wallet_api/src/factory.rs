@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use crate::api::WalletApi;
-use crate::{WalletApiError, WalletApiResult};
+use crate::{ WalletApiResult};
 
 use wallet_core::WalletCore;
 use wallet_storage::WalletStorage;
