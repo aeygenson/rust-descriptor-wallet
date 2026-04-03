@@ -2,6 +2,7 @@ pub mod error;
 pub mod config;
 pub mod core;
 pub mod service;
+pub mod model;
 
 pub use config::WalletConfig;
 pub use core::WalletCore;

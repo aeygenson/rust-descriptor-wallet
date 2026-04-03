@@ -10,7 +10,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Commands {
-    Status,
+    Status {
+        #[arg(long)]
+        name: String,
+    },
     ListWallets,
     GetWallet {
         #[arg(long)]
@@ -33,6 +36,14 @@ pub enum Commands {
         name: String,
     },
     Balance {
+        #[arg(long)]
+        name: String,
+    },
+    Txs {
+        #[arg(long)]
+        name: String,
+    },
+    Utxos {
         #[arg(long)]
         name: String,
     },

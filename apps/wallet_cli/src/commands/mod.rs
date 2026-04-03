@@ -1,5 +1,3 @@
-
-
 pub mod wallet;
 pub mod runtime;
 
@@ -10,9 +8,8 @@ use crate::cli::Commands;
 
 pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
     match cmd {
-        Commands::Status => {
-            let status = api.status().await?;
-            println!("{status}");
+        Commands::Status { name } => {
+            runtime::status(api, &name).await?;
         }
         Commands::ListWallets => {
             wallet::list_wallets(api).await?;
@@ -34,6 +31,12 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         }
         Commands::Balance { name } => {
             runtime::balance(api, &name).await?;
+        }
+        Commands::Txs { name } => {
+            runtime::txs(api, &name).await?;
+        }
+        Commands::Utxos { name } => {
+            runtime::utxos(api, &name).await?;
         }
     }
 

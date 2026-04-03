@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use crate::factory::build_default_api;
-use crate::services::{runtime, status, wallets};
+use crate::services::{runtime, wallets};
 use crate::WalletApiResult;
 
-use crate::dto::{WalletDetailsDto, WalletSummaryDto};
+use crate::dto::{WalletDetailsDto, WalletStatusDto, WalletSummaryDto, WalletTxDto, WalletUtxoDto};
 
 use wallet_core::WalletCore;
 use wallet_storage::WalletStorage;
@@ -30,8 +30,8 @@ impl WalletApi {
         Self { core, storage, sync }
     }
 
-    pub async fn status(&self) -> WalletApiResult<String> {
-        status::status(&self.core, &self.storage).await
+    pub async fn status(&self, name: &str) -> WalletApiResult<WalletStatusDto> {
+        runtime::status(&self.storage, name).await
     }
 
     pub async fn list_wallets(&self) -> WalletApiResult<Vec<WalletSummaryDto>> {
@@ -60,6 +60,14 @@ impl WalletApi {
 
     pub async fn balance(&self, name: &str) -> WalletApiResult<u64> {
         runtime::balance(&self.storage, name).await
+    }
+
+    pub async fn txs(&self, name: &str) -> WalletApiResult<Vec<WalletTxDto>> {
+        runtime::txs(&self.storage, name).await
+    }
+
+    pub async fn utxos(&self, name: &str) -> WalletApiResult<Vec<WalletUtxoDto>> {
+        runtime::utxos(&self.storage, name).await
     }
 
     pub fn core(&self) -> &Arc<WalletCore> {

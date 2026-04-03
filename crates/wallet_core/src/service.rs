@@ -1,7 +1,9 @@
 use bdk_file_store::Store;
 use bdk_wallet::{ChangeSet, KeychainKind, PersistedWallet, Wallet};
+use bdk_chain::ChainPosition;
 
 use crate::{WalletConfig, WalletCoreResult};
+use crate::model::{WalletTxInfo, WalletUtxoInfo};
 
 use tracing::{debug, info, error};
 
@@ -73,6 +75,147 @@ impl WalletService {
     pub fn balance_sat(&self) -> WalletCoreResult<u64> {
         debug!("wallet_service: balance_sat queried");
         Ok(self.wallet.balance().total().to_sat())
+    }
+
+    /// Return list of wallet transactions (basic view).
+    ///
+    /// This reads transaction data from the underlying BDK wallet.
+    /// No network calls are performed — data must be synced beforehand.
+    ///
+    /// Currently returns:
+    /// - txid
+    /// - confirmation status
+    /// - confirmation height (if available)
+    /// - direction (`received`, `sent`, `self`, `unknown`)
+    /// - net value in satoshis
+    /// - optional fee in satoshis
+    ///
+    /// Future improvements may include:
+    /// - timestamps
+    /// - more precise self-transfer classification
+    /// - richer transaction classification
+    pub fn transactions(&self) -> Vec<WalletTxInfo> {
+        debug!("wallet_service: transactions start");
+
+        // BDK stores transactions in its internal graph.
+        // We iterate over all known transactions and map them
+        // into our core domain model (WalletTxInfo).
+        //
+        // For each transaction we compute:
+        // - sent amount from wallet-owned inputs
+        // - received amount to wallet-owned outputs
+        // - net value (received - sent)
+        // - direction string for simple CLI display
+        // - optional fee when BDK can calculate it from known inputs
+        //
+        // Direction rules for now:
+        // - received: wallet only gains funds
+        // - sent: wallet spends funds and sends value externally
+        // - self: wallet spends funds but also receives wallet-owned outputs back
+        let mut result = Vec::new();
+
+        for tx in self.wallet.transactions() {
+            let txid = tx.tx_node.txid.to_string();
+
+            let (sent, received) = self.wallet.sent_and_received(&tx.tx_node.tx);
+            let sent_sat = sent.to_sat();
+            let received_sat = received.to_sat();
+            let net_value = received_sat as i64 - sent_sat as i64;
+
+            let has_wallet_inputs = sent_sat > 0;
+            let has_wallet_outputs = received_sat > 0;
+
+            let direction = if !has_wallet_inputs && has_wallet_outputs {
+                "received".to_string()
+            } else if has_wallet_inputs && has_wallet_outputs {
+                "self".to_string()
+            } else if has_wallet_inputs {
+                "sent".to_string()
+            } else {
+                "unknown".to_string()
+            };
+
+            let fee = if direction == "received" {
+                None
+            } else {
+                self
+                    .wallet
+                    .calculate_fee(&tx.tx_node.tx)
+                    .ok()
+                    .map(|amount| amount.to_sat())
+            };
+
+            // Determine confirmation status and height from chain position
+            let (confirmed, confirmation_height) = match tx.chain_position {
+                ChainPosition::Confirmed { anchor, .. } => (true, Some(anchor.block_id.height)),
+                ChainPosition::Unconfirmed { .. } => (false, None),
+            };
+
+            result.push(WalletTxInfo {
+                txid,
+                confirmed,
+                confirmation_height,
+                direction,
+                net_value,
+                fee,
+            });
+        }
+
+        debug!("wallet_service: transactions count={}", result.len());
+        result
+    }
+
+    /// Return list of wallet UTXOs (basic view).
+    ///
+    /// This reads spendable outputs from the underlying BDK wallet.
+    /// No network calls are performed — data must be synced beforehand.
+    ///
+    /// Currently also includes:
+    /// - address (when derivation data is available)
+    /// - keychain kind (`external` / `internal`)
+    ///
+    /// Future improvements may include:
+    /// - spendability flags
+    pub fn utxos(&self) -> Vec<WalletUtxoInfo> {
+        debug!("wallet_service: utxos start");
+
+        // BDK exposes wallet-owned spendable outputs via `list_unspent()`.
+        // We map them into our core domain model (WalletUtxoInfo).
+        let mut result = Vec::new();
+
+        for utxo in self.wallet.list_unspent() {
+            let outpoint = utxo.outpoint.to_string();
+            let value = utxo.txout.value.to_sat();
+
+            let address = Some(
+                self.wallet
+                    .peek_address(utxo.keychain, utxo.derivation_index)
+                    .address
+                    .to_string(),
+            );
+
+            let keychain = match utxo.keychain {
+                KeychainKind::External => "external".to_string(),
+                KeychainKind::Internal => "internal".to_string(),
+            };
+
+            let (confirmed, confirmation_height) = match utxo.chain_position {
+                ChainPosition::Confirmed { anchor, .. } => (true, Some(anchor.block_id.height)),
+                ChainPosition::Unconfirmed { .. } => (false, None),
+            };
+
+            result.push(WalletUtxoInfo {
+                outpoint,
+                value,
+                confirmed,
+                confirmation_height,
+                address,
+                keychain,
+            });
+        }
+
+        debug!("wallet_service: utxos count={}", result.len());
+        result
     }
 
     pub fn wallet(&self) -> &Wallet {

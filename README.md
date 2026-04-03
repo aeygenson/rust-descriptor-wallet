@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: persisted wallets can now be loaded at runtime for address generation, chain sync, and balance queries.
+Current milestone: persisted wallets now support runtime address generation, chain sync, balance lookup, transaction history, UTXO inspection, and high-level status reporting.
 
 ## Vision
 
@@ -52,6 +52,9 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - receive-address generation for stored wallets
 - Esplora-based wallet sync
 - balance queries over persisted wallet state
+- wallet status reporting with balance, UTXO count, and latest observed block height
+- transaction history inspection from synced wallet state
+- UTXO inspection from synced wallet state
 
 ### In Progress
 
@@ -63,7 +66,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 ### Expected Shortly
 
 - send / PSBT-oriented wallet actions exposed through the CLI
-- richer runtime inspection such as UTXOs and transaction history
+- transaction creation and signing flows
 - first end-to-end wallet flow across the workspace layers
 
 ## Planned Capabilities
@@ -76,6 +79,7 @@ The intended feature set includes:
 - persisted wallet metadata and per-wallet database paths
 - runtime address derivation and balance tracking
 - UTXO tracking
+- transaction history inspection
 - transaction building
 - PSBT creation and signing flow
 - watch-only support
@@ -130,6 +134,9 @@ cargo run -p wallet_cli -- delete-wallet signet-dev
 cargo run -p wallet_cli -- address --name signet-dev
 cargo run -p wallet_cli -- sync --name signet-dev
 cargo run -p wallet_cli -- balance --name signet-dev
+cargo run -p wallet_cli -- status --name signet-dev
+cargo run -p wallet_cli -- txs --name signet-dev
+cargo run -p wallet_cli -- utxos --name signet-dev
 ```
 
 What is stored right now:
@@ -148,13 +155,16 @@ What works at runtime now:
 - reveal the next external receive address and persist the derivation state
 - sync wallet state through the configured Esplora endpoint
 - read total balance from the persisted wallet state
+- inspect a high-level wallet status view
+- inspect wallet transaction history from the current synced state
+- inspect spendable UTXOs from the current synced state
 
 Storage location:
 
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers both wallet metadata management and basic runtime operations. Transaction building and PSBT flow are the next major step.
+The CLI now covers wallet metadata management plus read-oriented runtime operations. Transaction building and PSBT flow are the next major step.
 
 ## Why Descriptor Wallets
 
