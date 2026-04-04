@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: persisted wallets now support runtime address generation, chain sync, balance lookup, transaction history, UTXO inspection, and high-level status reporting.
+Current milestone: persisted wallets now support runtime inspection plus unsigned PSBT creation, backed by stronger wallet-domain types in `wallet_core`.
 
 ## Vision
 
@@ -55,18 +55,20 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - wallet status reporting with balance, UTXO count, and latest observed block height
 - transaction history inspection from synced wallet state
 - UTXO inspection from synced wallet state
+- unsigned PSBT creation through the runtime wallet flow
+- stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 
 ### In Progress
 
 - descriptor validation and richer domain logic inside `wallet_core`
-- transaction building and PSBT workflow
+- PSBT signing and finalization flow
 - richer command surface in `wallet_api`
 - desktop integration on top of the same runtime API
 
 ### Expected Shortly
 
-- send / PSBT-oriented wallet actions exposed through the CLI
-- transaction creation and signing flows
+- signed send flow on top of the created PSBT
+- transaction signing and broadcast flow
 - first end-to-end wallet flow across the workspace layers
 
 ## Planned Capabilities
@@ -81,7 +83,8 @@ The intended feature set includes:
 - UTXO tracking
 - transaction history inspection
 - transaction building
-- PSBT creation and signing flow
+- unsigned PSBT creation
+- PSBT signing flow
 - watch-only support
 - hardware signer support
 - desktop UI built on the same API boundary
@@ -137,6 +140,7 @@ cargo run -p wallet_cli -- balance --name signet-dev
 cargo run -p wallet_cli -- status --name signet-dev
 cargo run -p wallet_cli -- txs --name signet-dev
 cargo run -p wallet_cli -- utxos --name signet-dev
+cargo run -p wallet_cli -- create-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
 ```
 
 What is stored right now:
@@ -158,13 +162,21 @@ What works at runtime now:
 - inspect a high-level wallet status view
 - inspect wallet transaction history from the current synced state
 - inspect spendable UTXOs from the current synced state
+- create an unsigned PSBT with destination, amount, fee, and selected input summary
+
+Core domain types introduced:
+
+- `AmountSat` for satoshi-denominated values
+- `FeeRateSatPerVb` for fee-rate validation
+- `WalletKeychain` for external vs internal wallet branches
+- `TxDirection` for received, sent, and self-transfer transaction classification
 
 Storage location:
 
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management plus read-oriented runtime operations. Transaction building and PSBT flow are the next major step.
+The CLI now covers wallet metadata management, read-oriented runtime operations, and unsigned PSBT creation. Signing and broadcast are the next major step.
 
 ## Why Descriptor Wallets
 

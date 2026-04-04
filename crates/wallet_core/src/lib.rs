@@ -3,6 +3,7 @@ pub mod config;
 pub mod core;
 pub mod service;
 pub mod model;
+pub mod types;
 
 pub use config::WalletConfig;
 pub use core::WalletCore;

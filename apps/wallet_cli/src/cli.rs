@@ -47,4 +47,17 @@ pub enum Commands {
         #[arg(long)]
         name: String,
     },
+    CreatePsbt {
+        #[arg(long)]
+        name: String,
+
+        #[arg(long)]
+        to: String,
+
+        #[arg(long)]
+        amount: u64,
+
+        #[arg(long = "fee-rate")]
+        fee_rate: u64,
+    },
 }

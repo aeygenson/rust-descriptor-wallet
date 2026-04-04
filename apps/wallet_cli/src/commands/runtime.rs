@@ -76,7 +76,7 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
                 .unwrap_or_else(|| "unconfirmed".to_string());
 
             println!(
-                "txid={} | dir={} | net={} sats | fee={} | confirmed={} | height={}",
+                "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | confirmed={} | height={}",
                 tx.txid,
                 tx.direction,
                 tx.net_value,
@@ -120,6 +120,49 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
             );
         }
     }
+
+    Ok(())
+}
+
+pub async fn create_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_psbt start name={} to={} amount={} fee_rate={}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb
+    );
+
+    let psbt = api
+        .create_psbt(name, to, amount_sat, fee_rate_sat_per_vb)
+        .await?;
+
+    info!(
+        "cli runtime: create_psbt success name={} to={} amount={} fee={} inputs={}",
+        name,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.selected_utxo_count
+    );
+
+    println!("PSBT created:");
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("inputs={}", psbt.selected_utxo_count);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
 
     Ok(())
 }

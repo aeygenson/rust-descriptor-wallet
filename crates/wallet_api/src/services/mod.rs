@@ -1,2 +1,4 @@
-pub mod wallets;
-pub mod runtime;
+pub mod registry;
+pub mod inspect;
+pub mod send;
+pub mod wallet;

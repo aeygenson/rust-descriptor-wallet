@@ -38,6 +38,14 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::Utxos { name } => {
             runtime::utxos(api, &name).await?;
         }
+        Commands::CreatePsbt {
+            name,
+            to,
+            amount,
+            fee_rate,
+        } => {
+            runtime::create_psbt(api, &name, &to, amount, fee_rate).await?;
+        }
     }
 
     Ok(())
