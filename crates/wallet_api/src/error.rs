@@ -37,6 +37,24 @@ pub enum WalletApiError {
 
     #[error("fee calculation failed")]
     FeeCalculationFailed,
+
+    #[error("invalid psbt: {0}")]
+    InvalidPsbt(String),
+
+    #[error("psbt signing failed: {0}")]
+    SignPsbtFailed(String),
+
+    #[error("wallet is watch-only and cannot sign")]
+    WatchOnlyCannotSign,
+
+    #[error("psbt is not finalized")]
+    PsbtNotFinalized,
+
+    #[error("failed to extract transaction from psbt: {0}")]
+    ExtractTxFailed(String),
+
+    #[error("transaction broadcast failed: {0}")]
+    BroadcastFailed(String),
 }
 
 impl From<WalletCoreError> for WalletApiError {
@@ -52,6 +70,24 @@ impl From<WalletCoreError> for WalletApiError {
             }
             WalletCoreError::PsbtBuildFailed(s) => WalletApiError::PsbtBuildFailed(s),
             WalletCoreError::FeeCalculationFailed => WalletApiError::FeeCalculationFailed,
+            WalletCoreError::InvalidPsbt(e) => {
+                WalletApiError::InvalidPsbt(e.to_string())
+            }
+            WalletCoreError::SignPsbtFailed(e) => {
+                WalletApiError::SignPsbtFailed(e.to_string())
+            }
+            WalletCoreError::WatchOnlyCannotSign => {
+                WalletApiError::WatchOnlyCannotSign
+            }
+            WalletCoreError::PsbtNotFinalized => {
+                WalletApiError::PsbtNotFinalized
+            }
+            WalletCoreError::ExtractTxFailed(s) => {
+                WalletApiError::ExtractTxFailed(s)
+            }
+            WalletCoreError::BroadcastFailed(s) => {
+                WalletApiError::BroadcastFailed(s)
+            }
             other => WalletApiError::Core(other),
         }
     }

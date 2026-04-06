@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use crate::factory::build_default_api;
-use crate::services::{wallet, inspect, send, registry};
+use crate::services::{wallet, inspect, psbt, registry};
 use crate::WalletApiResult;
 
 use crate::dto::{
     WalletDetailsDto,
     WalletPsbtDto,
+    WalletPublishedTxDto,
+    WalletSignedPsbtDto,
     WalletStatusDto,
     WalletSummaryDto,
     WalletTxDto,
@@ -84,7 +86,7 @@ impl WalletApi {
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
     ) -> WalletApiResult<WalletPsbtDto> {
-        send::create_psbt(
+        psbt::create(
             &self.storage,
             name,
             to_address,
@@ -92,6 +94,22 @@ impl WalletApi {
             fee_rate_sat_per_vb,
         )
         .await
+    }
+
+    pub async fn sign_psbt(
+        &self,
+        name: &str,
+        psbt_base64: &str,
+    ) -> WalletApiResult<WalletSignedPsbtDto> {
+        psbt::sign(&self.storage, name, psbt_base64).await
+    }
+
+    pub async fn publish_psbt(
+        &self,
+        name: &str,
+        psbt_base64: &str,
+    ) -> WalletApiResult<WalletPublishedTxDto> {
+        psbt::publish(&self.storage, name, psbt_base64).await
     }
 
     pub fn core(&self) -> &Arc<WalletCore> {

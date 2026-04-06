@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: persisted wallets now support runtime inspection plus unsigned PSBT creation, backed by stronger wallet-domain types in `wallet_core`.
+Current milestone: the project has moved beyond a read-only wallet into a software-signing wallet flow with PSBT creation and signing, backed by stronger wallet-domain types in `wallet_core`.
 
 ## Vision
 
@@ -56,19 +56,21 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - transaction history inspection from synced wallet state
 - UTXO inspection from synced wallet state
 - unsigned PSBT creation through the runtime wallet flow
+- PSBT signing for software-signing wallets
+- finalized-PSBT extraction and publish preparation
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 
 ### In Progress
 
 - descriptor validation and richer domain logic inside `wallet_core`
-- PSBT signing and finalization flow
+- broadcast transport integration for finalized transactions
 - richer command surface in `wallet_api`
 - desktop integration on top of the same runtime API
 
 ### Expected Shortly
 
-- signed send flow on top of the created PSBT
-- transaction signing and broadcast flow
+- real network broadcast on top of finalized transactions
+- end-to-end send flow from create to broadcast
 - first end-to-end wallet flow across the workspace layers
 
 ## Planned Capabilities
@@ -85,6 +87,7 @@ The intended feature set includes:
 - transaction building
 - unsigned PSBT creation
 - PSBT signing flow
+- finalized transaction broadcast
 - watch-only support
 - hardware signer support
 - desktop UI built on the same API boundary
@@ -100,6 +103,8 @@ The intended transaction flow is:
 3. a PSBT is created as the signing handoff format
 4. a signer adds signatures without owning the full wallet application layer
 5. the finalized transaction is broadcast to the network
+
+Current code covers steps `1` through `4`. The publish path already validates and extracts finalized transactions, while actual network broadcast is the next integration step.
 
 ## Getting Started
 
@@ -141,6 +146,8 @@ cargo run -p wallet_cli -- status --name signet-dev
 cargo run -p wallet_cli -- txs --name signet-dev
 cargo run -p wallet_cli -- utxos --name signet-dev
 cargo run -p wallet_cli -- create-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
+cargo run -p wallet_cli -- sign-psbt --name signet-dev --psbt '<base64>'
+cargo run -p wallet_cli -- publish-psbt --name signet-dev --psbt '<base64>'
 ```
 
 What is stored right now:
@@ -163,6 +170,9 @@ What works at runtime now:
 - inspect wallet transaction history from the current synced state
 - inspect spendable UTXOs from the current synced state
 - create an unsigned PSBT with destination, amount, fee, and selected input summary
+- sign a PSBT using wallet-owned private descriptor material
+- classify signing results as unchanged, partial, or finalized
+- validate a finalized PSBT and extract the transaction ready for broadcast integration
 
 Core domain types introduced:
 
@@ -170,13 +180,14 @@ Core domain types introduced:
 - `FeeRateSatPerVb` for fee-rate validation
 - `WalletKeychain` for external vs internal wallet branches
 - `TxDirection` for received, sent, and self-transfer transaction classification
+- `PsbtSigningStatus` for stable signing-state classification
 
 Storage location:
 
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, and unsigned PSBT creation. Signing and broadcast are the next major step.
+The CLI now covers wallet metadata management, read-oriented runtime operations, unsigned PSBT creation, and PSBT signing. Actual network broadcast is the next major step.
 
 ## Why Descriptor Wallets
 

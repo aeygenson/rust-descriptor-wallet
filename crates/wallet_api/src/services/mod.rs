@@ -1,4 +1,4 @@
 pub mod registry;
 pub mod inspect;
-pub mod send;
+pub mod psbt;
 pub mod wallet;

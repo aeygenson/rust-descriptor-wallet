@@ -166,3 +166,49 @@ pub async fn create_psbt(
 
     Ok(())
 }
+
+pub async fn sign_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Result<()> {
+    debug!("cli runtime: sign_psbt start name={}", name);
+
+    let signed = api.sign_psbt(name, psbt_base64).await?;
+
+    info!(
+        "cli runtime: sign_psbt success name={} modified={} finalized={} txid={}",
+        name,
+        signed.modified,
+        signed.finalized,
+        signed.txid
+    );
+
+    if signed.finalized {
+        println!("PSBT finalized successfully:");
+    } else if signed.modified {
+        println!("PSBT partially signed:");
+    } else {
+        println!("No signatures were added to the PSBT:");
+    }
+
+    println!("txid={}", signed.txid);
+    println!("modified={}", signed.modified);
+    println!("finalized={}", signed.finalized);
+    println!("\npsbt_base64:\n{}", signed.psbt_base64);
+
+    Ok(())
+}
+
+pub async fn publish_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Result<()> {
+    debug!("cli runtime: publish_psbt start name={}", name);
+
+    let published = api.publish_psbt(name, psbt_base64).await?;
+
+    info!(
+        "cli runtime: publish_psbt success name={} txid={}",
+        name,
+        published.txid
+    );
+
+    println!("Transaction broadcasted successfully:");
+    println!("txid={}", published.txid);
+
+    Ok(())
+}

@@ -1,34 +1,176 @@
-
-
+use crate::model::PsbtSigningStatus;
 use crate::WalletCoreResult;
 
-/// Core domain layer placeholder.
+/// Core domain layer.
 ///
-/// This struct is intended to host pure business logic for the wallet in the future
-/// (e.g. descriptor validation, address derivation policies, fee logic, coin selection),
-/// without any IO, networking, or persistence concerns.
+/// This type hosts pure business logic only: validation and policy helpers
+/// that do not require IO, networking, persistence, or wallet database access.
 #[derive(Debug, Default)]
 pub struct WalletCore;
 
 impl WalletCore {
-    pub fn new() -> Self {
-        Self
-    }
+    pub fn new() -> Self { Self }
 
-    /// Lightweight health check for the core layer
+    /// Lightweight health check for the core layer.
     pub fn health_check(&self) -> WalletCoreResult<&'static str> {
         Ok("wallet_core OK")
     }
 
-    /// TODO: validate descriptors and invariants (no IO)
-    pub fn validate_descriptors(&self) -> WalletCoreResult<()> {
-        // placeholder for future domain logic
+    /// Returns true when a descriptor string appears to contain private key
+    /// material and therefore should be able to produce a signing keymap.
+    pub fn descriptor_looks_private(&self, descriptor: &str) -> bool {
+        descriptor.contains("xprv")
+            || descriptor.contains("tprv")
+            || descriptor.contains("yprv")
+            || descriptor.contains("zprv")
+    }
+
+    /// Validate a software-signing wallet configuration at the pure domain level.
+    pub fn validate_signing_descriptors(
+        &self,
+        external_descriptor: &str,
+        internal_descriptor: &str,
+        is_watch_only: bool,
+    ) -> WalletCoreResult<()> {
+        let external_private = self.descriptor_looks_private(external_descriptor);
+        let internal_private = self.descriptor_looks_private(internal_descriptor);
+
+        if is_watch_only && (external_private || internal_private) {
+            return Err(crate::WalletCoreError::InvalidConfig(
+                "watch-only wallet must not contain private descriptors".to_string(),
+            ));
+        }
+
+        if !is_watch_only && (!external_private || !internal_private) {
+            return Err(crate::WalletCoreError::InvalidConfig(
+                "software-signing wallet requires private descriptors for both keychains"
+                    .to_string(),
+            ));
+        }
+
         Ok(())
     }
 
-    /// TODO: compute derived values (e.g. fees, selection strategies)
-    pub fn compute_policy(&self) -> WalletCoreResult<()> {
-        // placeholder for future domain logic
+    /// Convenience helper delegating to the model-layer status enum.
+    pub fn classify_psbt_signing(
+        &self,
+        modified: bool,
+        finalized: bool,
+    ) -> PsbtSigningStatus {
+        match (modified, finalized) {
+            (_, true) => PsbtSigningStatus::Finalized,
+            (true, false) => PsbtSigningStatus::PartiallySigned,
+            (false, false) => PsbtSigningStatus::Unchanged,
+        }
+    }
+
+    /// TODO: validate descriptors and invariants (no IO).
+    pub fn validate_descriptors(&self) -> WalletCoreResult<()> {
         Ok(())
+    }
+
+    /// TODO: compute derived values (e.g. fees, selection strategies).
+    pub fn compute_policy(&self) -> WalletCoreResult<()> {
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn health_check_ok() {
+        let core = WalletCore::new();
+        let result = core.health_check().unwrap();
+        assert_eq!(result, "wallet_core OK");
+    }
+
+    #[test]
+    fn descriptor_looks_private_detects_private_keys() {
+        let core = WalletCore::new();
+
+        assert!(core.descriptor_looks_private("wpkh(xprv...)"));
+        assert!(core.descriptor_looks_private("tr(tprv...)"));
+        assert!(core.descriptor_looks_private("yprv..."));
+        assert!(core.descriptor_looks_private("zprv..."));
+    }
+
+    #[test]
+    fn descriptor_looks_private_rejects_public_only() {
+        let core = WalletCore::new();
+
+        assert!(!core.descriptor_looks_private("wpkh(xpub...)"));
+        assert!(!core.descriptor_looks_private("tr(tpub...)"));
+    }
+
+    #[test]
+    fn validate_signing_descriptors_rejects_watch_only_with_private() {
+        let core = WalletCore::new();
+
+        let result = core.validate_signing_descriptors(
+            "wpkh(xprv...)",
+            "wpkh(xprv...)",
+            true,
+        );
+
+        assert!(matches!(
+            result,
+            Err(crate::WalletCoreError::InvalidConfig(_))
+        ));
+    }
+
+    #[test]
+    fn validate_signing_descriptors_rejects_signing_without_private() {
+        let core = WalletCore::new();
+
+        let result = core.validate_signing_descriptors(
+            "wpkh(xpub...)",
+            "wpkh(xpub...)",
+            false,
+        );
+
+        assert!(matches!(
+            result,
+            Err(crate::WalletCoreError::InvalidConfig(_))
+        ));
+    }
+
+    #[test]
+    fn validate_signing_descriptors_accepts_valid_signing_wallet() {
+        let core = WalletCore::new();
+
+        let result = core.validate_signing_descriptors(
+            "wpkh(xprv...)",
+            "wpkh(xprv...)",
+            false,
+        );
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn classify_psbt_signing_states() {
+        let core = WalletCore::new();
+
+        assert_eq!(
+            core.classify_psbt_signing(false, false),
+            PsbtSigningStatus::Unchanged
+        );
+
+        assert_eq!(
+            core.classify_psbt_signing(true, false),
+            PsbtSigningStatus::PartiallySigned
+        );
+
+        assert_eq!(
+            core.classify_psbt_signing(true, true),
+            PsbtSigningStatus::Finalized
+        );
+
+        assert_eq!(
+            core.classify_psbt_signing(false, true),
+            PsbtSigningStatus::Finalized
+        );
     }
 }

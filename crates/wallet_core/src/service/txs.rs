@@ -106,6 +106,7 @@ mod tests {
             internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
             db_path: unique_test_db_path("wallet_core_txs"),
             esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
         }
     }
 

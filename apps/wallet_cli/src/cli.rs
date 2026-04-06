@@ -60,4 +60,18 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         fee_rate: u64,
     },
+    SignPsbt {
+        #[arg(long)]
+        name: String,
+
+        #[arg(long = "psbt")]
+        psbt_base64: String,
+    },
+    PublishPsbt {
+        #[arg(long)]
+        name: String,
+
+        #[arg(long = "psbt")]
+        psbt_base64: String,
+    },
 }

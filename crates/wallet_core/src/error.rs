@@ -1,3 +1,4 @@
+use bitcoin::psbt::PsbtParseError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -7,6 +8,9 @@ pub enum WalletCoreError {
 
     #[error("not implemented")]
     NotImplemented,
+
+    #[error("invalid configuration: {0}")]
+    InvalidConfig(String),
 
     #[error(transparent)]
     Store(#[from] bdk_file_store::StoreError),
@@ -39,4 +43,29 @@ pub enum WalletCoreError {
 
     #[error("fee calculation failed")]
     FeeCalculationFailed,
+
+    #[error("invalid psbt: {0}")]
+    InvalidPsbt(String),
+    
+    #[allow(deprecated)]
+    #[error(transparent)]
+    SignPsbtFailed(#[from] bdk_wallet::signer::SignerError),
+
+    #[error("wallet is watch-only and cannot sign")]
+    WatchOnlyCannotSign,
+
+    #[error("psbt is not finalized")]
+    PsbtNotFinalized,
+
+    #[error("failed to extract transaction from psbt: {0}")]
+    ExtractTxFailed(String),
+
+    #[error("transaction broadcast failed: {0}")]
+    BroadcastFailed(String),
+}
+
+impl From<PsbtParseError> for WalletCoreError {
+    fn from(e: PsbtParseError) -> Self {
+        WalletCoreError::InvalidPsbt(e.to_string())
+    }
 }

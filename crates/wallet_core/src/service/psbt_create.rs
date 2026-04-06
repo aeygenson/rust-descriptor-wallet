@@ -175,6 +175,39 @@ mod tests {
             internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
             db_path: unique_test_db_path("wallet_core_psbt"),
             esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
+        }
+    }
+
+    fn load_test_wallet() -> (WalletConfig, WalletService) {
+        let config = test_config();
+        let wallet = WalletService::load_or_create(&config)
+            .expect("wallet should load or create successfully");
+        (config, wallet)
+    }
+
+    fn create_psbt_with(
+        wallet: &mut WalletService,
+        network: Network,
+        to_address: &str,
+        amount_sat: u64,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        wallet.create_psbt(
+            network,
+            to_address,
+            AmountSat(amount_sat),
+            FeeRateSatPerVb(fee_rate_sat_per_vb),
+        )
+    }
+
+    fn assert_create_psbt_err(
+        result: WalletCoreResult<WalletPsbtInfo>,
+        matcher: impl FnOnce(crate::WalletCoreError) -> bool,
+    ) {
+        match result {
+            Err(err) => assert!(matcher(err), "unexpected error variant"),
+            Ok(_) => panic!("expected create_psbt to fail"),
         }
     }
 
@@ -204,106 +237,52 @@ mod tests {
 
     #[test]
     fn create_psbt_fails_for_zero_amount() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
+        let (config, mut wallet) = load_test_wallet();
 
-        let result = wallet.create_psbt(
-            config.network,
-            valid_signet_address(),
-            AmountSat(0),
-            FeeRateSatPerVb(1),
-        );
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 0, 1);
 
-        assert!(matches!(result, Err(crate::WalletCoreError::InvalidAmount)));
+        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidAmount));
     }
 
     #[test]
     fn create_psbt_fails_for_zero_fee_rate() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
+        let (config, mut wallet) = load_test_wallet();
 
-        let result = wallet.create_psbt(
-            config.network,
-            valid_signet_address(),
-            AmountSat(1000),
-            FeeRateSatPerVb(0),
-        );
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 0);
 
-        assert!(matches!(result, Err(crate::WalletCoreError::InvalidFeeRate)));
-    }
-
-    #[test]
-    fn create_psbt_returns_invalid_amount_error() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
-
-        let result = wallet.create_psbt(
-            config.network,
-            valid_signet_address(),
-            AmountSat(0),
-            FeeRateSatPerVb(1),
-        );
-
-        assert!(matches!(result, Err(crate::WalletCoreError::InvalidAmount)));
+        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
     }
 
     #[test]
     fn create_psbt_returns_invalid_destination_address_error() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
+        let (config, mut wallet) = load_test_wallet();
 
-        let result = wallet.create_psbt(
-            config.network,
-            "invalid_address",
-            AmountSat(1000),
-            FeeRateSatPerVb(1),
-        );
+        let result = create_psbt_with(&mut wallet, config.network, "invalid_address", 1000, 1);
 
-        assert!(matches!(
-            result,
-            Err(crate::WalletCoreError::InvalidDestinationAddress(_))
-        ));
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::InvalidDestinationAddress(_))
+        });
     }
 
     #[test]
     fn create_psbt_returns_destination_network_mismatch_error() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
+        let (config, mut wallet) = load_test_wallet();
 
-        let result = wallet.create_psbt(
-            config.network,
-            valid_mainnet_address(),
-            AmountSat(1000),
-            FeeRateSatPerVb(1),
-        );
+        let result = create_psbt_with(&mut wallet, config.network, valid_mainnet_address(), 1000, 1);
 
-        assert!(matches!(
-            result,
-            Err(crate::WalletCoreError::DestinationNetworkMismatch(_))
-        ));
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::DestinationNetworkMismatch(_))
+        });
     }
 
     #[test]
     fn create_psbt_fails_for_insufficient_funds() {
-        let config = test_config();
-        let mut wallet = WalletService::load_or_create(&config)
-            .expect("wallet should load or create successfully");
+        let (config, mut wallet) = load_test_wallet();
 
-        let result = wallet.create_psbt(
-            config.network,
-            valid_signet_address(),
-            AmountSat(1000),
-            FeeRateSatPerVb(1),
-        );
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 1);
 
-        assert!(
-            matches!(result, Err(crate::WalletCoreError::PsbtBuildFailed(_))),
-            "should fail due to insufficient funds during PSBT build"
-        );
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
+        });
     }
 }

@@ -26,6 +26,7 @@ pub(crate) async fn load_wallet_config(
         internal_descriptor: record.internal_descriptor,
         db_path: record.db_path.into(),
         esplora_url: record.esplora_url,
+        is_watch_only: record.is_watch_only,
     })
 }
 

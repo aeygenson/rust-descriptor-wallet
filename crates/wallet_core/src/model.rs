@@ -63,3 +63,71 @@ pub struct WalletPsbtInfo {
     /// Number of wallet UTXOs selected for this PSBT.
     pub selected_utxo_count: usize,
 }
+
+/// Domain status representing PSBT signing progress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PsbtSigningStatus {
+    /// The signing attempt did not change the PSBT.
+    Unchanged,
+    /// The PSBT was updated but is not yet fully finalized.
+    PartiallySigned,
+    /// The PSBT is finalized and ready for extraction/broadcast.
+    Finalized,
+}
+
+impl PsbtSigningStatus {
+    /// Convert signing status into a stable string representation for DTO/API layers.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Unchanged => "unchanged",
+            Self::PartiallySigned => "partial",
+            Self::Finalized => "finalized",
+        }
+    }
+}
+
+impl std::fmt::Display for PsbtSigningStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Core model describing the result of attempting to sign a PSBT.
+///
+/// This remains a domain model in `wallet_core` and is independent from
+/// API/CLI formatting.
+#[derive(Debug, Clone)]
+pub struct WalletSignedPsbtInfo {
+    /// Base64-encoded signed PSBT payload.
+    pub psbt_base64: String,
+
+    /// Whether the wallet modified the PSBT during signing.
+    pub modified: bool,
+
+    /// Whether the wallet finalized the PSBT during signing.
+    pub finalized: bool,
+
+    /// Transaction id derived from the PSBT unsigned transaction.
+    pub txid: String,
+}
+
+impl WalletSignedPsbtInfo {
+    /// Classify signing result into a domain status.
+    pub fn signing_status(&self) -> PsbtSigningStatus {
+        match (self.modified, self.finalized) {
+            (_, true) => PsbtSigningStatus::Finalized,
+            (true, false) => PsbtSigningStatus::PartiallySigned,
+            (false, false) => PsbtSigningStatus::Unchanged,
+        }
+    }
+}
+
+/// Core model describing a successfully published (broadcast) transaction.
+///
+/// This is a domain model and represents the result of broadcasting a
+/// finalized transaction to the network.
+#[derive(Debug, Clone)]
+pub struct WalletPublishedTxInfo {
+    /// Transaction id of the broadcasted transaction.
+    pub txid: String,
+}

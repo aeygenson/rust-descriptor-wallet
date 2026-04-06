@@ -1,6 +1,9 @@
+use crate::{WalletConfig, WalletCoreResult};
+use bdk_wallet::descriptor::IntoWalletDescriptor;
+use bdk_wallet::keys::KeyMap;
 use bdk_wallet::KeychainKind;
 use tracing::{debug, error, info};
-use crate::{WalletConfig, WalletCoreResult};
+
 use super::*;
 
 impl WalletService {
@@ -18,8 +21,14 @@ impl WalletService {
 
         let external_descriptor = config.external_descriptor.clone();
         let internal_descriptor = config.internal_descriptor.clone();
+        let core = crate::core::WalletCore::new();
+        core.validate_signing_descriptors(
+            &config.external_descriptor,
+            &config.internal_descriptor,
+            config.is_watch_only,
+        )?;
 
-        let wallet = match Wallet::load()
+        let mut wallet = match Wallet::load()
             .descriptor(KeychainKind::External, Some(external_descriptor.clone()))
             .descriptor(KeychainKind::Internal, Some(internal_descriptor.clone()))
             .check_network(config.network)
@@ -29,6 +38,7 @@ impl WalletService {
                 crate::WalletCoreError::Load(e.to_string())
             })?
         {
+            Some(wallet) => wallet,
             None => Wallet::create(external_descriptor, internal_descriptor)
                 .network(config.network)
                 .create_wallet(&mut db)
@@ -36,11 +46,82 @@ impl WalletService {
                     error!("wallet_service: create_wallet error: {}", e);
                     crate::WalletCoreError::Create(e.to_string())
                 })?,
-            Some(wallet) => wallet,
         };
 
+        if !config.is_watch_only {
+            Self::attach_signers_if_present(&mut wallet, config)?;
+        }
         info!("wallet_service: load_or_create success");
         Ok(Self { wallet, db })
+    }
+
+
+    /// Attach explicit keymaps for private descriptors during wallet initialization.
+    fn attach_signers_if_present(
+        wallet: &mut Wallet,
+        config: &WalletConfig,
+    ) -> WalletCoreResult<()> {
+        let core = crate::core::WalletCore::new();
+        let external_private = core.descriptor_looks_private(&config.external_descriptor);
+        let internal_private = core.descriptor_looks_private(&config.internal_descriptor);
+
+        debug!(
+            "wallet_service: attach_signers_if_present external_private={} internal_private={}",
+            external_private,
+            internal_private
+        );
+
+        if !external_private && !internal_private {
+            debug!(
+                "wallet_service: attach_signers_if_present no private descriptor material detected; wallet is effectively watch-only"
+            );
+            return Ok(());
+        }
+
+        let secp = bdk_wallet::bitcoin::secp256k1::Secp256k1::new();
+
+        if external_private {
+            let (_descriptor, external_keymap): (_, KeyMap) = config
+                .external_descriptor
+                .clone()
+                .into_wallet_descriptor(&secp, config.network)
+                .map_err(|e| {
+                    crate::WalletCoreError::Create(format!(
+                        "external signer descriptor parse error: {}",
+                        e
+                    ))
+                })?;
+
+            debug!(
+                "wallet_service: attach_signers_if_present setting external keymap entries={}",
+                external_keymap.len()
+            );
+            wallet.set_keymap(KeychainKind::External, external_keymap);
+        }
+
+        if internal_private {
+            let (_descriptor, internal_keymap): (_, KeyMap) = config
+                .internal_descriptor
+                .clone()
+                .into_wallet_descriptor(&secp, config.network)
+                .map_err(|e| {
+                    crate::WalletCoreError::Create(format!(
+                        "internal signer descriptor parse error: {}",
+                        e
+                    ))
+                })?;
+
+            debug!(
+                "wallet_service: attach_signers_if_present setting internal keymap entries={}",
+                internal_keymap.len()
+            );
+            wallet.set_keymap(KeychainKind::Internal, internal_keymap);
+        }
+
+        debug!(
+            "wallet_service: attach_signers_if_present explicit keymap attachment complete"
+        );
+        Ok(())
     }
 
     /// Reveal next receive address.
@@ -65,16 +146,12 @@ impl WalletService {
         Ok(self.wallet.balance().total().to_sat())
     }
 
-    pub fn wallet(&self) -> &Wallet {
-        &self.wallet
-    }
+    pub fn wallet(&self) -> &Wallet { &self.wallet }
 
     /// Mutable access to underlying BDK wallet.
     ///
     /// Used by sync layer to apply blockchain updates.
-    pub fn wallet_mut(&mut self) -> &mut Wallet {
-        &mut self.wallet
-    }
+    pub fn wallet_mut(&mut self) -> &mut Wallet { &mut self.wallet }
 
     /// Persist staged wallet changes to disk.
     pub fn persist(&mut self) -> WalletCoreResult<()> {
@@ -93,7 +170,9 @@ mod tests {
     use super::*;
     use bitcoin::Network;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn test_config() -> WalletConfig {
         WalletConfig {
@@ -102,6 +181,18 @@ mod tests {
             internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
             db_path: unique_test_db_path("wallet_core_lifecycle"),
             esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
+        }
+    }
+
+    fn signing_test_config() -> WalletConfig {
+        WalletConfig {
+            network: Network::Signet,
+            external_descriptor: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn".to_string(),
+            internal_descriptor: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct".to_string(),
+            db_path: unique_test_db_path("wallet_core_lifecycle_signing"),
+            esplora_url: "https://mutinynet.com/api".to_string(),
+            is_watch_only: false,
         }
     }
 
@@ -110,8 +201,13 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("system time before UNIX_EPOCH")
             .as_nanos();
+        let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let pid = std::process::id();
 
-        std::env::temp_dir().join(format!("{}_{}_{}.db", prefix, std::process::id(), nanos))
+        std::env::temp_dir().join(format!(
+            "{}_{}_{}_{}.db",
+            prefix, pid, nanos, counter
+        ))
     }
 
     #[test]
@@ -121,6 +217,55 @@ mod tests {
         let wallet = WalletService::load_or_create(&config);
 
         assert!(wallet.is_ok(), "expected wallet to load or create successfully");
+    }
+
+    #[test]
+    fn load_or_create_creates_signing_wallet_successfully() {
+        let config = signing_test_config();
+
+        let wallet = WalletService::load_or_create(&config);
+
+        assert!(wallet.is_ok(), "expected signing wallet to load or create successfully");
+    }
+
+    #[test]
+    fn load_or_create_rejects_watch_only_wallet_with_private_descriptors() {
+        let mut config = signing_test_config();
+        config.is_watch_only = true;
+
+        let err = WalletService::load_or_create(&config)
+            .expect_err("watch-only wallet with private descriptors must be rejected");
+
+        match err {
+            crate::WalletCoreError::InvalidConfig(message) => {
+                assert!(
+                    message.contains("watch-only wallet must not contain private descriptors"),
+                    "unexpected error message: {}",
+                    message
+                );
+            }
+            other => panic!("expected InvalidConfig, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn load_or_create_rejects_signing_wallet_with_public_descriptors_only() {
+        let mut config = test_config();
+        config.is_watch_only = false;
+
+        let err = WalletService::load_or_create(&config)
+            .expect_err("software-signing wallet with only public descriptors must be rejected");
+
+        match err {
+            crate::WalletCoreError::InvalidConfig(message) => {
+                assert!(
+                    message.contains("software-signing wallet requires private descriptors"),
+                    "unexpected error message: {}",
+                    message
+                );
+            }
+            other => panic!("expected InvalidConfig, got {:?}", other),
+        }
     }
 
     #[test]

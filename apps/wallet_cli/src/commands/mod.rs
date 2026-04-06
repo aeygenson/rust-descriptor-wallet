@@ -46,6 +46,12 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         } => {
             runtime::create_psbt(api, &name, &to, amount, fee_rate).await?;
         }
+        Commands::SignPsbt { name, psbt_base64 } => {
+            runtime::sign_psbt(api, &name, &psbt_base64).await?;
+        }
+        Commands::PublishPsbt { name, psbt_base64 } => {
+            runtime::publish_psbt(api, &name, &psbt_base64).await?;
+        }
     }
 
     Ok(())

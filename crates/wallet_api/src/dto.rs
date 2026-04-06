@@ -1,5 +1,11 @@
 use serde::{Deserialize, Serialize};
-use wallet_core::model::{WalletPsbtInfo, WalletTxInfo, WalletUtxoInfo};
+use wallet_core::model::{
+    WalletPsbtInfo,
+    WalletPublishedTxInfo,
+    WalletSignedPsbtInfo,
+    WalletTxInfo,
+    WalletUtxoInfo,
+};
 
 /// Lightweight wallet summary for listing and UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -99,6 +105,42 @@ impl From<WalletPsbtInfo> for WalletPsbtDto {
             change_amount_sat: value.change_amount_sat.map(|v| v.as_u64()),
             selected_utxo_count: value.selected_utxo_count,
         }
+    }
+}
+
+/// Signed PSBT information returned after signing
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletSignedPsbtDto {
+    pub psbt_base64: String,
+    pub modified: bool,
+    pub finalized: bool,
+    pub txid: String,
+    pub signing_status: String,
+}
+
+impl From<WalletSignedPsbtInfo> for WalletSignedPsbtDto {
+    fn from(value: WalletSignedPsbtInfo) -> Self {
+        let signing_status = value.signing_status().as_str().to_string();
+
+        Self {
+            psbt_base64: value.psbt_base64,
+            modified: value.modified,
+            finalized: value.finalized,
+            txid: value.txid,
+            signing_status,
+        }
+    }
+}
+
+/// Published transaction information returned after broadcast
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletPublishedTxDto {
+    pub txid: String,
+}
+
+impl From<WalletPublishedTxInfo> for WalletPublishedTxDto {
+    fn from(value: WalletPublishedTxInfo) -> Self {
+        Self { txid: value.txid }
     }
 }
 
