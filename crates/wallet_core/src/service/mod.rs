@@ -5,6 +5,7 @@ mod lifecycle;
 pub mod psbt_sign;
 pub mod psbt_publish;
 pub mod psbt_common;
+pub mod broadcast;
 
 use bdk_file_store::Store;
 use bdk_wallet::{ChangeSet, PersistedWallet, Wallet};
@@ -18,7 +19,10 @@ const MAGIC_BYTES: &[u8] = b"rust-descriptor-wallet-v1";
 pub struct WalletService {
     /// BDK persisted wallet wrapper.
     wallet: PersistedWallet<Store<ChangeSet>>,
-    
+
     /// File-backed store used by the persisted wallet.
     db: Store<ChangeSet>,
+
+    /// Indicates whether this wallet is watch-only (cannot sign transactions).
+    is_watch_only: bool,
 }

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::factory::build_default_api;
-use crate::services::{wallet, inspect, psbt, registry};
+use crate::service::{wallet, inspect, psbt, registry};
 use crate::WalletApiResult;
 
 use crate::dto::{
@@ -110,6 +110,28 @@ impl WalletApi {
         psbt_base64: &str,
     ) -> WalletApiResult<WalletPublishedTxDto> {
         psbt::publish(&self.storage, name, psbt_base64).await
+    }
+
+    pub async fn send(
+        &self,
+        name: &str,
+        to_address: &str,
+        amount_sat: u64,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<WalletPublishedTxDto> {
+        let created = self
+            .create_psbt(name, to_address, amount_sat, fee_rate_sat_per_vb)
+            .await?;
+
+        let signed = self
+            .sign_psbt(name, &created.psbt_base64)
+            .await?;
+
+        if !signed.finalized {
+            return Err(crate::WalletApiError::SendNotFinalized);
+        }
+
+        self.publish_psbt(name, &signed.psbt_base64).await
     }
 
     pub fn core(&self) -> &Arc<WalletCore> {

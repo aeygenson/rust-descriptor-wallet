@@ -52,7 +52,11 @@ impl WalletService {
             Self::attach_signers_if_present(&mut wallet, config)?;
         }
         info!("wallet_service: load_or_create success");
-        Ok(Self { wallet, db })
+        Ok(Self {
+            wallet,
+            db,
+            is_watch_only: config.is_watch_only,
+        })
     }
 
 

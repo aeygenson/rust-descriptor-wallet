@@ -17,8 +17,6 @@ pub async fn sync(api: &WalletApi, name: &str) -> Result<()> {
     println!("Synced wallet {name}");
     Ok(())
 }
-
-
 pub async fn balance(api: &WalletApi, name: &str) -> Result<()> {
     debug!("cli runtime: balance start name={}", name);
     let bal = api.balance(name).await?;
@@ -180,12 +178,10 @@ pub async fn sign_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Result
         signed.txid
     );
 
-    if signed.finalized {
-        println!("PSBT finalized successfully:");
-    } else if signed.modified {
-        println!("PSBT partially signed:");
-    } else {
-        println!("No signatures were added to the PSBT:");
+    match signed.signing_status.as_str() {
+        "finalized" => println!("PSBT finalized successfully:"),
+        "partially_signed" => println!("PSBT partially signed:"),
+        _ => println!("No signatures were added to the PSBT:"),
     }
 
     println!("txid={}", signed.txid);
@@ -208,6 +204,39 @@ pub async fn publish_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Res
     );
 
     println!("Transaction broadcasted successfully:");
+    println!("txid={}", published.txid);
+
+    Ok(())
+}
+
+pub async fn send_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send start name={} to={} amount={} fee_rate={}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb
+    );
+
+    let published = api.send(name, to, amount_sat, fee_rate_sat_per_vb).await?;
+
+    info!(
+        "cli runtime: send success name={} to={} amount={} txid={}",
+        name,
+        to,
+        amount_sat,
+        published.txid
+    );
+
+    println!("Transaction sent successfully:");
+    println!("to={}", to);
+    println!("amount={} sats", amount_sat);
     println!("txid={}", published.txid);
 
     Ok(())

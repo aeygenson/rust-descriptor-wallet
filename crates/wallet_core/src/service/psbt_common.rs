@@ -5,7 +5,7 @@ use bitcoin::Transaction;
 
 use crate::{WalletCoreError, WalletCoreResult};
 
-/// Parse PSBT from base64 string
+/// Parse a PSBT from its encoded string representation.
 pub fn parse_psbt(psbt_base64: &str) -> WalletCoreResult<Psbt> {
     Psbt::from_str(psbt_base64)
         .map_err(|e| WalletCoreError::InvalidPsbt(e.to_string()))
@@ -41,6 +41,13 @@ mod tests {
     fn parse_psbt_works() {
         let psbt = parse_psbt(FINALIZED_TEST_PSBT).unwrap();
         assert_eq!(psbt.inputs.len(), 1);
+    }
+
+    #[test]
+    fn parse_psbt_fails_for_invalid_string() {
+        let result = parse_psbt("not-a-psbt");
+
+        assert!(matches!(result, Err(WalletCoreError::InvalidPsbt(_))));
     }
 
     #[test]

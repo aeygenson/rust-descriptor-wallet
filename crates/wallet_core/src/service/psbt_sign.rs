@@ -3,20 +3,22 @@ use tracing::{debug, info};
 use crate::model::WalletSignedPsbtInfo;
 use crate::service::psbt_common::parse_psbt;
 use crate::WalletCoreResult;
+use crate::WalletCoreError;
 
 use super::*;
 
 impl WalletService {
     /// Sign an existing PSBT using the wallet's configured signers.
     ///
-    /// Note: if the wallet is watch-only, signing will fail and the error is
-    /// surfaced as `SignPsbtFailed` (or a more specific watch-only error later
-    /// if you choose to detect that explicitly before signing).
+    /// Watch-only wallets cannot sign and return `WalletCoreError::WatchOnlyCannotSign`.
     pub fn sign_psbt(&mut self, psbt_base64: &str) -> WalletCoreResult<WalletSignedPsbtInfo> {
         debug!("wallet_service: sign_psbt start");
 
         let mut psbt = parse_psbt(psbt_base64)?;
         let original_psbt_base64 = psbt.to_string();
+        if self.is_watch_only {
+            return Err(WalletCoreError::WatchOnlyCannotSign);
+        }
 
         debug!(
             "wallet_service: sign_psbt wallet_context external_descriptor=<unavailable> internal_descriptor=<unavailable>"
@@ -164,17 +166,6 @@ mod tests {
         WalletService::load_or_create(config).unwrap()
     }
 
-    fn assert_watch_only_unchanged(result: &WalletSignedPsbtInfo) {
-        assert!(
-            !result.modified,
-            "Watch-only wallet must not modify PSBT during signing"
-        );
-        assert!(
-            !result.finalized,
-            "Watch-only wallet must not finalize PSBT"
-        );
-        assert_eq!(result.signing_status(), PsbtSigningStatus::Unchanged);
-    }
 
     #[test]
     fn test_sign_psbt_success() {
@@ -189,13 +180,13 @@ mod tests {
     }
 
     #[test]
-    fn test_sign_psbt_watch_only_is_unchanged() {
+    fn test_sign_psbt_watch_only_returns_error() {
         let config = watch_only_config();
         let mut service = load_wallet(&config);
 
-        let result = service.sign_psbt(UNSIGNED_TEST_PSBT).unwrap();
+        let result = service.sign_psbt(UNSIGNED_TEST_PSBT);
 
-        assert_watch_only_unchanged(&result);
+        assert!(matches!(result, Err(WalletCoreError::WatchOnlyCannotSign)));
     }
 
     #[test]

@@ -1,13 +1,13 @@
 use bitcoin::psbt::PsbtParseError;
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error )]
 pub enum WalletCoreError {
-    #[error("invalid state")]
-    InvalidState,
+    #[error("invalid state: {0}")]
+    InvalidState(String),
 
-    #[error("not implemented")]
-    NotImplemented,
+    #[error("not implemented: {0}")]
+    NotImplemented(String),
 
     #[error("invalid configuration: {0}")]
     InvalidConfig(String),
@@ -62,6 +62,21 @@ pub enum WalletCoreError {
 
     #[error("transaction broadcast failed: {0}")]
     BroadcastFailed(String),
+
+    #[error("broadcast transport error: {0}")]
+    BroadcastTransport(String),
+
+    #[error("mempool conflict: {0}")]
+    BroadcastMempoolConflict(String),
+
+    #[error("transaction already confirmed: {0}")]
+    BroadcastAlreadyConfirmed(String),
+
+    #[error("missing inputs: {0}")]
+    BroadcastMissingInputs(String),
+
+    #[error("insufficient fee: {0}")]
+    BroadcastInsufficientFee(String),
 }
 
 impl From<PsbtParseError> for WalletCoreError {

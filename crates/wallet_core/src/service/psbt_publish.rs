@@ -2,8 +2,9 @@ use bitcoin::consensus::encode::serialize_hex;
 use tracing::{debug, info};
 
 use crate::model::WalletPublishedTxInfo;
+use crate::service::broadcast::TxBroadcaster;
 use crate::service::psbt_common::{extract_finalized_tx, parse_psbt};
-use crate::{WalletCoreError, WalletCoreResult};
+use crate::WalletCoreResult;
 
 use super::*;
 
@@ -14,7 +15,11 @@ impl WalletService {
     /// Note: actual network broadcasting is intentionally left for the next
     /// integration step, once a dedicated broadcaster/transport abstraction is
     /// added to the project.
-    pub fn publish_psbt(&self, psbt_base64: &str) -> WalletCoreResult<WalletPublishedTxInfo> {
+    pub fn publish_psbt<B: TxBroadcaster>(
+        &self,
+        psbt_base64: &str,
+        broadcaster: &B,
+    ) -> WalletCoreResult<WalletPublishedTxInfo> {
         debug!("wallet_service: publish_psbt start");
 
         let psbt = parse_psbt(psbt_base64)?;
@@ -28,21 +33,35 @@ impl WalletService {
             tx_hex.len()
         );
 
-        Err(WalletCoreError::BroadcastFailed(
-            "broadcast transport not wired yet".to_string(),
-        ))
+        broadcaster.broadcast_tx_hex(&tx_hex)?;
+
+        info!(
+            "wallet_service: publish_psbt broadcasted transaction txid={}",
+            txid,
+        );
+
+        Ok(WalletPublishedTxInfo { txid })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::psbt_common::is_psbt_finalized;
     use crate::model::WalletSignedPsbtInfo;
-
+    use crate::service::psbt_common::is_psbt_finalized;
+    use crate::WalletCoreError;
+    use crate::service::broadcast::{FailingBroadcaster, NoopBroadcaster};
     const FINALIZED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGAQhCAUBQOwjdd/7aYgEH2ZHtHfwqt01+CB3A29cdWLeeXj+EejPrC6Y6pnpcto0TJA8BwCK1uMICqlUyEsXb+xY0dkYBAAEFIFU1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWAAEFILEKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoAA==";
 
     const UNSIGNED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGIRZVNVyoPJc/HZfODjhDyF14kFrxa03FMbxIjlchLSMBFhkAc8XaClYAAIABAACAAAAAgAAAAAAAAAAAARcgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYAAQUgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYhB1U1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWGQBzxdoKVgAAgAEAAIAAAACAAAAAAAAAAAAAAQUgsQrJf2ds8fPM2ssLeBcSgrvpSpTfFDIBcA3Fm8wV82ghB7EKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoGQBzxdoKVgAAgAEAAIAAAACAAQAAAAAAAAAA";
+
+    fn unique_db_path(prefix: &str) -> std::path::PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("{}_{}_{}.db", prefix, std::process::id(), nanos))
+    }
 
     #[test]
     fn finalized_psbt_is_detected_as_publishable() {
@@ -89,24 +108,46 @@ mod tests {
     }
 
     #[test]
-    fn publish_psbt_returns_broadcast_failed_until_transport_is_wired() {
-        let txid = parse_psbt(FINALIZED_TEST_PSBT)
-            .and_then(|psbt| extract_finalized_tx(&psbt))
-            .map(|tx| tx.compute_txid().to_string())
-            .expect("finalized test PSBT should extract txid");
+    fn publish_psbt_succeeds_with_noop_broadcaster() {
+        let service = WalletService::load_or_create(&crate::config::WalletConfig {
+            network: bitcoin::Network::Signet,
+            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
+            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            db_path: unique_db_path("wallet_core_publish"),
+            esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
+        })
+        .expect("watch-only wallet should load for publish test");
 
-        let result: crate::WalletCoreResult<crate::model::WalletPublishedTxInfo> =
-            Err(crate::WalletCoreError::BroadcastFailed(
-                "broadcast transport not wired yet".to_string(),
-            ));
+        let result = service.publish_psbt(FINALIZED_TEST_PSBT, &NoopBroadcaster);
+
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap().txid,
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
+        );
+    }
+
+    #[test]
+    fn publish_psbt_returns_broadcast_failed_for_failing_broadcaster() {
+        let service = WalletService::load_or_create(&crate::config::WalletConfig {
+            network: bitcoin::Network::Signet,
+            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
+            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            db_path: unique_db_path("wallet_core_publish_fail"),
+            esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
+        })
+        .expect("watch-only wallet should load for publish test");
+
+        let result = service.publish_psbt(
+            FINALIZED_TEST_PSBT,
+            &FailingBroadcaster::new("transport down"),
+        );
 
         assert!(matches!(
             result,
-            Err(crate::WalletCoreError::BroadcastFailed(_))
+            Err(WalletCoreError::BroadcastFailed(msg)) if msg.contains("transport down")
         ));
-        assert_eq!(
-            txid,
-            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
-        );
     }
 }

@@ -50,11 +50,30 @@ pub enum WalletApiError {
     #[error("psbt is not finalized")]
     PsbtNotFinalized,
 
+    #[error("signed PSBT must be finalized before publish")]
+    SendNotFinalized,
+
     #[error("failed to extract transaction from psbt: {0}")]
     ExtractTxFailed(String),
 
     #[error("transaction broadcast failed: {0}")]
     BroadcastFailed(String),
+
+    #[error("broadcast transport error: {0}")]
+    BroadcastTransport(String),
+
+    #[error("mempool conflict: {0}")]
+    BroadcastMempoolConflict(String),
+
+    #[error("transaction already confirmed: {0}")]
+    BroadcastAlreadyConfirmed(String),
+
+    #[error("missing inputs: {0}")]
+    BroadcastMissingInputs(String),
+
+    #[error("insufficient relay fee: {0}")]
+    BroadcastInsufficientFee(String),
+
 }
 
 impl From<WalletCoreError> for WalletApiError {
@@ -86,7 +105,31 @@ impl From<WalletCoreError> for WalletApiError {
                 WalletApiError::ExtractTxFailed(s)
             }
             WalletCoreError::BroadcastFailed(s) => {
-                WalletApiError::BroadcastFailed(s)
+                let normalized = s.to_ascii_lowercase();
+
+                if normalized.contains("non-final") {
+                    WalletApiError::PsbtNotFinalized
+                } else {
+                    WalletApiError::BroadcastFailed(s)
+                }
+            }
+            WalletCoreError::BroadcastTransport(s) => {
+                WalletApiError::BroadcastTransport(s)
+            }
+            WalletCoreError::BroadcastMempoolConflict(s) => {
+                WalletApiError::BroadcastMempoolConflict(s)
+            }
+            WalletCoreError::BroadcastAlreadyConfirmed(s) => {
+                WalletApiError::BroadcastAlreadyConfirmed(s)
+            }
+            WalletCoreError::BroadcastMissingInputs(s) => {
+                WalletApiError::BroadcastMissingInputs(s)
+            }
+            WalletCoreError::BroadcastInsufficientFee(s) => {
+                WalletApiError::BroadcastInsufficientFee(s)
+            }
+            WalletCoreError::InvalidConfig(s) => {
+                WalletApiError::InvalidInput(s)
             }
             other => WalletApiError::Core(other),
         }
