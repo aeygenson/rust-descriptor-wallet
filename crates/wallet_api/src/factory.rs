@@ -7,7 +7,7 @@ use crate::{ WalletApiResult};
 
 use wallet_core::WalletCore;
 use wallet_storage::WalletStorage;
-use wallet_sync::WalletSync;
+use wallet_sync::WalletSyncService;
 
 /// Build default WalletApi with all dependencies wired.
 pub async fn build_default_api() -> WalletApiResult<WalletApi> {
@@ -24,7 +24,7 @@ pub async fn build_default_api() -> WalletApiResult<WalletApi> {
         .await?;
 
     // Sync service (network / esplora)
-    let sync = WalletSync::new(Arc::clone(&core));
+    let sync = WalletSyncService::new();
 
     Ok(WalletApi::from_parts(core, storage, sync))
 }

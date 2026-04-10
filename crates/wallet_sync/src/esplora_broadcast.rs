@@ -1,13 +1,17 @@
-use wallet_core::service::broadcast::TxBroadcaster;
-use wallet_core::{WalletCoreError, WalletCoreResult};
+use crate::broadcast::TxBroadcaster;
+use crate::{WalletSyncError, WalletSyncResult};
 use std::thread::sleep;
 use std::time::Duration;
 
-/// Broadcast raw transaction hex through an Esplora-compatible API.
+/// Abstraction for broadcasting a fully signed raw transaction to the network.
 ///
-/// Expected endpoint:
-/// POST {base_url}/tx
-/// body = raw transaction hex
+/// `wallet_sync` defines the behavior contract together with concrete backend
+/// implementations (Esplora, Electrum, Bitcoin Core RPC, mocks, etc.).
+///
+/// Implementations should:
+/// - return `Ok(())` only when the transaction is accepted for broadcast
+/// - return structured `WalletSyncError::*` variants for failure cases
+/// - avoid panicking on network or parsing errors
 #[derive(Debug, Clone)]
 pub struct EsploraBroadcaster {
     base_url: String,
@@ -36,50 +40,57 @@ impl EsploraBroadcaster {
             || status == reqwest::StatusCode::REQUEST_TIMEOUT
     }
 
-    fn classify_esplora_rejection(status: reqwest::StatusCode, body: &str) -> WalletCoreError {
+    fn classify_esplora_rejection(status: reqwest::StatusCode, body: &str) -> WalletSyncError {
         let normalized = body.to_ascii_lowercase();
 
         if normalized.contains("txn-mempool-conflict")
             || normalized.contains("mempool conflict")
         {
-            return WalletCoreError::BroadcastMempoolConflict(body.to_string());
+            return WalletSyncError::BroadcastMempoolConflict(body.to_string());
         }
 
         if normalized.contains("already in block chain")
             || normalized.contains("already confirmed")
             || normalized.contains("transaction already in block chain")
         {
-            return WalletCoreError::BroadcastAlreadyConfirmed(body.to_string());
+            return WalletSyncError::BroadcastAlreadyConfirmed(body.to_string());
         }
 
         if normalized.contains("missing inputs") {
-            return WalletCoreError::BroadcastMissingInputs(body.to_string());
+            return WalletSyncError::BroadcastMissingInputs(body.to_string());
         }
 
         if normalized.contains("non-bip68-final")
             || normalized.contains("non-final")
         {
-            return WalletCoreError::PsbtNotFinalized;
+            return WalletSyncError::PsbtNotFinalized;
         }
 
         if normalized.contains("min relay fee")
             || normalized.contains("insufficient fee")
             || normalized.contains("fee not met")
         {
-            return WalletCoreError::BroadcastInsufficientFee(body.to_string());
+            return WalletSyncError::BroadcastInsufficientFee(body.to_string());
         }
 
-        WalletCoreError::BroadcastFailed(format!(
+        WalletSyncError::BroadcastFailed(format!(
             "esplora rejected transaction: status={} body={}",
             status, body
         ))
     }
+
+    /// Broadcast raw transaction hex without requiring callers to import the
+    /// `TxBroadcaster` trait into scope.
+    #[inline]
+    pub fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletSyncResult<()> {
+        <Self as TxBroadcaster>::broadcast_tx_hex(self, tx_hex)
+    }
 }
 
 impl TxBroadcaster for EsploraBroadcaster {
-    fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletCoreResult<()> {
+    fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletSyncResult<()> {
         let endpoint = self.tx_endpoint();
-        let mut last_error: Option<WalletCoreError> = None;
+        let mut last_error: Option<WalletSyncError> = None;
 
         for attempt in 0..=self.max_retries {
             let response = self
@@ -108,7 +119,7 @@ impl TxBroadcaster for EsploraBroadcaster {
                     return Err(err);
                 }
                 Err(e) => {
-                    let err = WalletCoreError::BroadcastTransport(e.to_string());
+                    let err = WalletSyncError::BroadcastTransport(e.to_string());
 
                     if attempt < self.max_retries {
                         last_error = Some(err);
@@ -122,7 +133,7 @@ impl TxBroadcaster for EsploraBroadcaster {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            WalletCoreError::BroadcastFailed("unknown broadcast failure".to_string())
+            WalletSyncError::BroadcastFailed("unknown broadcast failure".to_string())
         }))
     }
 }
@@ -132,6 +143,9 @@ mod tests {
     use super::*;
     use httpmock::Method::POST;
     use httpmock::MockServer;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
 
     #[test]
     fn trims_trailing_slash_from_base_url() {
@@ -177,7 +191,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(WalletCoreError::BroadcastMempoolConflict(msg)) if msg.contains("txn-mempool-conflict")
+            Err(WalletSyncError::BroadcastMempoolConflict(msg)) if msg.contains("txn-mempool-conflict")
         ));
         mock.assert();
     }
@@ -197,7 +211,7 @@ mod tests {
         let broadcaster = EsploraBroadcaster::new(server.base_url());
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
-        assert!(matches!(result, Err(WalletCoreError::PsbtNotFinalized)));
+        assert!(matches!(result, Err(WalletSyncError::PsbtNotFinalized)));
         mock.assert();
     }
 
@@ -209,7 +223,7 @@ mod tests {
         );
 
         match err {
-            WalletCoreError::BroadcastMempoolConflict(msg) => {
+            WalletSyncError::BroadcastMempoolConflict(msg) => {
                 assert!(msg.contains("txn-mempool-conflict"));
             }
             other => panic!("expected BroadcastMempoolConflict, got {:?}", other),
@@ -224,7 +238,7 @@ mod tests {
         );
 
         match err {
-            WalletCoreError::BroadcastAlreadyConfirmed(msg) => {
+            WalletSyncError::BroadcastAlreadyConfirmed(msg) => {
                 assert!(msg.contains("already in block chain"));
             }
             other => panic!("expected BroadcastAlreadyConfirmed, got {:?}", other),
@@ -239,7 +253,7 @@ mod tests {
         );
 
         match err {
-            WalletCoreError::BroadcastMissingInputs(msg) => {
+            WalletSyncError::BroadcastMissingInputs(msg) => {
                 assert!(msg.contains("missing inputs"));
             }
             other => panic!("expected BroadcastMissingInputs, got {:?}", other),
@@ -254,7 +268,7 @@ mod tests {
         );
 
         match err {
-            WalletCoreError::BroadcastInsufficientFee(msg) => {
+            WalletSyncError::BroadcastInsufficientFee(msg) => {
                 assert!(msg.contains("min relay fee"));
             }
             other => panic!("expected BroadcastInsufficientFee, got {:?}", other),
@@ -269,7 +283,7 @@ mod tests {
         );
 
         match err {
-            WalletCoreError::BroadcastFailed(msg) => {
+            WalletSyncError::BroadcastFailed(msg) => {
                 assert!(msg.contains("status=400"));
                 assert!(msg.contains("some unexpected rejection"));
             }
@@ -279,26 +293,41 @@ mod tests {
 
     #[test]
     fn retries_and_succeeds_on_retryable_server_error() {
-        let server = MockServer::start();
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let addr = listener.local_addr().expect("listener addr");
 
-        let _first = server.mock(|when, then| {
-            when.method(POST)
-                .path("/tx")
-                .body("deadbeef");
-            then.status(500)
-                .body("temporary server error");
+        let handle = thread::spawn(move || {
+            for attempt in 0..2 {
+                let (mut stream, _) = listener.accept().expect("accept connection");
+
+                let mut buf = [0u8; 4096];
+                let _ = stream.read(&mut buf).expect("read request");
+
+                if attempt == 0 {
+                    let body = "temporary server error";
+                    let response = format!(
+                        "HTTP/1.1 503 Service Unavailable\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                        body.len(),
+                        body
+                    );
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write 503 response");
+                } else {
+                    let response =
+                        "HTTP/1.1 200 OK\r\ncontent-length: 0\r\nconnection: close\r\n\r\n";
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write 200 response");
+                }
+                stream.flush().expect("flush response");
+            }
         });
 
-        let _second = server.mock(|when, then| {
-            when.method(POST)
-                .path("/tx")
-                .body("deadbeef");
-            then.status(200);
-        });
-
-        let broadcaster = EsploraBroadcaster::new(server.base_url());
+        let broadcaster = EsploraBroadcaster::new(format!("http://{}", addr));
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "unexpected result: {:?}", result);
+        handle.join().expect("server thread join");
     }
 }

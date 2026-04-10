@@ -1,8 +1,7 @@
 use bitcoin::consensus::encode::serialize_hex;
 use tracing::{debug, info};
 
-use crate::model::WalletPublishedTxInfo;
-use crate::service::broadcast::TxBroadcaster;
+use crate::model::{WalletFinalizedTxInfo};
 use crate::service::psbt_common::{extract_finalized_tx, parse_psbt};
 use crate::WalletCoreResult;
 
@@ -10,35 +9,29 @@ use super::*;
 
 impl WalletService {
     /// Parse a finalized PSBT, extract the fully signed transaction, and
-    /// broadcast it using the provided broadcaster implementation.
-    pub fn publish_psbt<B: TxBroadcaster>(
+    /// return the finalized transaction data needed for broadcasting.
+    pub fn finalize_psbt_for_broadcast(
         &self,
         psbt_base64: &str,
-        broadcaster: &B,
-    ) -> WalletCoreResult<WalletPublishedTxInfo> {
-        debug!("wallet_service: publish_psbt start");
+    ) -> WalletCoreResult<WalletFinalizedTxInfo> {
+        debug!("wallet_service: finalize_psbt_for_broadcast start");
 
         let psbt = parse_psbt(psbt_base64)?;
         let tx = extract_finalized_tx(&psbt)?;
         let txid = tx.compute_txid().to_string();
         let tx_hex = serialize_hex(&tx);
+        let replaceable = tx.is_explicitly_rbf();
 
         info!(
-            "wallet_service: publish_psbt prepared finalized transaction txid={} hex_len={}",
+            "wallet_service: finalize_psbt_for_broadcast prepared finalized transaction txid={} hex_len={}",
             txid,
             tx_hex.len()
         );
 
-        broadcaster.broadcast_tx_hex(&tx_hex)?;
-
-        info!(
-            "wallet_service: publish_psbt broadcasted transaction txid={}",
+        Ok(WalletFinalizedTxInfo {
             txid,
-        );
-
-        Ok(WalletPublishedTxInfo {
-            txid,
-            replaceable: Some(tx.is_explicitly_rbf()),
+            tx_hex,
+            replaceable,
         })
     }
 }
@@ -49,7 +42,6 @@ mod tests {
     use crate::model::WalletSignedPsbtInfo;
     use crate::service::psbt_common::is_psbt_finalized;
     use crate::WalletCoreError;
-    use crate::service::broadcast::{FailingBroadcaster, NoopBroadcaster};
     const FINALIZED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGAQhCAUBQOwjdd/7aYgEH2ZHtHfwqt01+CB3A29cdWLeeXj+EejPrC6Y6pnpcto0TJA8BwCK1uMICqlUyEsXb+xY0dkYBAAEFIFU1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWAAEFILEKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoAA==";
 
     const UNSIGNED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGIRZVNVyoPJc/HZfODjhDyF14kFrxa03FMbxIjlchLSMBFhkAc8XaClYAAIABAACAAAAAgAAAAAAAAAAAARcgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYAAQUgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYhB1U1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWGQBzxdoKVgAAgAEAAIAAAACAAAAAAAAAAAAAAQUgsQrJf2ds8fPM2ssLeBcSgrvpSpTfFDIBcA3Fm8wV82ghB7EKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoGQBzxdoKVgAAgAEAAIAAAACAAQAAAAAAAAAA";
@@ -91,6 +83,30 @@ mod tests {
     }
 
     #[test]
+    fn finalized_psbt_produces_broadcast_payload() {
+        let service = WalletService::load_or_create(&crate::config::WalletConfig {
+            network: bitcoin::Network::Signet,
+            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
+            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            db_path: unique_db_path("wallet_core_finalize_publish"),
+            esplora_url: "https://mempool.space/signet/api".to_string(),
+            is_watch_only: true,
+        })
+        .expect("watch-only wallet should load for finalize test");
+
+        let result = service.finalize_psbt_for_broadcast(FINALIZED_TEST_PSBT);
+
+        assert!(result.is_ok());
+        let finalized = result.unwrap();
+        assert_eq!(
+            finalized.txid,
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
+        );
+        assert!(finalized.replaceable);
+        assert!(!finalized.tx_hex.is_empty());
+    }
+
+    #[test]
     fn signed_model_reports_finalized_before_publish() {
         let info = WalletSignedPsbtInfo {
             psbt_base64: FINALIZED_TEST_PSBT.to_string(),
@@ -103,52 +119,6 @@ mod tests {
         assert!(matches!(
             info.signing_status(),
             crate::model::PsbtSigningStatus::Finalized
-        ));
-    }
-
-    #[test]
-    fn publish_psbt_succeeds_with_noop_broadcaster() {
-        let service = WalletService::load_or_create(&crate::config::WalletConfig {
-            network: bitcoin::Network::Signet,
-            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
-            db_path: unique_db_path("wallet_core_publish"),
-            esplora_url: "https://mempool.space/signet/api".to_string(),
-            is_watch_only: true,
-        })
-        .expect("watch-only wallet should load for publish test");
-
-        let result = service.publish_psbt(FINALIZED_TEST_PSBT, &NoopBroadcaster);
-
-        assert!(result.is_ok());
-        let published = result.unwrap();
-        assert_eq!(
-            published.txid,
-            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
-        );
-        assert_eq!(published.replaceable, Some(true));
-    }
-
-    #[test]
-    fn publish_psbt_returns_broadcast_failed_for_failing_broadcaster() {
-        let service = WalletService::load_or_create(&crate::config::WalletConfig {
-            network: bitcoin::Network::Signet,
-            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
-            db_path: unique_db_path("wallet_core_publish_fail"),
-            esplora_url: "https://mempool.space/signet/api".to_string(),
-            is_watch_only: true,
-        })
-        .expect("watch-only wallet should load for publish test");
-
-        let result = service.publish_psbt(
-            FINALIZED_TEST_PSBT,
-            &FailingBroadcaster::transport("transport down"),
-        );
-
-        assert!(matches!(
-            result,
-            Err(WalletCoreError::BroadcastTransport(msg)) if msg.contains("transport down")
         ));
     }
 }

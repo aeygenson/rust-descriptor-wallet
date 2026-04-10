@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-actively--developing-yellow)
 
-A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundaries, BDK-based wallet logic, and a path toward a desktop wallet with a clear separation between core logic, sync, storage, API, and UI.
+A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundaries, BDK-based wallet logic, and a path toward a desktop wallet with a clear separation between core logic, chain integration, storage, API, and UI.
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
@@ -16,7 +16,7 @@ Current milestone: the project now supports real software-wallet sends plus RBF 
 The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 
 - clean Rust workspace architecture
-- explicit separation of wallet logic, sync, storage, and presentation
+- explicit separation of wallet logic, chain integration, storage, and presentation
 - a practical PSBT-oriented transaction flow
 - a codebase that can evolve from CLI-first development into a desktop application
 
@@ -27,7 +27,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 ### Components
 
 - `wallet_core (BDK)`: descriptor handling, wallet state, address derivation, transaction construction, and PSBT flow
-- `wallet_sync`: blockchain synchronization layer
+- `wallet_sync`: chain integration layer for Esplora sync and transaction broadcast
 - `wallet_storage`: local persistence layer
 - `wallet_api`: orchestration boundary shared by apps
 - `wallet_cli`: command-line entry point
@@ -50,14 +50,14 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - CLI commands for wallet metadata management
 - runtime wallet loading and creation backed by per-wallet BDK file stores
 - receive-address generation for stored wallets
-- Esplora-based wallet sync
+- Esplora-based wallet sync through `wallet_sync`
 - balance queries over persisted wallet state
 - wallet status reporting with balance, UTXO count, and latest observed block height
 - transaction history inspection from synced wallet state
 - UTXO inspection from synced wallet state
 - unsigned PSBT creation through the runtime wallet flow
 - PSBT signing for software-signing wallets
-- finalized-PSBT extraction and publish through an Esplora broadcaster
+- finalized-PSBT extraction and publish through `wallet_sync`
 - end-to-end create/sign/publish orchestration in the API layer
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
@@ -84,6 +84,7 @@ The intended feature set includes:
 - descriptor wallets with `wpkh` and later `tr`
 - external and internal derivation paths
 - blockchain sync through Esplora
+- transaction broadcast through the same chain backend boundary
 - persisted wallet metadata and per-wallet database paths
 - runtime address derivation and balance tracking
 - UTXO tracking
@@ -110,7 +111,7 @@ The intended transaction flow is:
 4. a signer adds signatures without owning the full wallet application layer
 5. the finalized transaction is broadcast to the network
 
-Current code now covers the full software-wallet path: create PSBT, sign it, finalize it, and publish the resulting transaction through an Esplora-compatible endpoint.
+Current code now covers the full software-wallet path: create PSBT, sign it, finalize it, and publish the resulting transaction through the shared chain backend built on Esplora.
 
 For replaceable transactions, the code also supports a fee-bump path:
 
@@ -180,7 +181,7 @@ What works at runtime now:
 
 - load or create a persisted BDK wallet from the stored descriptors
 - reveal the next external receive address and persist the derivation state
-- sync wallet state through the configured Esplora endpoint
+- sync wallet state through the configured Esplora endpoint via `wallet_sync`
 - read total balance from the persisted wallet state
 - inspect a high-level wallet status view
 - inspect wallet transaction history from the current synced state
@@ -189,7 +190,7 @@ What works at runtime now:
 - sign a PSBT using wallet-owned private descriptor material
 - classify signing results as unchanged, partial, or finalized
 - validate and extract a finalized PSBT into a raw transaction
-- broadcast raw transaction hex through an Esplora-compatible `/tx` endpoint
+- broadcast raw transaction hex through an Esplora-compatible `/tx` endpoint via `wallet_sync`
 - run an end-to-end send path through create, sign, and publish
 - inspect fee rate and replaceability on wallet transactions
 - build replacement PSBTs for eligible RBF transactions
@@ -208,7 +209,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The workspace now also has a cleaner boundary where `wallet_sync` owns the Esplora-facing chain integration used by higher layers. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 
@@ -249,7 +250,7 @@ wpkh([fingerprint/84'/1'/0']tpub.../1/*)
 ## Development Roadmap
 
 1. implement wallet primitives in `wallet_core`
-2. integrate sync in `wallet_sync`
+2. continue expanding `wallet_sync` as the chain-backend boundary
 3. add persistence in `wallet_storage`
 4. expose real operations through `wallet_api`
 5. expand `wallet_cli` into a usable development interface

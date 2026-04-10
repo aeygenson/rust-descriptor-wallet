@@ -5,8 +5,26 @@ use wallet_sync::error::WalletSyncError;
 
 #[derive(Debug, Error)]
 pub enum WalletApiError {
-    #[error(transparent)]
-    Sync(#[from] WalletSyncError),
+    #[error("broadcast transport error: {0}")]
+    BroadcastTransport(String),
+
+    #[error("transaction broadcast failed: {0}")]
+    BroadcastFailed(String),
+
+    #[error("mempool conflict: {0}")]
+    BroadcastMempoolConflict(String),
+
+    #[error("transaction already confirmed: {0}")]
+    BroadcastAlreadyConfirmed(String),
+
+    #[error("missing inputs: {0}")]
+    BroadcastMissingInputs(String),
+
+    #[error("insufficient relay fee: {0}")]
+    BroadcastInsufficientFee(String),
+
+    #[error("sync error: {0}")]
+    Sync(String),
 
     #[error(transparent)]
     Storage(#[from] WalletStorageError),
@@ -75,25 +93,42 @@ pub enum WalletApiError {
 
     #[error("failed to extract transaction from psbt: {0}")]
     ExtractTxFailed(String),
+}
 
-    #[error("transaction broadcast failed: {0}")]
-    BroadcastFailed(String),
+impl From<WalletSyncError> for WalletApiError {
+    fn from(e: WalletSyncError) -> Self {
+        match e {
+            WalletSyncError::BroadcastTransport(s) => {
+                WalletApiError::BroadcastTransport(s)
+            }
+            WalletSyncError::BroadcastFailed(s) => {
+                let normalized = s.to_ascii_lowercase();
 
-    #[error("broadcast transport error: {0}")]
-    BroadcastTransport(String),
-
-    #[error("mempool conflict: {0}")]
-    BroadcastMempoolConflict(String),
-
-    #[error("transaction already confirmed: {0}")]
-    BroadcastAlreadyConfirmed(String),
-
-    #[error("missing inputs: {0}")]
-    BroadcastMissingInputs(String),
-
-    #[error("insufficient relay fee: {0}")]
-    BroadcastInsufficientFee(String),
-
+                if normalized.contains("non-final") {
+                    WalletApiError::PsbtNotFinalized
+                } else {
+                    WalletApiError::BroadcastFailed(s)
+                }
+            }
+            WalletSyncError::BroadcastMempoolConflict(s) => {
+                WalletApiError::BroadcastMempoolConflict(s)
+            }
+            WalletSyncError::BroadcastAlreadyConfirmed(s) => {
+                WalletApiError::BroadcastAlreadyConfirmed(s)
+            }
+            WalletSyncError::BroadcastMissingInputs(s) => {
+                WalletApiError::BroadcastMissingInputs(s)
+            }
+            WalletSyncError::BroadcastInsufficientFee(s) => {
+                WalletApiError::BroadcastInsufficientFee(s)
+            }
+            WalletSyncError::PsbtNotFinalized => {
+                WalletApiError::PsbtNotFinalized
+            }
+            WalletSyncError::Core(core) => WalletApiError::from(core),
+            other => WalletApiError::Sync(other.to_string()),
+        }
+    }
 }
 
 impl From<WalletCoreError> for WalletApiError {
@@ -146,30 +181,6 @@ impl From<WalletCoreError> for WalletApiError {
             }
             WalletCoreError::ExtractTxFailed(s) => {
                 WalletApiError::ExtractTxFailed(s)
-            }
-            WalletCoreError::BroadcastFailed(s) => {
-                let normalized = s.to_ascii_lowercase();
-
-                if normalized.contains("non-final") {
-                    WalletApiError::PsbtNotFinalized
-                } else {
-                    WalletApiError::BroadcastFailed(s)
-                }
-            }
-            WalletCoreError::BroadcastTransport(s) => {
-                WalletApiError::BroadcastTransport(s)
-            }
-            WalletCoreError::BroadcastMempoolConflict(s) => {
-                WalletApiError::BroadcastMempoolConflict(s)
-            }
-            WalletCoreError::BroadcastAlreadyConfirmed(s) => {
-                WalletApiError::BroadcastAlreadyConfirmed(s)
-            }
-            WalletCoreError::BroadcastMissingInputs(s) => {
-                WalletApiError::BroadcastMissingInputs(s)
-            }
-            WalletCoreError::BroadcastInsufficientFee(s) => {
-                WalletApiError::BroadcastInsufficientFee(s)
             }
             WalletCoreError::InvalidConfig(s) => {
                 WalletApiError::InvalidInput(s)

@@ -12,3 +12,6 @@ bdk_wallet.workspace = true
 wallet_core={path="../wallet_core"}
 tracing.workspace = true
 bdk_chain.workspace = true
+reqwest.workspace = true
+[dev-dependencies]
+httpmock.workspace = true

@@ -2988,8 +2988,6 @@ name = "wallet_api"
 version = "0.1.0"
 dependencies = [
  "bitcoin",
- "httpmock",
- "reqwest 0.11.27",
  "serde",
  "serde_json",
  "sqlx",
@@ -3057,6 +3055,8 @@ dependencies = [
  "bdk_chain",
  "bdk_esplora",
  "bdk_wallet",
+ "httpmock",
+ "reqwest 0.11.27",
  "thiserror",
  "tracing",
  "wallet_core",

@@ -199,6 +199,7 @@ pub struct WalletSignedPsbtInfo {
     pub txid: String,
 }
 
+
 impl WalletSignedPsbtInfo {
     /// Classify signing result into a domain status.
     pub fn signing_status(&self) -> PsbtSigningStatus {
@@ -208,6 +209,25 @@ impl WalletSignedPsbtInfo {
             (false, false) => PsbtSigningStatus::Unchanged,
         }
     }
+}
+
+/// Core model describing a finalized transaction extracted from a PSBT.
+///
+/// This represents the output of core logic after a PSBT has been fully
+/// signed and finalized, but before it is broadcast to the network.
+///
+/// This model is intentionally independent of any broadcasting mechanism
+/// and is used as the boundary between `wallet_core` and `wallet_sync`.
+#[derive(Debug, Clone)]
+pub struct WalletFinalizedTxInfo {
+    /// Transaction id of the finalized transaction.
+    pub txid: String,
+
+    /// Raw transaction hex ready for broadcast.
+    pub tx_hex: String,
+
+    /// Whether the transaction is replaceable via RBF.
+    pub replaceable: bool,
 }
 
 /// Core model describing a successfully published (broadcast) transaction.

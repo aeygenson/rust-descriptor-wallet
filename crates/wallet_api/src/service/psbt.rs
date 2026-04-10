@@ -2,53 +2,53 @@ use crate::dto::{WalletPsbtDto, WalletPublishedTxDto, WalletSignedPsbtDto};
 use crate::WalletApiResult;
 
 use wallet_core::types::{AmountSat, FeeRateSatPerVb};
-use crate::broadcaster::esplora::EsploraBroadcaster;
-use wallet_core::{WalletCoreError, WalletService};
+use wallet_core::WalletService;
 use wallet_storage::WalletStorage;
+use wallet_sync::{WalletSyncError, WalletSyncService};
 
 use super::wallet::load_wallet_config;
 
 use tracing::{debug, info};
 use tokio::task;
 
-fn log_publish_error(name: &str, error: &WalletCoreError) {
+fn log_publish_error(name: &str, error: &WalletSyncError) {
     match error {
-        WalletCoreError::BroadcastTransport(msg) => {
+        WalletSyncError::BroadcastTransport(msg) => {
             tracing::error!(
                 "api psbt: publish transport_failed name={} error={}",
                 name,
                 msg
             );
         }
-        WalletCoreError::BroadcastMempoolConflict(msg) => {
+        WalletSyncError::BroadcastMempoolConflict(msg) => {
             tracing::error!(
                 "api psbt: publish mempool_conflict name={} error={}",
                 name,
                 msg
             );
         }
-        WalletCoreError::BroadcastAlreadyConfirmed(msg) => {
+        WalletSyncError::BroadcastAlreadyConfirmed(msg) => {
             tracing::error!(
                 "api psbt: publish already_confirmed name={} error={}",
                 name,
                 msg
             );
         }
-        WalletCoreError::BroadcastMissingInputs(msg) => {
+        WalletSyncError::BroadcastMissingInputs(msg) => {
             tracing::error!(
                 "api psbt: publish missing_inputs name={} error={}",
                 name,
                 msg
             );
         }
-        WalletCoreError::BroadcastInsufficientFee(msg) => {
+        WalletSyncError::BroadcastInsufficientFee(msg) => {
             tracing::error!(
                 "api psbt: publish insufficient_fee name={} error={}",
                 name,
                 msg
             );
         }
-        WalletCoreError::PsbtNotFinalized => {
+        WalletSyncError::PsbtNotFinalized => {
             tracing::error!(
                 "api psbt: publish not_finalized name={}",
                 name,
@@ -181,13 +181,22 @@ pub async fn publish(
     let psbt_base64 = psbt_base64.to_string();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| {
+    let published = task::block_in_place(|| -> WalletApiResult<wallet_core::model::WalletPublishedTxInfo> {
         let wallet = WalletService::load_or_create(&config)?;
-        let broadcaster = EsploraBroadcaster::new(config.esplora_url.clone());
+        let sync_service = WalletSyncService::new();
 
-        wallet.publish_psbt(&psbt_base64, &broadcaster).map_err(|e| {
-            log_publish_error(&name_for_error, &e);
-            e
+        let finalized = wallet.finalize_psbt_for_broadcast(&psbt_base64)?;
+
+        sync_service
+            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .map_err(|e| {
+                log_publish_error(&name_for_error, &e);
+                e
+            })?;
+
+        Ok(wallet_core::model::WalletPublishedTxInfo {
+            txid: finalized.txid,
+            replaceable: Some(finalized.replaceable),
         })
     })?;
 
@@ -281,9 +290,9 @@ pub async fn bump_fee(
     let txid = txid.to_string();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| {
+    let published = task::block_in_place(|| -> WalletApiResult<wallet_core::model::WalletPublishedTxInfo> {
         let mut wallet = WalletService::load_or_create(&config)?;
-        let broadcaster = EsploraBroadcaster::new(config.esplora_url.clone());
+        let sync_service = WalletSyncService::new();
 
         let bumped = wallet.bump_fee_psbt(&txid, fee_rate_sat_per_vb).map_err(|e| {
             tracing::error!(
@@ -306,9 +315,18 @@ pub async fn bump_fee(
             e
         })?;
 
-        wallet.publish_psbt(&signed.psbt_base64, &broadcaster).map_err(|e| {
-            log_publish_error(&name_for_error, &e);
-            e
+        let finalized = wallet.finalize_psbt_for_broadcast(&signed.psbt_base64)?;
+
+        sync_service
+            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .map_err(|e| {
+                log_publish_error(&name_for_error, &e);
+                e
+            })?;
+
+        Ok(wallet_core::model::WalletPublishedTxInfo {
+            txid: finalized.txid,
+            replaceable: Some(finalized.replaceable),
         })
     })?;
 

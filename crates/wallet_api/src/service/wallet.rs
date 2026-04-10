@@ -1,6 +1,6 @@
 
 
-use std::sync::Arc;
+
 
 use bitcoin::Network;
 use tracing::{debug, info};
@@ -8,9 +8,9 @@ use tracing::{debug, info};
 use crate::dto::WalletStatusDto;
 use crate::{WalletApiError, WalletApiResult};
 
-use wallet_core::{WalletConfig, WalletCore, WalletService};
+use wallet_core::{WalletConfig,  WalletService};
 use wallet_storage::WalletStorage;
-use wallet_sync::WalletSync;
+use wallet_sync::WalletSyncService;
 
 /// Load wallet configuration from storage and convert it into the core config.
 pub(crate) async fn load_wallet_config(
@@ -59,8 +59,7 @@ pub async fn sync(storage: &WalletStorage, name: &str) -> WalletApiResult<()> {
     let config = load_wallet_config(storage, name).await?;
     let mut wallet = WalletService::load_or_create(&config)?;
 
-    let core = Arc::new(WalletCore::new());
-    let sync_service = WalletSync::new(core);
+    let sync_service = WalletSyncService::new();
     sync_service.sync(&mut wallet, &config).await?;
 
     info!("api wallet: sync success name={}", name);

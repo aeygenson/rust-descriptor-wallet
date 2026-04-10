@@ -17,13 +17,13 @@ use crate::dto::{
 
 use wallet_core::WalletCore;
 use wallet_storage::WalletStorage;
-use wallet_sync::WalletSync;
+use wallet_sync::WalletSyncService;
 
 #[derive(Debug)]
 pub struct WalletApi {
     core: Arc<WalletCore>,
     storage: WalletStorage,
-    sync: WalletSync,
+    sync: WalletSyncService,
 }
 
 impl WalletApi {
@@ -34,7 +34,7 @@ impl WalletApi {
     pub fn from_parts(
         core: Arc<WalletCore>,
         storage: WalletStorage,
-        sync: WalletSync,
+        sync: WalletSyncService,
     ) -> Self {
         Self { core, storage, sync }
     }
@@ -160,7 +160,7 @@ impl WalletApi {
         &self.storage
     }
 
-    pub fn sync_service(&self) -> &WalletSync {
+    pub fn sync_service(&self) -> &WalletSyncService {
         &self.sync
     }
 }

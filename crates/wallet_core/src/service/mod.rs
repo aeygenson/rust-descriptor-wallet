@@ -5,7 +5,6 @@ mod lifecycle;
 pub mod psbt_sign;
 pub mod psbt_publish;
 pub mod psbt_common;
-pub mod broadcast;
 pub mod psbt_bump;
 
 use bdk_file_store::Store;
