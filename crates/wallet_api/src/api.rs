@@ -112,6 +112,24 @@ impl WalletApi {
         psbt::publish(&self.storage, name, psbt_base64).await
     }
 
+    pub async fn bump_fee_psbt(
+        &self,
+        name: &str,
+        txid: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::bump_fee_psbt(&self.storage, name, txid, fee_rate_sat_per_vb).await
+    }
+
+    pub async fn bump_fee(
+        &self,
+        name: &str,
+        txid: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<WalletPublishedTxDto> {
+        psbt::bump_fee(&self.storage, name, txid, fee_rate_sat_per_vb).await
+    }
+
     pub async fn send(
         &self,
         name: &str,

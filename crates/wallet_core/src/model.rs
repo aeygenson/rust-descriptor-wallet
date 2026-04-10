@@ -1,4 +1,9 @@
-use crate::types::{AmountSat, WalletKeychain, TxDirection};
+use bdk_wallet::bitcoin::{psbt::Psbt, Sequence};
+
+use crate::{
+    WalletCoreResult,
+    types::{AmountSat, WalletKeychain, TxDirection},
+};
 
 
 /// Core wallet transaction model used inside wallet_core
@@ -15,6 +20,8 @@ pub struct WalletTxInfo {
     pub confirmed: bool,
     pub confirmation_height: Option<u32>,
     pub direction: TxDirection,
+    /// Whether the transaction is replaceable via RBF.
+    pub replaceable: bool,
     /// Net value in satoshis:
     /// positive => received
     /// negative => sent
@@ -23,6 +30,9 @@ pub struct WalletTxInfo {
 
     /// Transaction fee in satoshis (always positive when present)
     pub fee: Option<AmountSat>,
+
+    /// Fee rate in sat/vB when known.
+    pub fee_rate_sat_per_vb: Option<u64>,
 }
 
 /// Core wallet UTXO model used inside wallet_core
@@ -48,6 +58,12 @@ pub struct WalletPsbtInfo {
     /// Base64-encoded PSBT payload.
     pub psbt_base64: String,
 
+    /// Transaction id of the PSBT.
+    pub txid: String,
+
+    /// Original transaction id (used for fee bump flows).
+    pub original_txid: Option<String>,
+
     /// Destination address the wallet is paying to.
     pub to_address: String,
 
@@ -57,11 +73,83 @@ pub struct WalletPsbtInfo {
     /// Transaction fee in satoshis.
     pub fee_sat: AmountSat,
 
+    /// Requested fee rate in sat/vB used when constructing the PSBT.
+    pub fee_rate_sat_per_vb: u64,
+
+    /// Whether the transaction was created as replaceable via RBF.
+    pub replaceable: bool,
+
     /// Change amount in satoshis, if a change output was created.
     pub change_amount_sat: Option<AmountSat>,
 
     /// Number of wallet UTXOs selected for this PSBT.
     pub selected_utxo_count: usize,
+
+    /// Total number of inputs in the transaction.
+    pub input_count: usize,
+
+    /// Total number of outputs in the transaction.
+    pub output_count: usize,
+
+    /// Number of recipient outputs (non-change).
+    pub recipient_count: usize,
+
+    /// Estimated virtual size of the transaction.
+    pub estimated_vsize: u64,
+}
+
+impl WalletPsbtInfo {
+    /// Build a conservative `WalletPsbtInfo` from a raw PSBT.
+    ///
+    /// This is primarily used by flows such as fee-bump, where a fresh PSBT
+    /// must be returned from wallet_core even when full UI-oriented metadata is
+    /// not readily available without additional wallet context.
+    ///
+    /// The conversion guarantees:
+    /// - base64 PSBT payload is preserved
+    /// - RBF flag is derived from input sequence numbers
+    /// - selected input count is preserved
+    ///
+    /// The remaining fields are populated conservatively:
+    /// - `to_address` = empty string
+    /// - `amount_sat` = 0
+    /// - `fee_sat` = 0
+    /// - `fee_rate_sat_per_vb` = 0
+    /// - `change_amount_sat` = None
+    ///
+    /// If later you want richer output, add a more specific constructor such as
+    /// `from_psbt_with_metadata(...)` and keep this method as the lowest-common-
+    /// denominator fallback.
+    pub fn from_psbt(psbt: Psbt) -> WalletCoreResult<Self> {
+        let replaceable = psbt
+            .unsigned_tx
+            .input
+            .iter()
+            .any(|txin| txin.sequence.0 < Sequence::ENABLE_LOCKTIME_NO_RBF.0);
+
+        let txid = psbt.unsigned_tx.compute_txid().to_string();
+        let input_count = psbt.unsigned_tx.input.len();
+        let output_count = psbt.unsigned_tx.output.len();
+        let recipient_count = output_count;
+        let estimated_vsize = psbt.unsigned_tx.vsize() as u64;
+
+        Ok(Self {
+            psbt_base64: psbt.to_string(),
+            txid,
+            original_txid: None,
+            to_address: String::new(),
+            amount_sat: AmountSat::default(),
+            fee_sat: AmountSat::default(),
+            fee_rate_sat_per_vb: 0,
+            replaceable,
+            change_amount_sat: None,
+            selected_utxo_count: input_count,
+            input_count,
+            output_count,
+            recipient_count,
+            estimated_vsize,
+        })
+    }
 }
 
 /// Domain status representing PSBT signing progress.
@@ -80,7 +168,7 @@ impl PsbtSigningStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Unchanged => "unchanged",
-            Self::PartiallySigned => "partial",
+            Self::PartiallySigned => "partially_signed",
             Self::Finalized => "finalized",
         }
     }
@@ -107,7 +195,7 @@ pub struct WalletSignedPsbtInfo {
     /// Whether the wallet finalized the PSBT during signing.
     pub finalized: bool,
 
-    /// Transaction id derived from the PSBT unsigned transaction.
+    /// Transaction id of the resulting transaction represented by the PSBT.
     pub txid: String,
 }
 
@@ -130,4 +218,7 @@ impl WalletSignedPsbtInfo {
 pub struct WalletPublishedTxInfo {
     /// Transaction id of the broadcasted transaction.
     pub txid: String,
+
+    /// Whether the transaction was created as replaceable via RBF, when known.
+    pub replaceable: Option<bool>,
 }

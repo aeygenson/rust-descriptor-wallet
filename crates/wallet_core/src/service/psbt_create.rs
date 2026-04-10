@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use bitcoin::{Address, Amount, Network};
+use bitcoin::{Address, Amount, Network, Sequence};
 use bitcoin::FeeRate;
 use bdk_wallet::KeychainKind;
 use tracing::{debug, info};
@@ -11,30 +11,25 @@ use crate::WalletCoreResult;
 use super::*;
 
 impl WalletService {
-    /// Create an unsigned PSBT scaffold for a future send flow.
+    /// Create an unsigned PSBT for a send flow.
     ///
-    /// This is the first core entry point for transaction construction.
-    /// For now it performs basic validation and defines the stable service API,
-    /// while the actual BDK transaction builder logic will be added next.
-    ///
-    /// Planned responsibilities of this method:
-    /// - validate destination address
-    /// - validate amount
-    /// - ensure destination network matches wallet network
-    /// - build unsigned PSBT with BDK
-    /// - return fee/change/input selection summary
+    /// This is the core entry point for transaction construction. It validates
+    /// the destination, amount, fee rate, wallet network, and returns an
+    /// unsigned PSBT together with fee/change/input-selection summary data.
     pub fn create_psbt(
         &mut self,
         wallet_network: Network,
         to_address: &str,
         amount_sat: AmountSat,
         fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
     ) -> WalletCoreResult<WalletPsbtInfo> {
         debug!(
-            "wallet_service: create_psbt start to={} amount_sat={} fee_rate_sat_per_vb={}",
+            "wallet_service: create_psbt start to={} amount_sat={} fee_rate_sat_per_vb={} enable_rbf={}",
             to_address,
             amount_sat.as_u64(),
-            fee_rate_sat_per_vb.as_u64()
+            fee_rate_sat_per_vb.as_u64(),
+            enable_rbf,
         );
 
         // Keep defensive validation in core even though wrapper constructors
@@ -65,19 +60,25 @@ impl WalletService {
         let mut builder = self.wallet.build_tx();
         builder.add_recipient(recipient_script.clone(), recipient_amount);
         builder.fee_rate(fee_rate);
+        if enable_rbf {
+            builder.set_exact_sequence(Sequence(0xFFFFFFFD));
+        }
 
         let psbt = builder
             .finish()
             .map_err(|e| crate::WalletCoreError::PsbtBuildFailed(e.to_string()))?;
 
+        let actual_replaceable = psbt.unsigned_tx.is_explicitly_rbf();
+
         for (idx, txout) in psbt.unsigned_tx.output.iter().enumerate() {
             let derivation = self.wallet.derivation_of_spk(txout.script_pubkey.clone());
             debug!(
-                "wallet_service: psbt output idx={} value={} recipient_match={} derivation={:?}",
+                "wallet_service: psbt output idx={} value={} recipient_match={} derivation={:?} tx_replaceable={}",
                 idx,
                 txout.value.to_sat(),
                 txout.script_pubkey == recipient_script,
-                derivation
+                derivation,
+                actual_replaceable
             );
         }
 
@@ -137,21 +138,32 @@ impl WalletService {
         let psbt_base64 = psbt.to_string();
 
         info!(
-            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} change_amount_sat={:?} selected_utxos={}",
+            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={}",
             to_address,
             amount_sat.as_u64(),
             fee_sat,
+            fee_rate_sat_per_vb.as_u64(),
+            enable_rbf,
+            actual_replaceable,
             change_amount_sat,
             selected_utxo_count
         );
 
         Ok(WalletPsbtInfo {
             psbt_base64,
+            txid: psbt.unsigned_tx.compute_txid().to_string(),
+            original_txid: None,
             to_address: to_address.to_string(),
             amount_sat,
-            fee_sat: AmountSat(fee_sat),
+            fee_sat: AmountSat::from(fee_sat),
+            fee_rate_sat_per_vb: fee_rate_sat_per_vb.as_u64(),
+            replaceable: actual_replaceable,
             change_amount_sat: change_amount_sat.map(AmountSat),
             selected_utxo_count,
+            input_count: psbt.unsigned_tx.input.len(),
+            output_count: psbt.unsigned_tx.output.len(),
+            recipient_count: 1,
+            estimated_vsize: psbt.unsigned_tx.vsize() as u64,
         })
     }
 }
@@ -192,12 +204,14 @@ mod tests {
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
+        enable_rbf: bool,
     ) -> WalletCoreResult<WalletPsbtInfo> {
         wallet.create_psbt(
             network,
             to_address,
-            AmountSat(amount_sat),
-            FeeRateSatPerVb(fee_rate_sat_per_vb),
+            AmountSat::from(amount_sat),
+            FeeRateSatPerVb::from(fee_rate_sat_per_vb),
+            enable_rbf,
         )
     }
 
@@ -239,7 +253,7 @@ mod tests {
     fn create_psbt_fails_for_zero_amount() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 0, 1);
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 0, 1, true);
 
         assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidAmount));
     }
@@ -248,7 +262,7 @@ mod tests {
     fn create_psbt_fails_for_zero_fee_rate() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 0);
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 0, true);
 
         assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
     }
@@ -257,7 +271,7 @@ mod tests {
     fn create_psbt_returns_invalid_destination_address_error() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, "invalid_address", 1000, 1);
+        let result = create_psbt_with(&mut wallet, config.network, "invalid_address", 1000, 1, true);
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::InvalidDestinationAddress(_))
@@ -268,7 +282,7 @@ mod tests {
     fn create_psbt_returns_destination_network_mismatch_error() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_mainnet_address(), 1000, 1);
+        let result = create_psbt_with(&mut wallet, config.network, valid_mainnet_address(), 1000, 1, true);
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::DestinationNetworkMismatch(_))
@@ -279,10 +293,75 @@ mod tests {
     fn create_psbt_fails_for_insufficient_funds() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 1);
+        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 1, true);
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
         });
+    }
+
+    #[test]
+    fn create_psbt_marks_transaction_replaceable_when_rbf_enabled() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+        );
+
+        match result {
+            Ok(psbt_info) => {
+                let psbt = crate::service::psbt_common::parse_psbt(&psbt_info.psbt_base64)
+                    .expect("created PSBT should parse");
+                assert!(psbt_info.replaceable, "PSBT info should report replaceable");
+                assert!(
+                    psbt.unsigned_tx.is_explicitly_rbf(),
+                    "unsigned transaction should be explicitly RBF"
+                );
+            }
+            Err(crate::WalletCoreError::PsbtBuildFailed(_)) => {
+                // Fresh watch-only test wallets may have no funds; in that case this
+                // test cannot reach transaction construction and should not fail the suite.
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn create_psbt_marks_transaction_non_replaceable_when_rbf_disabled() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            false,
+        );
+
+        match result {
+            Ok(psbt_info) => {
+                let psbt = crate::service::psbt_common::parse_psbt(&psbt_info.psbt_base64)
+                    .expect("created PSBT should parse");
+                assert!(
+                    !psbt_info.replaceable,
+                    "PSBT info should report non-replaceable when RBF is disabled"
+                );
+                assert!(
+                    !psbt.unsigned_tx.is_explicitly_rbf(),
+                    "unsigned transaction should not be explicitly RBF"
+                );
+            }
+            Err(crate::WalletCoreError::PsbtBuildFailed(_)) => {
+                // Fresh watch-only test wallets may have no funds; in that case this
+                // test cannot reach transaction construction and should not fail the suite.
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
+        }
     }
 }

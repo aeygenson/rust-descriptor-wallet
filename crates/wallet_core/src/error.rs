@@ -29,6 +29,39 @@ pub enum WalletCoreError {
     #[error("invalid fee rate")]
     InvalidFeeRate,
 
+    #[error("invalid txid: {0}")]
+    InvalidTxid(String),
+
+    #[error("transaction not found: {0}")]
+    TransactionNotFound(String),
+
+    #[error("transaction is already confirmed: {0}")]
+    TransactionAlreadyConfirmed(String),
+
+    #[error("transaction is not replaceable (RBF disabled): {0}")]
+    TransactionNotReplaceable(String),
+
+    #[error(
+        "requested fee rate for tx {txid} must be greater than original fee rate (original: {original_sat_per_vb}, requested: {requested_sat_per_vb})"
+    )]
+    FeeRateTooLowForBump {
+        txid: String,
+        original_sat_per_vb: crate::types::FeeRateSatPerVb,
+        requested_sat_per_vb: crate::types::FeeRateSatPerVb,
+    },
+
+    #[error("fee bump build failed for tx {txid}: {reason}")]
+    FeeBumpBuildFailed { txid: String, reason: String },
+
+    #[error("transaction fee unavailable for tx {txid}: {reason}")]
+    TransactionFeeUnavailable { txid: String, reason: String },
+
+    #[error("transaction virtual size unavailable for tx {0}")]
+    TransactionVsizeUnavailable(String),
+
+    #[error("psbt conversion failed for tx {txid}: {reason}")]
+    PsbtConversionFailed { txid: String, reason: String },
+
     #[error("invalid amount")]
     InvalidAmount,
 

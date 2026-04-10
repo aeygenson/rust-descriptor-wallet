@@ -1,7 +1,8 @@
 
 
 use crate::dto::{WalletTxDto, WalletUtxoDto};
-use crate::{WalletApiResult};
+use crate::WalletApiResult;
+use tokio::task;
 
 use wallet_core::WalletService;
 use wallet_storage::WalletStorage;
@@ -20,13 +21,18 @@ pub async fn txs(
     debug!("api inspect: txs start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
-    let wallet = WalletService::load_or_create(&config)?;
 
-    let txs: Vec<WalletTxDto> = wallet
-        .transactions()
-        .into_iter()
-        .map(Into::into)
-        .collect();
+    let txs: Vec<WalletTxDto> = task::block_in_place(|| {
+        let wallet = WalletService::load_or_create(&config)?;
+
+        let txs: Vec<WalletTxDto> = wallet
+            .transactions()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+
+        Ok::<_, crate::WalletApiError>(txs)
+    })?;
 
     info!("api inspect: txs success name={} count={}", name, txs.len());
 
@@ -43,13 +49,18 @@ pub async fn utxos(
     debug!("api inspect: utxos start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
-    let wallet = WalletService::load_or_create(&config)?;
 
-    let utxos: Vec<WalletUtxoDto> = wallet
-        .utxos()
-        .into_iter()
-        .map(Into::into)
-        .collect();
+    let utxos: Vec<WalletUtxoDto> = task::block_in_place(|| {
+        let wallet = WalletService::load_or_create(&config)?;
+
+        let utxos: Vec<WalletUtxoDto> = wallet
+            .utxos()
+            .into_iter()
+            .map(Into::into)
+            .collect();
+
+        Ok::<_, crate::WalletApiError>(utxos)
+    })?;
 
     info!("api inspect: utxos success name={} count={}", name, utxos.len());
 

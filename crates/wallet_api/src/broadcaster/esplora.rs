@@ -200,7 +200,7 @@ mod tests {
         assert!(matches!(result, Err(WalletCoreError::PsbtNotFinalized)));
         mock.assert();
     }
-}
+
     #[test]
     fn classifies_mempool_conflict_error() {
         let err = EsploraBroadcaster::classify_esplora_rejection(
@@ -215,3 +215,90 @@ mod tests {
             other => panic!("expected BroadcastMempoolConflict, got {:?}", other),
         }
     }
+
+    #[test]
+    fn classifies_already_confirmed_error() {
+        let err = EsploraBroadcaster::classify_esplora_rejection(
+            reqwest::StatusCode::BAD_REQUEST,
+            "sendrawtransaction RPC error: {\"code\":-27,\"message\":\"transaction already in block chain\"}",
+        );
+
+        match err {
+            WalletCoreError::BroadcastAlreadyConfirmed(msg) => {
+                assert!(msg.contains("already in block chain"));
+            }
+            other => panic!("expected BroadcastAlreadyConfirmed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classifies_missing_inputs_error() {
+        let err = EsploraBroadcaster::classify_esplora_rejection(
+            reqwest::StatusCode::BAD_REQUEST,
+            "sendrawtransaction RPC error: {\"code\":-25,\"message\":\"missing inputs\"}",
+        );
+
+        match err {
+            WalletCoreError::BroadcastMissingInputs(msg) => {
+                assert!(msg.contains("missing inputs"));
+            }
+            other => panic!("expected BroadcastMissingInputs, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classifies_insufficient_fee_error() {
+        let err = EsploraBroadcaster::classify_esplora_rejection(
+            reqwest::StatusCode::BAD_REQUEST,
+            "sendrawtransaction RPC error: {\"code\":-26,\"message\":\"min relay fee not met\"}",
+        );
+
+        match err {
+            WalletCoreError::BroadcastInsufficientFee(msg) => {
+                assert!(msg.contains("min relay fee"));
+            }
+            other => panic!("expected BroadcastInsufficientFee, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn classifies_unknown_rejection_as_broadcast_failed() {
+        let err = EsploraBroadcaster::classify_esplora_rejection(
+            reqwest::StatusCode::BAD_REQUEST,
+            "some unexpected rejection",
+        );
+
+        match err {
+            WalletCoreError::BroadcastFailed(msg) => {
+                assert!(msg.contains("status=400"));
+                assert!(msg.contains("some unexpected rejection"));
+            }
+            other => panic!("expected BroadcastFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn retries_and_succeeds_on_retryable_server_error() {
+        let server = MockServer::start();
+
+        let _first = server.mock(|when, then| {
+            when.method(POST)
+                .path("/tx")
+                .body("deadbeef");
+            then.status(500)
+                .body("temporary server error");
+        });
+
+        let _second = server.mock(|when, then| {
+            when.method(POST)
+                .path("/tx")
+                .body("deadbeef");
+            then.status(200);
+        });
+
+        let broadcaster = EsploraBroadcaster::new(server.base_url());
+        let result = broadcaster.broadcast_tx_hex("deadbeef");
+
+        assert!(result.is_ok());
+    }
+}

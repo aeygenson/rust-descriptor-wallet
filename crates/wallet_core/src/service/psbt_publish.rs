@@ -10,11 +10,7 @@ use super::*;
 
 impl WalletService {
     /// Parse a finalized PSBT, extract the fully signed transaction, and
-    /// prepare it for broadcast.
-    ///
-    /// Note: actual network broadcasting is intentionally left for the next
-    /// integration step, once a dedicated broadcaster/transport abstraction is
-    /// added to the project.
+    /// broadcast it using the provided broadcaster implementation.
     pub fn publish_psbt<B: TxBroadcaster>(
         &self,
         psbt_base64: &str,
@@ -40,7 +36,10 @@ impl WalletService {
             txid,
         );
 
-        Ok(WalletPublishedTxInfo { txid })
+        Ok(WalletPublishedTxInfo {
+            txid,
+            replaceable: Some(tx.is_explicitly_rbf()),
+        })
     }
 }
 
@@ -122,10 +121,12 @@ mod tests {
         let result = service.publish_psbt(FINALIZED_TEST_PSBT, &NoopBroadcaster);
 
         assert!(result.is_ok());
+        let published = result.unwrap();
         assert_eq!(
-            result.unwrap().txid,
+            published.txid,
             "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
         );
+        assert_eq!(published.replaceable, Some(true));
     }
 
     #[test]
@@ -142,12 +143,12 @@ mod tests {
 
         let result = service.publish_psbt(
             FINALIZED_TEST_PSBT,
-            &FailingBroadcaster::new("transport down"),
+            &FailingBroadcaster::transport("transport down"),
         );
 
         assert!(matches!(
             result,
-            Err(WalletCoreError::BroadcastFailed(msg)) if msg.contains("transport down")
+            Err(WalletCoreError::BroadcastTransport(msg)) if msg.contains("transport down")
         ));
     }
 }

@@ -26,6 +26,26 @@ pub enum WalletApiError {
     #[error("invalid fee rate")]
     InvalidFeeRate,
 
+    #[error("transaction not found: {0}")]
+    TransactionNotFound(String),
+
+    #[error("transaction already confirmed: {0}")]
+    TransactionAlreadyConfirmed(String),
+
+    #[error("transaction is not replaceable (RBF disabled): {0}")]
+    TransactionNotReplaceable(String),
+
+    #[error(
+        "fee rate too low for bump (original: {original_sat_per_vb} sat/vB, requested: {requested_sat_per_vb} sat/vB)"
+    )]
+    FeeRateTooLowForBump {
+        original_sat_per_vb: u64,
+        requested_sat_per_vb: u64,
+    },
+
+    #[error("fee bump build failed: {0}")]
+    FeeBumpBuildFailed(String),
+
     #[error("invalid destination address: {0}")]
     InvalidDestinationAddress(String),
 
@@ -81,6 +101,26 @@ impl From<WalletCoreError> for WalletApiError {
         match e {
             WalletCoreError::InvalidAmount => WalletApiError::InvalidAmount,
             WalletCoreError::InvalidFeeRate => WalletApiError::InvalidFeeRate,
+            WalletCoreError::TransactionNotFound(txid) => {
+                WalletApiError::TransactionNotFound(txid)
+            }
+            WalletCoreError::TransactionAlreadyConfirmed(txid) => {
+                WalletApiError::TransactionAlreadyConfirmed(txid)
+            }
+            WalletCoreError::TransactionNotReplaceable(txid) => {
+                WalletApiError::TransactionNotReplaceable(txid)
+            }
+            WalletCoreError::FeeRateTooLowForBump {
+                original_sat_per_vb,
+                requested_sat_per_vb,
+                ..
+            } => WalletApiError::FeeRateTooLowForBump {
+                original_sat_per_vb: original_sat_per_vb.as_u64(),
+                requested_sat_per_vb: requested_sat_per_vb.as_u64(),
+            },
+            WalletCoreError::FeeBumpBuildFailed { reason, .. } => {
+                WalletApiError::FeeBumpBuildFailed(reason)
+            }
             WalletCoreError::InvalidDestinationAddress(s) => {
                 WalletApiError::InvalidDestinationAddress(s)
             }
@@ -91,6 +131,9 @@ impl From<WalletCoreError> for WalletApiError {
             WalletCoreError::FeeCalculationFailed => WalletApiError::FeeCalculationFailed,
             WalletCoreError::InvalidPsbt(e) => {
                 WalletApiError::InvalidPsbt(e.to_string())
+            }
+            WalletCoreError::PsbtConversionFailed { reason, .. } => {
+                WalletApiError::InvalidPsbt(reason)
             }
             WalletCoreError::SignPsbtFailed(e) => {
                 WalletApiError::SignPsbtFailed(e.to_string())

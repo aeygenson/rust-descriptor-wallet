@@ -68,17 +68,26 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
                 .map(|v| format!("{} sats", v))
                 .unwrap_or_else(|| "n/a".to_string());
 
+            let fee_rate = tx
+                .fee_rate_sat_per_vb
+                .map(|v| format!("{} sat/vB", v))
+                .unwrap_or_else(|| "n/a".to_string());
+
+            let replaceable = tx.replaceable.to_string();
+
             let height = tx
                 .confirmation_height
                 .map(|h| h.to_string())
                 .unwrap_or_else(|| "unconfirmed".to_string());
 
             println!(
-                "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | confirmed={} | height={}",
+                "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | fee_rate={:<10} | rbf={} | confirmed={} | height={}",
                 tx.txid,
                 tx.direction,
                 tx.net_value,
                 fee,
+                fee_rate,
+                replaceable,
                 tx.confirmed,
                 height
             );
@@ -122,6 +131,7 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
     Ok(())
 }
 
+
 pub async fn create_psbt(
     api: &WalletApi,
     name: &str,
@@ -142,25 +152,119 @@ pub async fn create_psbt(
         .await?;
 
     info!(
-        "cli runtime: create_psbt success name={} to={} amount={} fee={} inputs={}",
+        "cli runtime: create_psbt success name={} txid={} to={} amount={} fee={} inputs={} outputs={} recipients={} vsize={}",
         name,
+        psbt.txid,
         psbt.to_address,
         psbt.amount_sat,
         psbt.fee_sat,
-        psbt.selected_utxo_count
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
     );
 
     println!("PSBT created:");
+    println!("txid={}", psbt.txid);
     println!("to={}", psbt.to_address);
     println!("amount={} sats", psbt.amount_sat);
     println!("fee={} sats", psbt.fee_sat);
-    println!("inputs={}", psbt.selected_utxo_count);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
 
     if let Some(change) = psbt.change_amount_sat {
         println!("change={} sats", change);
     }
 
     println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
+pub async fn bump_fee_psbt(
+    api: &WalletApi,
+    name: &str,
+    txid: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: bump_fee_psbt start name={} txid={} fee_rate={}",
+        name,
+        txid,
+        fee_rate_sat_per_vb
+    );
+
+    let psbt = api.bump_fee_psbt(name, txid, fee_rate_sat_per_vb).await?;
+
+    info!(
+        "cli runtime: bump_fee_psbt success name={} original_txid={} replacement_txid={} fee={} inputs={} outputs={} recipients={} vsize={}",
+        name,
+        txid,
+        psbt.txid,
+        psbt.fee_sat,
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+    );
+
+    println!("Replacement PSBT created:");
+    println!("original_txid={}", txid);
+    println!("replacement_txid={}", psbt.txid);
+    if let Some(original_txid) = &psbt.original_txid {
+        println!("tracked_original_txid={}", original_txid);
+    }
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
+pub async fn bump_fee(
+    api: &WalletApi,
+    name: &str,
+    txid: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: bump_fee start name={} txid={} fee_rate={}",
+        name,
+        txid,
+        fee_rate_sat_per_vb
+    );
+
+    let published = api.bump_fee(name, txid, fee_rate_sat_per_vb).await?;
+
+    info!(
+        "cli runtime: bump_fee success name={} original_txid={} replacement_txid={}",
+        name,
+        txid,
+        published.txid
+    );
+
+    println!("Replacement transaction broadcasted successfully:");
+    println!("original_txid={}", txid);
+    println!("replacement_txid={}", published.txid);
+    if let Some(rbf) = published.replaceable {
+        println!("rbf={}", rbf);
+    }
 
     Ok(())
 }
@@ -205,6 +309,9 @@ pub async fn publish_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Res
 
     println!("Transaction broadcasted successfully:");
     println!("txid={}", published.txid);
+    if let Some(rbf) = published.replaceable {
+        println!("rbf={}", rbf);
+    }
 
     Ok(())
 }
@@ -238,6 +345,9 @@ pub async fn send_psbt(
     println!("to={}", to);
     println!("amount={} sats", amount_sat);
     println!("txid={}", published.txid);
+    if let Some(rbf) = published.replaceable {
+        println!("rbf={}", rbf);
+    }
 
     Ok(())
 }

@@ -54,6 +54,8 @@ impl WalletService {
 
             let direction = if !has_wallet_inputs && has_wallet_outputs {
                 TxDirection::Received
+            } else if has_wallet_inputs && net_value < 0 {
+                TxDirection::Sent
             } else if has_wallet_inputs && has_wallet_outputs {
                 TxDirection::SelfTransfer
             } else {
@@ -70,6 +72,17 @@ impl WalletService {
                     .map(|amount| AmountSat(amount.to_sat()))
             };
 
+            let fee_rate_sat_per_vb = fee.as_ref().map(|fee_sat| {
+                let vsize = tx.tx_node.tx.vsize() as u64;
+                if vsize == 0 {
+                    0
+                } else {
+                    fee_sat.as_u64().div_ceil(vsize)
+                }
+            });
+
+            let replaceable = tx.tx_node.tx.is_explicitly_rbf();
+
             // Determine confirmation status and height from chain position
             let (confirmed, confirmation_height) = match tx.chain_position {
                 ChainPosition::Confirmed { anchor, .. } => (true, Some(anchor.block_id.height)),
@@ -83,6 +96,8 @@ impl WalletService {
                 direction,
                 net_value,
                 fee,
+                replaceable,
+                fee_rate_sat_per_vb,
             });
         }
 

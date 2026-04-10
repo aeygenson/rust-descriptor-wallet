@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project has moved beyond a read-only wallet into a real software-signing wallet flow with PSBT creation, signing, and publish via Esplora.
+Current milestone: the project now supports real software-wallet sends plus RBF fee bumping, including replacement-PSBT creation and publish via Esplora.
 
 ## Vision
 
@@ -59,18 +59,21 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - PSBT signing for software-signing wallets
 - finalized-PSBT extraction and publish through an Esplora broadcaster
 - end-to-end create/sign/publish orchestration in the API layer
+- replacement PSBT creation for RBF-enabled transactions
+- one-shot fee bump flow from replacement build through publish
+- transaction inspection now surfaces fee rate and replaceability metadata
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 
 ### In Progress
 
 - descriptor validation and richer domain logic inside `wallet_core`
-- broader transaction flow coverage beyond the current PSBT send path
+- richer send controls and policy handling
 - richer command surface in `wallet_api`
 - desktop integration on top of the same runtime API
 
 ### Expected Shortly
 
-- richer send options and policy controls
+- broader fee management and transaction controls
 - hardware-signing flow on top of the same PSBT pipeline
 - first end-to-end wallet flow across the workspace layers
 
@@ -90,6 +93,7 @@ The intended feature set includes:
 - PSBT signing flow
 - finalized transaction broadcast
 - one-shot send flow through create + sign + publish
+- RBF fee bump flow
 - watch-only support
 - hardware signer support
 - desktop UI built on the same API boundary
@@ -107,6 +111,13 @@ The intended transaction flow is:
 5. the finalized transaction is broadcast to the network
 
 Current code now covers the full software-wallet path: create PSBT, sign it, finalize it, and publish the resulting transaction through an Esplora-compatible endpoint.
+
+For replaceable transactions, the code also supports a fee-bump path:
+
+1. inspect an unconfirmed RBF transaction
+2. build a replacement PSBT at a higher fee rate
+3. sign the replacement transaction
+4. publish the replacement through Esplora
 
 ## Getting Started
 
@@ -150,6 +161,8 @@ cargo run -p wallet_cli -- utxos --name signet-dev
 cargo run -p wallet_cli -- create-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
 cargo run -p wallet_cli -- sign-psbt --name signet-dev --psbt '<base64>'
 cargo run -p wallet_cli -- publish-psbt --name signet-dev --psbt '<base64>'
+cargo run -p wallet_cli -- bump-fee-psbt --name signet-dev --txid <txid> --fee-rate 5
+cargo run -p wallet_cli -- bump-fee --name signet-dev --txid <txid> --fee-rate 5
 cargo run -p wallet_cli -- send-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
 ```
 
@@ -178,6 +191,9 @@ What works at runtime now:
 - validate and extract a finalized PSBT into a raw transaction
 - broadcast raw transaction hex through an Esplora-compatible `/tx` endpoint
 - run an end-to-end send path through create, sign, and publish
+- inspect fee rate and replaceability on wallet transactions
+- build replacement PSBTs for eligible RBF transactions
+- execute a full fee-bump flow through replacement build, sign, and publish
 
 Core domain types introduced:
 
@@ -192,7 +208,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, and a one-shot send command. The next major step is broadening the transaction flow rather than just proving it end to end.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 

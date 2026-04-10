@@ -3,6 +3,8 @@ use std::str::FromStr;
 use bitcoin::psbt::Psbt;
 use bitcoin::Transaction;
 
+use bitcoin::{Sequence, Txid};
+
 use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a PSBT from its encoded string representation.
@@ -25,17 +27,51 @@ pub fn extract_finalized_tx(psbt: &Psbt) -> WalletCoreResult<Transaction> {
     }
 
     psbt.clone().extract_tx().map_err(|e| {
-        WalletCoreError::ExtractTxFailed(e.to_string())
+        WalletCoreError::ExtractTxFailed(format!(
+            "failed to extract tx from PSBT: {}",
+            e
+        ))
     })
+}
+
+/// Check if a transaction is explicitly RBF-enabled.
+pub fn is_rbf_enabled(tx: &Transaction) -> bool {
+    tx.input
+        .iter()
+        .any(|txin| txin.sequence.0 < Sequence::ENABLE_LOCKTIME_NO_RBF.0)
+}
+
+/// Parse a txid from string.
+pub fn parse_txid(txid: &str) -> WalletCoreResult<Txid> {
+    Txid::from_str(txid)
+        .map_err(|_| WalletCoreError::InvalidTxid(txid.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bitcoin::{absolute, transaction, Amount, OutPoint, ScriptBuf, TxIn, TxOut, Witness};
 
     const FINALIZED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGAQhCAUBQOwjdd/7aYgEH2ZHtHfwqt01+CB3A29cdWLeeXj+EejPrC6Y6pnpcto0TJA8BwCK1uMICqlUyEsXb+xY0dkYBAAEFIFU1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWAAEFILEKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoAA==";
 
     const UNSIGNED_TEST_PSBT: &str = "cHNidP8BAIkCAAAAAc9GHAJ+0qYu4xXAbjEeNofTV2iW7wrR9V5VGybv5cMaAgAAAAD9////AugDAAAAAAAAIlEgO4KysqkYUxXab4DaXwbQRA2KXhRX+pM4fC2RnIbsh4aNIgAAAAAAACJRINc6z2Znt4UObgDiG7RSWixeLYiVaj0sNbC8BvSw3wG8+sMtAAABASsQJwAAAAAAACJRIDuCsrKpGFMV2m+A2l8G0EQNil4UV/qTOHwtkZyG7IeGIRZVNVyoPJc/HZfODjhDyF14kFrxa03FMbxIjlchLSMBFhkAc8XaClYAAIABAACAAAAAgAAAAAAAAAAAARcgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYAAQUgVTVcqDyXPx2Xzg44Q8hdeJBa8WtNxTG8SI5XIS0jARYhB1U1XKg8lz8dl84OOEPIXXiQWvFrTcUxvEiOVyEtIwEWGQBzxdoKVgAAgAEAAIAAAACAAAAAAAAAAAAAAQUgsQrJf2ds8fPM2ssLeBcSgrvpSpTfFDIBcA3Fm8wV82ghB7EKyX9nbPHzzNrLC3gXEoK76UqU3xQyAXANxZvMFfNoGQBzxdoKVgAAgAEAAIAAAACAAQAAAAAAAAAA";
+
+    fn build_tx_with_sequence(sequence: Sequence) -> Transaction {
+        Transaction {
+            version: transaction::Version(2),
+            lock_time: absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: OutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence,
+                witness: Witness::new(),
+            }],
+            output: vec![TxOut {
+                value: Amount::from_sat(1_000),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        }
+    }
 
     #[test]
     fn parse_psbt_works() {
@@ -79,5 +115,37 @@ mod tests {
             result,
             Err(WalletCoreError::PsbtNotFinalized)
         ));
+    }
+
+    #[test]
+    fn detects_rbf_enabled_transaction() {
+        let tx = build_tx_with_sequence(Sequence(0xFFFFFFFD));
+        assert!(is_rbf_enabled(&tx));
+    }
+
+    #[test]
+    fn detects_non_rbf_transaction() {
+        let tx = build_tx_with_sequence(Sequence::MAX);
+        assert!(!is_rbf_enabled(&tx));
+    }
+
+    #[test]
+    fn parse_txid_works_for_valid_txid() {
+        let txid = parse_txid(
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d",
+        )
+        .unwrap();
+
+        assert_eq!(
+            txid.to_string(),
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
+        );
+    }
+
+    #[test]
+    fn parse_txid_fails_for_invalid_string() {
+        let result = parse_txid("not-a-txid");
+
+        assert!(matches!(result, Err(WalletCoreError::InvalidTxid(_))));
     }
 }

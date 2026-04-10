@@ -33,8 +33,10 @@ pub struct WalletTxDto {
     pub confirmed: bool,
     pub confirmation_height: Option<u32>,
     pub direction: String,
+    pub replaceable: bool,
     pub net_value: i64,
     pub fee: Option<u64>,
+    pub fee_rate_sat_per_vb: Option<u64>,
 }
 
 // Conversion from core model
@@ -45,8 +47,10 @@ impl From<WalletTxInfo> for WalletTxDto {
             confirmed: value.confirmed,
             confirmation_height: value.confirmation_height,
             direction: value.direction.as_str().to_string(),
+            replaceable: value.replaceable,
             net_value: value.net_value,
             fee: value.fee.map(Into::into),
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
         }
     }
 }
@@ -88,22 +92,38 @@ pub struct WalletStatusDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletPsbtDto {
     pub psbt_base64: String,
+    pub txid: String,
+    pub original_txid: Option<String>,
     pub to_address: String,
     pub amount_sat: u64,
     pub fee_sat: u64,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
     pub change_amount_sat: Option<u64>,
     pub selected_utxo_count: usize,
+    pub input_count: usize,
+    pub output_count: usize,
+    pub recipient_count: usize,
+    pub estimated_vsize: u64,
 }
 
 impl From<WalletPsbtInfo> for WalletPsbtDto {
     fn from(value: WalletPsbtInfo) -> Self {
         Self {
             psbt_base64: value.psbt_base64,
+            txid: value.txid,
+            original_txid: value.original_txid,
             to_address: value.to_address,
             amount_sat: value.amount_sat.as_u64(),
             fee_sat: value.fee_sat.as_u64(),
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
+            replaceable: value.replaceable,
             change_amount_sat: value.change_amount_sat.map(|v| v.as_u64()),
             selected_utxo_count: value.selected_utxo_count,
+            input_count: value.input_count,
+            output_count: value.output_count,
+            recipient_count: value.recipient_count,
+            estimated_vsize: value.estimated_vsize,
         }
     }
 }
@@ -136,11 +156,15 @@ impl From<WalletSignedPsbtInfo> for WalletSignedPsbtDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletPublishedTxDto {
     pub txid: String,
+    pub replaceable: Option<bool>,
 }
 
 impl From<WalletPublishedTxInfo> for WalletPublishedTxDto {
     fn from(value: WalletPublishedTxInfo) -> Self {
-        Self { txid: value.txid }
+        Self {
+            txid: value.txid,
+            replaceable: value.replaceable,
+        }
     }
 }
 

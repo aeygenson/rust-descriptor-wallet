@@ -74,6 +74,26 @@ pub enum Commands {
         #[arg(long = "psbt")]
         psbt_base64: String,
     },
+    BumpFeePsbt {
+        #[arg(long)]
+        name: String,
+
+        #[arg(long)]
+        txid: String,
+
+        #[arg(long = "fee-rate")]
+        fee_rate: u64,
+    },
+    BumpFee {
+        #[arg(long)]
+        name: String,
+
+        #[arg(long)]
+        txid: String,
+
+        #[arg(long = "fee-rate")]
+        fee_rate: u64,
+    },
     SendPsbt {
         #[arg(long)]
         name: String,

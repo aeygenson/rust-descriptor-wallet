@@ -35,7 +35,11 @@ impl WalletService {
             .load_wallet(&mut db)
             .map_err(|e| {
                 error!("wallet_service: load_wallet error: {}", e);
-                crate::WalletCoreError::Load(e.to_string())
+                crate::WalletCoreError::Load(format!(
+                    "failed to load wallet from {}: {}",
+                    config.db_path.display(),
+                    e
+                ))
             })?
         {
             Some(wallet) => wallet,
@@ -44,14 +48,21 @@ impl WalletService {
                 .create_wallet(&mut db)
                 .map_err(|e| {
                     error!("wallet_service: create_wallet error: {}", e);
-                    crate::WalletCoreError::Create(e.to_string())
+                    crate::WalletCoreError::Create(format!(
+                        "failed to create wallet at {}: {}",
+                        config.db_path.display(),
+                        e
+                    ))
                 })?,
         };
 
-        if !config.is_watch_only {
-            Self::attach_signers_if_present(&mut wallet, config)?;
-        }
-        info!("wallet_service: load_or_create success");
+        Self::attach_signers_if_present(&mut wallet, config)?;
+        info!(
+            "wallet_service: load_or_create success path={} network={:?} watch_only={}",
+            config.db_path.display(),
+            config.network,
+            config.is_watch_only
+        );
         Ok(Self {
             wallet,
             db,
@@ -74,6 +85,13 @@ impl WalletService {
             external_private,
             internal_private
         );
+
+        if config.is_watch_only {
+            debug!(
+                "wallet_service: attach_signers_if_present skipped because wallet is watch-only"
+            );
+            return Ok(());
+        }
 
         if !external_private && !internal_private {
             debug!(
@@ -151,6 +169,9 @@ impl WalletService {
     }
 
     pub fn wallet(&self) -> &Wallet { &self.wallet }
+
+    /// Whether this wallet is watch-only and cannot sign transactions.
+    pub fn is_watch_only(&self) -> bool { self.is_watch_only }
 
     /// Mutable access to underlying BDK wallet.
     ///

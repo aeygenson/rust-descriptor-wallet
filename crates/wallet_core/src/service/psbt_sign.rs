@@ -2,8 +2,7 @@ use tracing::{debug, info};
 
 use crate::model::WalletSignedPsbtInfo;
 use crate::service::psbt_common::parse_psbt;
-use crate::WalletCoreResult;
-use crate::WalletCoreError;
+use crate::{WalletCoreError, WalletCoreResult};
 
 use super::*;
 
@@ -165,7 +164,6 @@ mod tests {
     fn load_wallet(config: &WalletConfig) -> WalletService {
         WalletService::load_or_create(config).unwrap()
     }
-
 
     #[test]
     fn test_sign_psbt_success() {

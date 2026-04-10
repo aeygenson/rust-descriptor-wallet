@@ -3,11 +3,17 @@ use std::sync::Arc;
 
 /// Abstraction for broadcasting a fully signed raw transaction to the network.
 ///
-/// `wallet_core` owns only the behavior contract. Concrete implementations
-/// (Esplora, Electrum, Bitcoin Core RPC, mocks, etc.) should live outside the
-/// core crate and implement this trait.
+/// `wallet_core` defines only the behavior contract. Concrete implementations
+/// (Esplora, Electrum, Bitcoin Core RPC, mocks, etc.) live outside the core crate.
+///
+/// Implementations should:
+/// - return `Ok(())` only when the transaction is accepted for broadcast
+/// - return structured `WalletCoreError::*` variants for failure cases
+/// - avoid panicking on network or parsing errors
 pub trait TxBroadcaster {
     /// Broadcast a raw transaction serialized as hex.
+    ///
+    /// The transaction must be fully signed and valid.
     fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletCoreResult<()>;
 }
 
@@ -27,11 +33,11 @@ pub struct FailingBroadcaster {
 }
 
 impl FailingBroadcaster {
-    /// Construct a broadcaster that fails with a generic broadcast error.
+    /// Construct a broadcaster that fails with a transport error.
     pub fn new(message: impl Into<String>) -> Self {
         let message = message.into();
         Self {
-            make_error: Arc::new(move || WalletCoreError::BroadcastFailed(message.clone())),
+            make_error: Arc::new(move || WalletCoreError::BroadcastTransport(message.clone())),
         }
     }
 
@@ -40,6 +46,14 @@ impl FailingBroadcaster {
         let message = message.into();
         Self {
             make_error: Arc::new(move || WalletCoreError::BroadcastTransport(message.clone())),
+        }
+    }
+
+    /// Construct a broadcaster that fails with a mempool conflict error.
+    pub fn mempool_conflict(message: impl Into<String>) -> Self {
+        let message = message.into();
+        Self {
+            make_error: Arc::new(move || WalletCoreError::BroadcastMempoolConflict(message.clone())),
         }
     }
 
@@ -73,13 +87,13 @@ mod tests {
     }
 
     #[test]
-    fn failing_broadcaster_returns_broadcast_failed() {
+    fn failing_broadcaster_returns_transport_error() {
         let broadcaster = FailingBroadcaster::new("mock broadcast failure");
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
         assert!(matches!(
             result,
-            Err(WalletCoreError::BroadcastFailed(_))
+            Err(WalletCoreError::BroadcastTransport(_))
         ));
     }
 

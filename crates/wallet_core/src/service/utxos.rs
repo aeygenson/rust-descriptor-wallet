@@ -1,9 +1,11 @@
+use super::*;
 use bdk_chain::ChainPosition;
 use bdk_wallet::KeychainKind;
 use tracing::debug;
-use super::*;
+
 use crate::model::WalletUtxoInfo;
 use crate::types::{AmountSat, WalletKeychain};
+
 impl WalletService {
     /// Return list of wallet UTXOs (basic view).
     ///
@@ -46,7 +48,8 @@ impl WalletService {
                 outpoint,
                 value,
                 confirmed,
-                confirmation_height,                address,
+                confirmation_height,
+                address,
                 keychain,
             });
         }
@@ -117,6 +120,9 @@ mod tests {
 
         for u in utxos {
             assert!(!u.outpoint.is_empty(), "outpoint should not be empty");
+            if let Some(address) = &u.address {
+                assert!(!address.is_empty(), "derived address should not be empty");
+            }
             // value uses AmountSat, so non-negativity is enforced by type
             assert!(
                 matches!(u.keychain, WalletKeychain::External | WalletKeychain::Internal),
