@@ -43,6 +43,7 @@
 
   <rect class="card" x="300" y="600" rx="28" ry="28" width="220" height="120" />
   <text x="410" y="670" text-anchor="middle" class="label">wallet_sync</text>
+  <text x="410" y="698" text-anchor="middle" class="subtle">chain backend</text>
 
   <rect class="card" x="560" y="600" rx="28" ry="28" width="220" height="120" />
   <text x="670" y="670" text-anchor="middle" class="label">wallet_storage</text>

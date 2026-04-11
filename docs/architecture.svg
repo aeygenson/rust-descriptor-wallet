@@ -46,7 +46,7 @@
 
   <rect class="card" x="290" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="440" y="682" text-anchor="middle" class="label">wallet_sync</text>
-  <text x="440" y="710" text-anchor="middle" class="subtle">Esplora and network sync</text>
+  <text x="440" y="710" text-anchor="middle" class="subtle">Esplora sync and broadcast</text>
 
   <rect class="card" x="790" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="940" y="682" text-anchor="middle" class="label">wallet_storage</text>
