@@ -1,4 +1,4 @@
-<svg width="1600" height="760" viewBox="0 0 1600 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1600" height="920" viewBox="0 0 1600 920" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="cardFill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#F8FAFC" />
@@ -20,54 +20,96 @@
     </marker>
     <style>
       .title { font-family: Helvetica, Arial, sans-serif; font-size: 18px; font-weight: 700; fill: #0F172A; letter-spacing: 0.04em; }
+      .lane { font-family: Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; fill: #0369A1; letter-spacing: 0.08em; }
       .label { font-family: Helvetica, Arial, sans-serif; font-size: 17px; font-weight: 600; fill: #0F172A; }
       .subtle { font-family: Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; fill: #475569; }
-      .small { font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #0369A1; letter-spacing: 0.06em; }
+      .small { font-family: Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #0369A1; letter-spacing: 0.06em; }
       .edge { stroke: #334155; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; marker-end: url(#arrow); }
       .card { fill: url(#cardFill); stroke: #0F172A; stroke-width: 3; filter: url(#shadow); }
       .accent { fill: url(#accentFill); stroke: #0F172A; stroke-width: 3; filter: url(#shadow); }
+      .laneBox { fill: rgba(255,255,255,0.42); stroke: #CBD5E1; stroke-width: 2; stroke-dasharray: 10 10; }
     </style>
   </defs>
 
-  <rect x="0" y="0" width="1600" height="760" fill="url(#bg)" />
-  <circle cx="130" cy="130" r="150" fill="#DCEAFE" opacity="0.45" />
-  <circle cx="1470" cy="630" r="210" fill="#E2E8F0" opacity="0.45" />
+  <rect x="0" y="0" width="1600" height="920" fill="url(#bg)" />
+  <circle cx="120" cy="130" r="150" fill="#DCEAFE" opacity="0.40" />
+  <circle cx="1460" cy="760" r="220" fill="#E2E8F0" opacity="0.42" />
 
-  <text x="800" y="64" text-anchor="middle" class="title">PSBT FLOW</text>
+  <text x="800" y="64" text-anchor="middle" class="title">PSBT AND TRANSACTION FLOW</text>
 
-  <rect class="card" x="70" y="220" rx="28" ry="28" width="240" height="130" />
-  <text x="190" y="278" text-anchor="middle" class="small">INPUT</text>
-  <text x="190" y="308" text-anchor="middle" class="label">Descriptor Wallet</text>
-  <text x="190" y="336" text-anchor="middle" class="subtle">utxos, policy, change path</text>
+  <rect x="40" y="110" width="1520" height="300" rx="30" class="laneBox" />
+  <text x="90" y="150" class="lane">SEND FLOW</text>
 
-  <rect class="card" x="360" y="220" rx="28" ry="28" width="250" height="130" />
-  <text x="485" y="278" text-anchor="middle" class="small">BUILD</text>
-  <text x="485" y="308" text-anchor="middle" class="label">Tx Builder</text>
-  <text x="485" y="336" text-anchor="middle" class="subtle">select inputs and outputs</text>
+  <rect class="card" x="80" y="190" rx="28" ry="28" width="250" height="130" />
+  <text x="205" y="246" text-anchor="middle" class="small">INPUT</text>
+  <text x="205" y="278" text-anchor="middle" class="label">wallet_core</text>
+  <text x="205" y="306" text-anchor="middle" class="subtle">wallet state, UTXOs, policy</text>
 
-  <rect class="accent" x="660" y="220" rx="28" ry="28" width="250" height="130" />
-  <text x="785" y="278" text-anchor="middle" class="small">CREATE</text>
-  <text x="785" y="308" text-anchor="middle" class="label">PSBT</text>
-  <text x="785" y="336" text-anchor="middle" class="subtle">unsigned transaction package</text>
+  <rect class="accent" x="380" y="190" rx="28" ry="28" width="250" height="130" />
+  <text x="505" y="246" text-anchor="middle" class="small">CREATE</text>
+  <text x="505" y="278" text-anchor="middle" class="label">Unsigned PSBT</text>
+  <text x="505" y="306" text-anchor="middle" class="subtle">recipient, amount, fee rate</text>
 
-  <rect class="card" x="960" y="220" rx="28" ry="28" width="250" height="130" />
-  <text x="1085" y="278" text-anchor="middle" class="small">SIGN</text>
-  <text x="1085" y="308" text-anchor="middle" class="label">Signer</text>
-  <text x="1085" y="336" text-anchor="middle" class="subtle">software or hardware signer</text>
+  <rect class="card" x="680" y="190" rx="28" ry="28" width="250" height="130" />
+  <text x="805" y="246" text-anchor="middle" class="small">SIGN</text>
+  <text x="805" y="278" text-anchor="middle" class="label">Signer</text>
+  <text x="805" y="306" text-anchor="middle" class="subtle">software or hardware keys</text>
 
-  <rect class="card" x="1260" y="220" rx="28" ry="28" width="250" height="130" />
-  <text x="1385" y="278" text-anchor="middle" class="small">FINALIZE</text>
-  <text x="1385" y="308" text-anchor="middle" class="label">Broadcast Tx</text>
-  <text x="1385" y="336" text-anchor="middle" class="subtle">final transaction to network</text>
+  <rect class="card" x="980" y="190" rx="28" ry="28" width="250" height="130" />
+  <text x="1105" y="246" text-anchor="middle" class="small">FINALIZE</text>
+  <text x="1105" y="278" text-anchor="middle" class="label">Finalized PSBT</text>
+  <text x="1105" y="306" text-anchor="middle" class="subtle">extract transaction hex</text>
 
-  <rect class="card" x="675" y="500" rx="28" ry="28" width="220" height="110" />
-  <text x="785" y="555" text-anchor="middle" class="label">wallet_storage</text>
-  <text x="785" y="583" text-anchor="middle" class="subtle">persist drafts and state</text>
+  <rect class="card" x="1280" y="190" rx="28" ry="28" width="250" height="130" />
+  <text x="1405" y="246" text-anchor="middle" class="small">PUBLISH</text>
+  <text x="1405" y="278" text-anchor="middle" class="label">wallet_sync</text>
+  <text x="1405" y="306" text-anchor="middle" class="subtle">Esplora broadcast, returns txid</text>
 
-  <path class="edge" d="M310 285H360" />
-  <path class="edge" d="M610 285H660" />
-  <path class="edge" d="M910 285H960" />
-  <path class="edge" d="M1210 285H1260" />
+  <rect class="card" x="640" y="340" rx="28" ry="28" width="320" height="90" />
+  <text x="800" y="392" text-anchor="middle" class="label">wallet_api</text>
+  <text x="800" y="418" text-anchor="middle" class="subtle">orchestrates create, sign, finalize, publish</text>
 
-  <path class="edge" d="M785 350V500" />
+  <path class="edge" d="M330 255H380" />
+  <path class="edge" d="M630 255H680" />
+  <path class="edge" d="M930 255H980" />
+  <path class="edge" d="M1230 255H1280" />
+  <path class="edge" d="M800 340V320" />
+
+  <rect x="40" y="470" width="1520" height="320" rx="30" class="laneBox" />
+  <text x="90" y="510" class="lane">RBF FEE-BUMP FLOW</text>
+
+  <rect class="card" x="80" y="560" rx="28" ry="28" width="250" height="130" />
+  <text x="205" y="616" text-anchor="middle" class="small">INSPECT</text>
+  <text x="205" y="648" text-anchor="middle" class="label">Tracked Tx</text>
+  <text x="205" y="676" text-anchor="middle" class="subtle">unconfirmed and replaceable</text>
+
+  <rect class="accent" x="380" y="560" rx="28" ry="28" width="250" height="130" />
+  <text x="505" y="616" text-anchor="middle" class="small">REBUILD</text>
+  <text x="505" y="648" text-anchor="middle" class="label">Replacement PSBT</text>
+  <text x="505" y="676" text-anchor="middle" class="subtle">same spend, higher fee rate</text>
+
+  <rect class="card" x="680" y="560" rx="28" ry="28" width="250" height="130" />
+  <text x="805" y="616" text-anchor="middle" class="small">SIGN</text>
+  <text x="805" y="648" text-anchor="middle" class="label">Signer</text>
+  <text x="805" y="676" text-anchor="middle" class="subtle">approve replacement tx</text>
+
+  <rect class="card" x="980" y="560" rx="28" ry="28" width="250" height="130" />
+  <text x="1105" y="616" text-anchor="middle" class="small">FINALIZE</text>
+  <text x="1105" y="648" text-anchor="middle" class="label">Replacement Tx</text>
+  <text x="1105" y="676" text-anchor="middle" class="subtle">ready for rebroadcast</text>
+
+  <rect class="card" x="1280" y="560" rx="28" ry="28" width="250" height="130" />
+  <text x="1405" y="616" text-anchor="middle" class="small">PUBLISH</text>
+  <text x="1405" y="648" text-anchor="middle" class="label">wallet_sync</text>
+  <text x="1405" y="676" text-anchor="middle" class="subtle">Esplora publish of replacement</text>
+
+  <rect class="card" x="640" y="710" rx="28" ry="28" width="320" height="90" />
+  <text x="800" y="762" text-anchor="middle" class="label">wallet_api</text>
+  <text x="800" y="788" text-anchor="middle" class="subtle">orchestrates inspect, bump, sign, publish</text>
+
+  <path class="edge" d="M330 625H380" />
+  <path class="edge" d="M630 625H680" />
+  <path class="edge" d="M930 625H980" />
+  <path class="edge" d="M1230 625H1280" />
+  <path class="edge" d="M800 710V690" />
 </svg>
