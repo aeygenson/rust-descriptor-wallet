@@ -109,6 +109,9 @@ impl WalletService {
 mod tests {
     use super::*;
     use bitcoin::Network;
+    use crate::config::{
+        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
+    };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -142,10 +145,19 @@ mod tests {
     fn signing_config() -> WalletConfig {
         WalletConfig {
             network: Network::Signet,
-            external_descriptor: SIGNING_EXTERNAL_DESCRIPTOR.to_string(),
-            internal_descriptor: SIGNING_INTERNAL_DESCRIPTOR.to_string(),
+            descriptors: WalletDescriptors {
+                external: SIGNING_EXTERNAL_DESCRIPTOR.to_string(),
+                internal: SIGNING_INTERNAL_DESCRIPTOR.to_string(),
+            },
+            backend: WalletBackendConfig {
+                sync: SyncBackendConfig::Esplora {
+                    url: "https://mutinynet.com/api".to_string(),
+                },
+                broadcast: Some(BroadcastBackendConfig::Esplora {
+                    url: "https://mutinynet.com/api".to_string(),
+                }),
+            },
             db_path: unique_test_db_path("wallet_core_psbt_sign"),
-            esplora_url: "https://mutinynet.com/api".to_string(),
             is_watch_only: false,
         }
     }
@@ -153,10 +165,19 @@ mod tests {
     fn watch_only_config() -> WalletConfig {
         WalletConfig {
             network: Network::Signet,
-            external_descriptor: WATCH_ONLY_EXTERNAL_DESCRIPTOR.to_string(),
-            internal_descriptor: WATCH_ONLY_INTERNAL_DESCRIPTOR.to_string(),
+            descriptors: WalletDescriptors {
+                external: WATCH_ONLY_EXTERNAL_DESCRIPTOR.to_string(),
+                internal: WATCH_ONLY_INTERNAL_DESCRIPTOR.to_string(),
+            },
+            backend: WalletBackendConfig {
+                sync: SyncBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                },
+                broadcast: Some(BroadcastBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                }),
+            },
             db_path: unique_test_db_path("wallet_core_psbt_watch_only"),
-            esplora_url: "https://mempool.space/signet/api".to_string(),
             is_watch_only: true,
         }
     }

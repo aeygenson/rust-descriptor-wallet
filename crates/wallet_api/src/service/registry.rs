@@ -1,7 +1,7 @@
 use crate::{ WalletApiResult};
 use wallet_storage::WalletStorage;
 
-use crate::dto::{WalletDetailsDto, WalletSummaryDto};
+use crate::model::{WalletDetailsDto, WalletSummaryDto};
 
 /// List all wallets
 pub async fn list_wallets(storage: &WalletStorage) -> WalletApiResult<Vec<WalletSummaryDto>> {
@@ -42,12 +42,31 @@ pub async fn get_wallet(
 ) -> WalletApiResult<WalletDetailsDto> {
     let wallet = storage.get_wallet_by_name(name).await?;
 
+    let sync_backend = wallet
+        .parse_sync_backend()
+        .map_err(|e| crate::WalletApiError::InvalidInput(format!(
+            "invalid sync backend for wallet '{}': {}",
+            name, e
+        )))?;
+
+    let broadcast_backend = wallet
+        .parse_broadcast_backend()
+        .map_err(|e| crate::WalletApiError::InvalidInput(format!(
+            "invalid broadcast backend for wallet '{}': {}",
+            name, e
+        )))?;
+
     Ok(WalletDetailsDto {
         name: wallet.name,
         network: wallet.network,
-        external_descriptor: wallet.external_descriptor,
-        internal_descriptor: wallet.internal_descriptor,
-        esplora_url: wallet.esplora_url,
+        descriptors: crate::model::WalletDescriptorsDto {
+            external: wallet.external_descriptor,
+            internal: wallet.internal_descriptor,
+        },
+        backend: crate::model::WalletBackendDto {
+            sync: sync_backend.into(),
+            broadcast: broadcast_backend.map(Into::into),
+        },
         is_watch_only: wallet.is_watch_only,
     })
 }

@@ -4,10 +4,10 @@ use crate::factory::build_default_api;
 use crate::service::{wallet, inspect, psbt, registry};
 use crate::WalletApiResult;
 
-use crate::dto::{
+use crate::model::{
     WalletDetailsDto,
     WalletPsbtDto,
-    WalletPublishedTxDto,
+    TxBroadcastResultDto,
     WalletSignedPsbtDto,
     WalletStatusDto,
     WalletSummaryDto,
@@ -108,7 +108,7 @@ impl WalletApi {
         &self,
         name: &str,
         psbt_base64: &str,
-    ) -> WalletApiResult<WalletPublishedTxDto> {
+    ) -> WalletApiResult<TxBroadcastResultDto> {
         psbt::publish(&self.storage, name, psbt_base64).await
     }
 
@@ -126,17 +126,17 @@ impl WalletApi {
         name: &str,
         txid: &str,
         fee_rate_sat_per_vb: u64,
-    ) -> WalletApiResult<WalletPublishedTxDto> {
+    ) -> WalletApiResult<TxBroadcastResultDto> {
         psbt::bump_fee(&self.storage, name, txid, fee_rate_sat_per_vb).await
     }
 
-    pub async fn send(
+    pub async fn send_psbt(
         &self,
         name: &str,
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
-    ) -> WalletApiResult<WalletPublishedTxDto> {
+    ) -> WalletApiResult<TxBroadcastResultDto> {
         let created = self
             .create_psbt(name, to_address, amount_sat, fee_rate_sat_per_vb)
             .await?;

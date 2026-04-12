@@ -1,4 +1,4 @@
-use crate::dto::{WalletPsbtDto, WalletPublishedTxDto, WalletSignedPsbtDto};
+use crate::model::{TxBroadcastResultDto, WalletPsbtDto, WalletSignedPsbtDto};
 use crate::WalletApiResult;
 
 use wallet_core::types::{AmountSat, FeeRateSatPerVb};
@@ -174,14 +174,14 @@ pub async fn publish(
     storage: &WalletStorage,
     name: &str,
     psbt_base64: &str,
-) -> WalletApiResult<WalletPublishedTxDto> {
+) -> WalletApiResult<TxBroadcastResultDto> {
     debug!("api psbt: publish start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
     let psbt_base64 = psbt_base64.to_string();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| -> WalletApiResult<wallet_core::model::WalletPublishedTxInfo> {
+    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
         let wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
@@ -194,7 +194,7 @@ pub async fn publish(
                 e
             })?;
 
-        Ok(wallet_core::model::WalletPublishedTxInfo {
+        Ok(TxBroadcastResultDto {
             txid: finalized.txid,
             replaceable: Some(finalized.replaceable),
         })
@@ -207,7 +207,7 @@ pub async fn publish(
         published.replaceable,
     );
 
-    Ok(published.into())
+    Ok(published)
 }
 
 /// Build a replacement PSBT for an existing unconfirmed RBF transaction.
@@ -276,7 +276,7 @@ pub async fn bump_fee(
     name: &str,
     txid: &str,
     fee_rate_sat_per_vb: u64,
-) -> WalletApiResult<WalletPublishedTxDto> {
+) -> WalletApiResult<TxBroadcastResultDto> {
     debug!(
         "api psbt: bump_fee start name={} txid={} fee_rate_sat_per_vb={}",
         name,
@@ -290,7 +290,7 @@ pub async fn bump_fee(
     let txid = txid.to_string();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| -> WalletApiResult<wallet_core::model::WalletPublishedTxInfo> {
+    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
         let mut wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
@@ -324,7 +324,7 @@ pub async fn bump_fee(
                 e
             })?;
 
-        Ok(wallet_core::model::WalletPublishedTxInfo {
+        Ok(TxBroadcastResultDto {
             txid: finalized.txid,
             replaceable: Some(finalized.replaceable),
         })
@@ -338,5 +338,5 @@ pub async fn bump_fee(
         published.replaceable,
     );
 
-    Ok(published.into())
+    Ok(published)
 }

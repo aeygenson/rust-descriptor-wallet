@@ -5,10 +5,13 @@
 use bitcoin::Network;
 use tracing::{debug, info};
 
-use crate::dto::WalletStatusDto;
+use crate::model::WalletStatusDto;
 use crate::{WalletApiError, WalletApiResult};
 
-use wallet_core::{WalletConfig,  WalletService};
+use wallet_core::{
+    config::{BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors},
+    WalletConfig, WalletService,
+};
 use wallet_storage::WalletStorage;
 use wallet_sync::WalletSyncService;
 
@@ -20,12 +23,56 @@ pub(crate) async fn load_wallet_config(
     let record = storage.get_wallet_by_name(name).await?;
     let network = parse_network(&record.network)?;
 
+    let sync_backend = record
+        .parse_sync_backend()
+        .map_err(|e| WalletApiError::InvalidInput(format!(
+            "invalid sync backend for wallet '{}': {}",
+            name, e
+        )))?;
+
+    let broadcast_backend = record
+        .parse_broadcast_backend()
+        .map_err(|e| WalletApiError::InvalidInput(format!(
+            "invalid broadcast backend for wallet '{}': {}",
+            name, e
+        )))?;
+
+    let sync_backend = match sync_backend {
+        wallet_storage::models::SyncBackendFile::Esplora { url } => {
+            SyncBackendConfig::Esplora { url }
+        }
+        wallet_storage::models::SyncBackendFile::Electrum { url } => {
+            SyncBackendConfig::Electrum { url }
+        }
+    };
+
+    let broadcast_backend = match broadcast_backend {
+        Some(wallet_storage::models::BroadcastBackendFile::Esplora { url }) => {
+            Some(BroadcastBackendConfig::Esplora { url })
+        }
+        Some(wallet_storage::models::BroadcastBackendFile::Rpc {
+            url,
+            rpc_user,
+            rpc_pass,
+        }) => Some(BroadcastBackendConfig::Rpc {
+            url,
+            rpc_user,
+            rpc_pass,
+        }),
+        None => None,
+    };
+
     Ok(WalletConfig {
         network,
-        external_descriptor: record.external_descriptor,
-        internal_descriptor: record.internal_descriptor,
+        descriptors: WalletDescriptors {
+            external: record.external_descriptor,
+            internal: record.internal_descriptor,
+        },
+        backend: WalletBackendConfig {
+            sync: sync_backend,
+            broadcast: broadcast_backend,
+        },
         db_path: record.db_path.into(),
-        esplora_url: record.esplora_url,
         is_watch_only: record.is_watch_only,
     })
 }

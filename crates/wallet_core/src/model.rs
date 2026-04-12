@@ -99,7 +99,7 @@ pub struct WalletPsbtInfo {
 }
 
 impl WalletPsbtInfo {
-    /// Build a conservative `WalletPsbtInfo` from a raw PSBT.
+    /// Build a conservative minimal `WalletPsbtInfo` from a raw PSBT.
     ///
     /// This is primarily used by flows such as fee-bump, where a fresh PSBT
     /// must be returned from wallet_core even when full UI-oriented metadata is
@@ -120,7 +120,7 @@ impl WalletPsbtInfo {
     /// If later you want richer output, add a more specific constructor such as
     /// `from_psbt_with_metadata(...)` and keep this method as the lowest-common-
     /// denominator fallback.
-    pub fn from_psbt(psbt: Psbt) -> WalletCoreResult<Self> {
+    pub fn from_psbt_minimal(psbt: Psbt) -> WalletCoreResult<Self> {
         let replaceable = psbt
             .unsigned_tx
             .input
@@ -228,17 +228,4 @@ pub struct WalletFinalizedTxInfo {
 
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
-}
-
-/// Core model describing a successfully published (broadcast) transaction.
-///
-/// This is a domain model and represents the result of broadcasting a
-/// finalized transaction to the network.
-#[derive(Debug, Clone)]
-pub struct WalletPublishedTxInfo {
-    /// Transaction id of the broadcasted transaction.
-    pub txid: String,
-
-    /// Whether the transaction was created as replaceable via RBF, when known.
-    pub replaceable: Option<bool>,
 }

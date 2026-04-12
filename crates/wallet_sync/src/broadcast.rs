@@ -1,10 +1,9 @@
-use std::sync::Arc;
-use crate::{WalletSyncError, WalletSyncResult};
+use crate::WalletSyncResult;
 
 /// Abstraction for broadcasting a fully signed raw transaction to the network.
 ///
-/// `wallet_core` defines only the behavior contract. Concrete implementations
-/// (Esplora, Electrum, Bitcoin Core RPC, mocks, etc.) live outside the core crate.
+/// `wallet_sync` defines only the behavior contract. Concrete implementations
+/// (Esplora, Bitcoin Core RPC, mocks, etc.) live in backend modules.
 ///
 /// Implementations should:
 /// - return `Ok(())` only when the transaction is accepted for broadcast
@@ -17,71 +16,17 @@ pub trait TxBroadcaster {
     fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletSyncResult<()>;
 }
 
-/// Test/dummy broadcaster that always succeeds.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct NoopBroadcaster;
-
-impl TxBroadcaster for NoopBroadcaster {
-    fn broadcast_tx_hex(&self, _tx_hex: &str) -> WalletSyncResult<()> {
-        Ok(())
-    }
-}
-
-/// Test/dummy broadcaster that always fails using a configured error factory.
-pub struct FailingBroadcaster {
-    make_error: Arc<dyn Fn() -> WalletSyncError + Send + Sync>,
-}
-
-impl FailingBroadcaster {
-    /// Construct a broadcaster that fails with a transport error.
-    pub fn new(message: impl Into<String>) -> Self {
-        let message = message.into();
-        Self {
-            make_error: Arc::new(move || WalletSyncError::BroadcastTransport(message.clone())),
-        }
-    }
-
-    /// Construct a broadcaster that fails with a transport error.
-    pub fn transport(message: impl Into<String>) -> Self {
-        let message = message.into();
-        Self {
-            make_error: Arc::new(move || WalletSyncError::BroadcastTransport(message.clone())),
-        }
-    }
-
-    /// Construct a broadcaster that fails with a mempool conflict error.
-    pub fn mempool_conflict(message: impl Into<String>) -> Self {
-        let message = message.into();
-        Self {
-            make_error: Arc::new(move || WalletSyncError::BroadcastMempoolConflict(message.clone())),
-        }
-    }
-
-    /// Construct a broadcaster that fails with an explicit core error factory.
-    pub fn from_factory<F>(factory: F) -> Self
-    where
-        F: Fn() -> WalletSyncError + Send + Sync + 'static,
-    {
-        Self {
-            make_error: Arc::new(factory),
-        }
-    }
-}
-
-impl TxBroadcaster for FailingBroadcaster {
-    fn broadcast_tx_hex(&self, _tx_hex: &str) -> WalletSyncResult<()> {
-        Err((self.make_error)())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::esplora::broadcast::EsploraBroadcaster;
+    use crate::backend::core_rpc::broadcast::CoreRpcBroadcaster;
+    use crate::backend::mock::broadcast::{FailingBroadcaster, NoopBroadcaster};
+    use crate::WalletSyncError;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::thread;
-    use crate::esplora_broadcast::EsploraBroadcaster;
-    
+
     #[test]
     fn noop_broadcaster_succeeds() {
         let broadcaster = NoopBroadcaster;
@@ -146,6 +91,40 @@ mod tests {
         });
 
         let broadcaster = EsploraBroadcaster::new(format!("http://{}", addr));
+        let result = broadcaster.broadcast_tx_hex("deadbeef");
+
+        assert!(result.is_ok());
+        handle.join().expect("server thread join");
+    }
+
+    #[test]
+    fn core_rpc_broadcaster_succeeds_on_json_rpc_result() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+        let addr = listener.local_addr().expect("listener addr");
+
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept connection");
+
+            let mut buf = [0u8; 4096];
+            let _ = stream.read(&mut buf).expect("read request");
+
+            let body = r#"{"result":"deadbeef-txid","error":null,"id":"wallet_sync"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream
+                .write_all(response.as_bytes())
+                .expect("write 200 response");
+            stream.flush().expect("flush response");
+        });
+
+        let broadcaster = CoreRpcBroadcaster::new(
+            format!("http://{}", addr),
+            "bitcoin",
+            "bitcoin",
+        );
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
         assert!(result.is_ok());

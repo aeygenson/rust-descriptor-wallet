@@ -14,8 +14,12 @@ pub fn default_db_path() -> WalletStorageResult<PathBuf> {
     Ok(default_app_path()?.join("app.db"))
 }
 
+pub fn default_wallet_dir(wallet_name: &str) -> WalletStorageResult<PathBuf> {
+    Ok(default_app_path()?.join("wallets").join(wallet_name))
+}
+
 pub fn default_wallet_db_path(wallet_name: &str) -> WalletStorageResult<PathBuf> {
-    Ok(default_app_path()?.join(format!("{wallet_name}.wallet.db")))
+    Ok(default_wallet_dir(wallet_name)?.join("wallet.db"))
 }
 
 pub async fn connect() -> WalletStorageResult<SqlitePool> {

@@ -1,0 +1,21 @@
+{
+  "name": "regtest-local",
+  "network": "regtest",
+  "descriptors": {
+    "external": "tr(tprv8ZgxMBicQKsPeAHm72dLDcYEoJxairbBQgcjg1RSYAngBHT2X3eKd9TP6CSns9Ca6dnUeJE5ZhP5EcysL9mMjAtrTvLbvSd9MKc1CdsWU7B/86h/1h/0h/0/*)#c86zrccx",
+    "internal": "tr(tprv8ZgxMBicQKsPeAHm72dLDcYEoJxairbBQgcjg1RSYAngBHT2X3eKd9TP6CSns9Ca6dnUeJE5ZhP5EcysL9mMjAtrTvLbvSd9MKc1CdsWU7B/86h/1h/0h/1/*)#fnlr7dg7"
+  },
+  "backend": {
+    "sync": {
+      "kind": "electrum",
+      "url": "tcp://127.0.0.1:60401"
+    },
+    "broadcast": {
+      "kind": "rpc",
+      "url": "http://127.0.0.1:18443",
+      "rpc_user": "bitcoin",
+      "rpc_pass": "bitcoin"
+    }
+  },
+  "is_watch_only": false
+}

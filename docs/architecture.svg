@@ -29,9 +29,13 @@
 
   <text x="800" y="70" text-anchor="middle" class="title">RUST DESCRIPTOR WALLET ARCHITECTURE</text>
 
-  <rect class="card" x="30" y="320" rx="28" ry="28" width="270" height="130" />
-  <text x="165" y="382" text-anchor="middle" class="label">Tauri UI</text>
-  <text x="165" y="410" text-anchor="middle" class="subtle">desktop frontend</text>
+  <rect class="card" x="30" y="250" rx="28" ry="28" width="270" height="130" />
+  <text x="165" y="312" text-anchor="middle" class="label">wallet_desktop</text>
+  <text x="165" y="340" text-anchor="middle" class="subtle">Tauri frontend</text>
+
+  <rect class="card" x="30" y="430" rx="28" ry="28" width="270" height="130" />
+  <text x="165" y="492" text-anchor="middle" class="label">wallet_cli</text>
+  <text x="165" y="520" text-anchor="middle" class="subtle">command-line frontend</text>
 
   <rect class="card" x="380" y="170" rx="28" ry="28" width="300" height="130" />
   <text x="530" y="232" text-anchor="middle" class="label">wallet_api</text>
@@ -46,7 +50,7 @@
 
   <rect class="card" x="290" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="440" y="682" text-anchor="middle" class="label">wallet_sync</text>
-  <text x="440" y="710" text-anchor="middle" class="subtle">Esplora sync and broadcast</text>
+  <text x="440" y="710" text-anchor="middle" class="subtle">Esplora, Electrum, Core RPC</text>
 
   <rect class="card" x="790" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="940" y="682" text-anchor="middle" class="label">wallet_storage</text>
@@ -56,7 +60,8 @@
   <text x="1300" y="682" text-anchor="middle" class="label">signer</text>
   <text x="1300" y="710" text-anchor="middle" class="subtle">software and hardware</text>
 
-  <path class="edge" d="M300 385L380 247" />
+  <path class="edge" d="M300 315L380 247" />
+  <path class="edge" d="M300 495L380 255" />
   <path class="edge" d="M680 235H870" />
   <path class="edge" d="M1230 235H1365" />
 

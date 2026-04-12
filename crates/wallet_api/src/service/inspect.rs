@@ -1,6 +1,6 @@
 
 
-use crate::dto::{WalletTxDto, WalletUtxoDto};
+use crate::model::{WalletTxDto, WalletUtxoDto};
 use crate::WalletApiResult;
 use tokio::task;
 

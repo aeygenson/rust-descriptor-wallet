@@ -1,7 +1,7 @@
-use crate::db::default_wallet_db_path;
-use crate::{WalletRecord, WalletStorageError, WalletStorageResult};
-use sqlx::{SqlitePool};
+use crate::db::{default_wallet_db_path, default_wallet_dir};
 use crate::models::ImportWalletFile;
+use crate::{WalletRecord, WalletStorageError, WalletStorageResult};
+use sqlx::SqlitePool;
 use std::fs;
 /// Fetch wallet by name
 pub async fn get_wallet_by_name(
@@ -11,7 +11,7 @@ pub async fn get_wallet_by_name(
     let wallet = sqlx::query_as::<_, WalletRecord>(
         r#"
         SELECT id, name, network, external_descriptor, internal_descriptor,
-               db_path, esplora_url, is_watch_only
+               db_path, sync_backend, broadcast_backend, is_watch_only, created_at, updated_at
         FROM wallets
         WHERE name = ?1
         "#,
@@ -29,7 +29,7 @@ pub async fn list_wallets(pool: &SqlitePool) -> WalletStorageResult<Vec<WalletRe
     let wallets = sqlx::query_as::<_, WalletRecord>(
         r#"
         SELECT id, name, network, external_descriptor, internal_descriptor,
-               db_path, esplora_url, is_watch_only
+               db_path, sync_backend, broadcast_backend, is_watch_only, created_at, updated_at
         FROM wallets
         ORDER BY id ASC
         "#,
@@ -47,10 +47,13 @@ pub async fn create_wallet(
     network: &str,
     external_descriptor: &str,
     internal_descriptor: &str,
-    esplora_url: &str,
+    sync_backend: &str,
+    broadcast_backend: Option<&str>,
     is_watch_only: bool,
 ) -> WalletStorageResult<()> {
     let db_path = default_wallet_db_path(name)?;
+    let wallet_dir = default_wallet_dir(name)?;
+    fs::create_dir_all(&wallet_dir)?;
     let db_path_str = db_path.to_string_lossy().to_string();
 
     sqlx::query(
@@ -61,9 +64,10 @@ pub async fn create_wallet(
             external_descriptor,
             internal_descriptor,
             db_path,
-            esplora_url,
+            sync_backend,
+            broadcast_backend,
             is_watch_only
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         "#,
     )
     .bind(name)
@@ -71,10 +75,19 @@ pub async fn create_wallet(
     .bind(external_descriptor)
     .bind(internal_descriptor)
     .bind(db_path_str)
-    .bind(esplora_url)
+    .bind(sync_backend)
+    .bind(broadcast_backend)
     .bind(if is_watch_only { 1_i64 } else { 0_i64 })
     .execute(pool)
-    .await?;
+    .await
+    .map_err(|e| {
+        if let sqlx::Error::Database(db_err) = &e {
+            if db_err.message().to_ascii_lowercase().contains("unique") {
+                return WalletStorageError::AlreadyExists(name.to_string());
+            }
+        }
+        WalletStorageError::Database(e)
+    })?;
 
     Ok(())
 }
@@ -104,13 +117,16 @@ pub async fn import_wallet_from_file(
     let wallet: ImportWalletFile =
         serde_json::from_str(&content)?;
     
+    let (sync_backend_json, broadcast_backend_json) = wallet.serialize_backends()?;
+
     create_wallet(
         pool,
         &wallet.name,
         &wallet.network,
-        &wallet.external_descriptor,
-        &wallet.internal_descriptor,
-        &wallet.esplora_url,
+        &wallet.descriptors.external,
+        &wallet.descriptors.internal,
+        &sync_backend_json,
+        broadcast_backend_json.as_deref(),
         wallet.is_watch_only,
     )
         .await?;

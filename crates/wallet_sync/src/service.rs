@@ -1,8 +1,15 @@
-use wallet_core::{WalletConfig, WalletService};
+use wallet_core::{config::{BroadcastBackendConfig, SyncBackendConfig}, WalletConfig, WalletService};
 
-use crate::esplora_broadcast::EsploraBroadcaster;
-use crate::esplora_sync::sync_wallet_esplora;
+use crate::backend::{
+    core_rpc::broadcast::CoreRpcBroadcaster,
+    esplora::{broadcast::EsploraBroadcaster, sync::sync_wallet_esplora},
+    electrum::sync::sync_wallet_electrum,
+    mock::broadcast::NoopBroadcaster,
+};
+use crate::model::{BackendProfile, BroadcastBackendKind, SyncBackendKind};
+use crate::broadcast::TxBroadcaster;
 use crate::WalletSyncResult;
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct WalletSyncService;
@@ -18,29 +25,75 @@ impl WalletSyncService {
         wallet: &mut WalletService,
         config: &WalletConfig,
     ) -> WalletSyncResult<()> {
-        // delegate to esplora backend
-        sync_wallet_esplora(wallet, config).await?;
+        let profile = self.backend_profile(config);
+        info!(
+            sync = profile.sync_label(),
+            broadcast = ?profile.broadcast_label(),
+            "starting wallet sync"
+        );
+
+        match &config.backend.sync {
+            SyncBackendConfig::Esplora { .. } => {
+                debug!("using esplora sync backend");
+                sync_wallet_esplora(wallet, config).await?
+            }
+            SyncBackendConfig::Electrum { .. } => {
+                debug!("using electrum sync backend");
+                sync_wallet_electrum(wallet, config).await?
+            }
+        }
+
+        info!("wallet sync completed successfully");
 
         Ok(())
     }
 
-    /// Build the Esplora broadcaster used by higher layers for tx publication.
-    ///
-    /// This keeps Esplora-specific construction inside the sync crate so API
-    /// and runtime layers do not need to know about concrete backend types.
-    pub fn broadcaster(&self, config: &WalletConfig) -> EsploraBroadcaster {
-        EsploraBroadcaster::new(config.esplora_url.clone())
+    fn backend_profile(&self, config: &WalletConfig) -> BackendProfile {
+        let sync = match &config.backend.sync {
+            SyncBackendConfig::Esplora { .. } => SyncBackendKind::Esplora,
+            SyncBackendConfig::Electrum { .. } => SyncBackendKind::Electrum,
+        };
+
+        let broadcast = config.backend.broadcast.as_ref().map(|b| match b {
+            BroadcastBackendConfig::Esplora { .. } => BroadcastBackendKind::Esplora,
+            BroadcastBackendConfig::Rpc { .. } => BroadcastBackendKind::CoreRpc,
+        });
+
+        BackendProfile::new(sync, broadcast)
     }
 
-    /// Broadcast a raw transaction hex through the configured Esplora backend.
     pub fn broadcast_tx_hex(
         &self,
         config: &WalletConfig,
         tx_hex: &str,
     ) -> WalletSyncResult<()> {
-        let broadcaster = self.broadcaster(config);
-        broadcaster.broadcast_tx_hex(tx_hex)?;
+        let profile = self.backend_profile(config);
+        info!(
+            broadcast = ?profile.broadcast_label(),
+            "starting transaction broadcast"
+        );
 
-        Ok(())
+        match config.backend.broadcast.as_ref() {
+            Some(BroadcastBackendConfig::Esplora { url }) => {
+                debug!("using esplora broadcast backend");
+                let b = EsploraBroadcaster::new(url.clone());
+                b.broadcast_tx_hex(tx_hex)
+            }
+            Some(BroadcastBackendConfig::Rpc {
+                url,
+                rpc_user,
+                rpc_pass,
+            }) => {
+                debug!("using core rpc broadcast backend");
+                let b = CoreRpcBroadcaster::new(url.clone(), rpc_user.clone(), rpc_pass.clone());
+                b.broadcast_tx_hex(tx_hex)
+            }
+            None => {
+                warn!("no broadcast backend configured, using noop broadcaster");
+                // fallback mock (useful for tests)
+                let b = NoopBroadcaster;
+                b.broadcast_tx_hex(tx_hex)
+            }
+        }
     }
 }

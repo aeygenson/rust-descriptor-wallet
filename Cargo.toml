@@ -1,12 +1,13 @@
 [workspace]
-    members = [
-        "crates/wallet_core",
-        "crates/wallet_sync",
-        "crates/wallet_storage",
-        "crates/wallet_api",
-        "apps/wallet_cli",
-        "apps/wallet_desktop",
-    ]
+members = [
+    "crates/wallet_core",
+    "crates/wallet_sync",
+    "crates/wallet_storage",
+    "crates/wallet_api",
+    "apps/wallet_cli",
+    "apps/wallet_desktop",
+    "crates/test_support",
+]
 resolver = "2"
 [workspace.package]
 edition = "2021"
@@ -15,19 +16,24 @@ license = "MIT"
 authors = ["Alex Eygenson"]
 [workspace.dependencies]
 anyhow = "1"
-serde = {version = "1",features = ["derive"]}
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tokio = {version = "1", features = ["rt-multi-thread","macros"]}
-sqlx = {version = "0.8", features = ["sqlite","runtime-tokio-rustls","macros"]}
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros"] }
 bdk_wallet = { version = "2.3.0", features = ["file_store"] }
-bdk_esplora = {version = "0.22.1",features = ["blocking"]}
+bdk_esplora = { version = "0.22.1", features = ["blocking"] }
 bdk_file_store = "0.21"
 bdk_chain = "0.23.3"
 bitcoin = "0.32"
-clap = {version = "4",features = ["derive"]}
+clap = { version = "4", features = ["derive"] }
 dirs = "6"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.11", features = ["blocking", "rustls-tls", "json"] }
 httpmock = "0.8"
+once_cell = "1"
+serial_test = "3"
+tempfile = "3"
+bitcoincore-rpc = "0.19"
+bdk_electrum = "0.23"

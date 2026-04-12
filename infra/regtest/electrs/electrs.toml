@@ -1,0 +1,6 @@
+network = "regtest"
+db_dir = "/Users/alexandereygenson/MyRust/rust-descriptor-wallet/infra/regtest/electrs/db"
+daemon_dir = "/Users/alexandereygenson/MyRust/rust-descriptor-wallet/infra/regtest/bitcoin/data"
+daemon_rpc_addr = "127.0.0.1:18443"
+electrum_rpc_addr = "127.0.0.1:60401"
+auth = "bitcoin:bitcoin"

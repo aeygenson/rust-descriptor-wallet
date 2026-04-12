@@ -39,6 +39,9 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{
+        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
+    };
     use crate::model::WalletSignedPsbtInfo;
     use crate::service::psbt_common::is_psbt_finalized;
     use crate::WalletCoreError;
@@ -86,10 +89,19 @@ mod tests {
     fn finalized_psbt_produces_broadcast_payload() {
         let service = WalletService::load_or_create(&crate::config::WalletConfig {
             network: bitcoin::Network::Signet,
-            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            descriptors: WalletDescriptors {
+                external: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
+                internal: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            },
+            backend: WalletBackendConfig {
+                sync: SyncBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                },
+                broadcast: Some(BroadcastBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                }),
+            },
             db_path: unique_db_path("wallet_core_finalize_publish"),
-            esplora_url: "https://mempool.space/signet/api".to_string(),
             is_watch_only: true,
         })
         .expect("watch-only wallet should load for finalize test");

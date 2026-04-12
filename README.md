@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports real software-wallet sends plus RBF fee bumping, including replacement-PSBT creation and publish via Esplora.
+Current milestone: the project now supports local multi-backend chain integration, including Electrum sync, Bitcoin Core RPC broadcast, and regtest-based integration tests.
 
 ## Vision
 
@@ -27,9 +27,10 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 ### Components
 
 - `wallet_core (BDK)`: descriptor handling, wallet state, address derivation, transaction construction, and PSBT flow
-- `wallet_sync`: chain integration layer for Esplora sync and transaction broadcast
+- `wallet_sync`: chain integration layer for Esplora, Electrum, and Bitcoin Core RPC backends
 - `wallet_storage`: local persistence layer
 - `wallet_api`: orchestration boundary shared by apps
+- `test_support`: local regtest helpers for integration tests and scripted environment control
 - `wallet_cli`: command-line entry point
 - `wallet_desktop`: desktop app entry point
 
@@ -42,7 +43,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 ### Implemented
 
 - Rust workspace with separate crates and app entry points
-- `wallet_cli`, `wallet_desktop`, `wallet_api`, `wallet_core`, `wallet_sync`, and `wallet_storage` crates wired into the workspace
+- `wallet_cli`, `wallet_desktop`, `wallet_api`, `wallet_core`, `wallet_sync`, `wallet_storage`, and `test_support` crates wired into the workspace
 - architecture and project-structure documentation
 - SQLite-backed wallet registry in `wallet_storage`
 - automatic storage initialization and migration on API startup
@@ -50,7 +51,8 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - CLI commands for wallet metadata management
 - runtime wallet loading and creation backed by per-wallet BDK file stores
 - receive-address generation for stored wallets
-- Esplora-based wallet sync through `wallet_sync`
+- backend-aware wallet sync through `wallet_sync`
+- Electrum sync support for local and compatible deployments
 - balance queries over persisted wallet state
 - wallet status reporting with balance, UTXO count, and latest observed block height
 - transaction history inspection from synced wallet state
@@ -58,11 +60,15 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - unsigned PSBT creation through the runtime wallet flow
 - PSBT signing for software-signing wallets
 - finalized-PSBT extraction and publish through `wallet_sync`
+- Bitcoin Core RPC broadcast backend for local/regtest transaction publication
 - end-to-end create/sign/publish orchestration in the API layer
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
 - transaction inspection now surfaces fee rate and replaceability metadata
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
+- regtest support scripts under `infra/regtest`
+- reusable `test_support` helpers for local node control, mining, funding, and mempool inspection
+- local integration tests covering receive, self-send/change, and RBF replacement flows
 
 ### In Progress
 
@@ -83,8 +89,8 @@ The intended feature set includes:
 
 - descriptor wallets with `wpkh` and later `tr`
 - external and internal derivation paths
-- blockchain sync through Esplora
-- transaction broadcast through the same chain backend boundary
+- blockchain sync through Esplora and Electrum
+- transaction broadcast through Esplora or Bitcoin Core RPC
 - persisted wallet metadata and per-wallet database paths
 - runtime address derivation and balance tracking
 - UTXO tracking
@@ -111,14 +117,14 @@ The intended transaction flow is:
 4. a signer adds signatures without owning the full wallet application layer
 5. the finalized transaction is broadcast to the network
 
-Current code now covers the full software-wallet path: create PSBT, sign it, finalize it, and publish the resulting transaction through the shared chain backend built on Esplora.
+Current code now covers the full software-wallet path: create PSBT, sign it, finalize it, and publish the resulting transaction through the shared chain backend, with local regtest using Electrum sync plus Bitcoin Core RPC broadcast.
 
 For replaceable transactions, the code also supports a fee-bump path:
 
 1. inspect an unconfirmed RBF transaction
 2. build a replacement PSBT at a higher fee rate
 3. sign the replacement transaction
-4. publish the replacement through Esplora
+4. publish the replacement through the configured broadcast backend
 
 ## Getting Started
 
@@ -149,31 +155,32 @@ Usage: wallet_cli <COMMAND>
 Current wallet-management commands:
 
 ```bash
-cargo run -p wallet_cli -- import-wallet --file wallet.json
+cargo run -p wallet_cli -- import-wallet --file wallet-mutiny-soft.json
+cargo run -p wallet_cli -- import-wallet --file wallet-regtest-local.json
 cargo run -p wallet_cli -- list-wallets
-cargo run -p wallet_cli -- get-wallet signet-dev
-cargo run -p wallet_cli -- delete-wallet signet-dev
-cargo run -p wallet_cli -- address --name signet-dev
-cargo run -p wallet_cli -- sync --name signet-dev
-cargo run -p wallet_cli -- balance --name signet-dev
-cargo run -p wallet_cli -- status --name signet-dev
-cargo run -p wallet_cli -- txs --name signet-dev
-cargo run -p wallet_cli -- utxos --name signet-dev
-cargo run -p wallet_cli -- create-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
-cargo run -p wallet_cli -- sign-psbt --name signet-dev --psbt '<base64>'
-cargo run -p wallet_cli -- publish-psbt --name signet-dev --psbt '<base64>'
-cargo run -p wallet_cli -- bump-fee-psbt --name signet-dev --txid <txid> --fee-rate 5
-cargo run -p wallet_cli -- bump-fee --name signet-dev --txid <txid> --fee-rate 5
-cargo run -p wallet_cli -- send-psbt --name signet-dev --to tb1... --amount 5000 --fee-rate 2
+cargo run -p wallet_cli -- get-wallet mutiny-soft
+cargo run -p wallet_cli -- delete-wallet mutiny-soft
+cargo run -p wallet_cli -- address --name regtest-local
+cargo run -p wallet_cli -- sync --name regtest-local
+cargo run -p wallet_cli -- balance --name regtest-local
+cargo run -p wallet_cli -- status --name regtest-local
+cargo run -p wallet_cli -- txs --name regtest-local
+cargo run -p wallet_cli -- utxos --name regtest-local
+cargo run -p wallet_cli -- create-psbt --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2
+cargo run -p wallet_cli -- sign-psbt --name regtest-local --psbt '<base64>'
+cargo run -p wallet_cli -- publish-psbt --name regtest-local --psbt '<base64>'
+cargo run -p wallet_cli -- bump-fee-psbt --name regtest-local --txid <txid> --fee-rate 5
+cargo run -p wallet_cli -- bump-fee --name regtest-local --txid <txid> --fee-rate 5
+cargo run -p wallet_cli -- send-psbt --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2
 ```
 
 What is stored right now:
 
 - wallet name
 - network
-- external descriptor
-- internal descriptor
-- Esplora URL
+- external and internal descriptors
+- sync backend configuration
+- optional broadcast backend configuration
 - watch-only flag
 - derived per-wallet database path
 
@@ -181,7 +188,7 @@ What works at runtime now:
 
 - load or create a persisted BDK wallet from the stored descriptors
 - reveal the next external receive address and persist the derivation state
-- sync wallet state through the configured Esplora endpoint via `wallet_sync`
+- sync wallet state through the configured backend via `wallet_sync`
 - read total balance from the persisted wallet state
 - inspect a high-level wallet status view
 - inspect wallet transaction history from the current synced state
@@ -190,11 +197,12 @@ What works at runtime now:
 - sign a PSBT using wallet-owned private descriptor material
 - classify signing results as unchanged, partial, or finalized
 - validate and extract a finalized PSBT into a raw transaction
-- broadcast raw transaction hex through an Esplora-compatible `/tx` endpoint via `wallet_sync`
+- broadcast raw transaction hex through the configured backend via `wallet_sync`
 - run an end-to-end send path through create, sign, and publish
 - inspect fee rate and replaceability on wallet transactions
 - build replacement PSBTs for eligible RBF transactions
 - execute a full fee-bump flow through replacement build, sign, and publish
+- run local regtest-backed integration flows against real node services
 
 Core domain types introduced:
 
@@ -209,7 +217,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The workspace now also has a cleaner boundary where `wallet_sync` owns the Esplora-facing chain integration used by higher layers. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 
@@ -238,19 +246,52 @@ wpkh([fingerprint/84'/1'/0']tpub.../1/*)
 
 ```json
 {
-  "name": "signet-dev",
+  "name": "mutiny-soft",
   "network": "signet",
-  "esplora_url": "https://blockstream.info/signet/api/",
-  "external_descriptor": "tr([fingerprint/86'/1'/0']tpub.../0/*)#checksum",
-  "internal_descriptor": "tr([fingerprint/86'/1'/0']tpub.../1/*)#checksum",
+  "descriptors": {
+    "external": "tr([fingerprint/86'/1'/0']tpub.../0/*)#checksum",
+    "internal": "tr([fingerprint/86'/1'/0']tpub.../1/*)#checksum"
+  },
+  "backend": {
+    "sync": {
+      "kind": "esplora",
+      "url": "https://mutinynet.com/api"
+    },
+    "broadcast": {
+      "kind": "esplora",
+      "url": "https://mutinynet.com/api"
+    }
+  },
   "is_watch_only": true
 }
 ```
 
+## Local Regtest
+
+The repository now includes a local regtest environment in [infra/regtest/README.md](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/infra/regtest/README.md).
+
+It provides:
+
+- `bitcoind` in regtest mode
+- `electrs` for Electrum sync
+- helper scripts for start, stop, reset, mine, and fund
+- a sample local wallet config in [wallet-regtest-local.json](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/wallet-regtest-local.json)
+
+This local profile uses:
+
+- Electrum for sync
+- Bitcoin Core RPC for broadcast
+
+Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/crates/wallet_api/tests/regtest_flow.rs):
+
+- receive funds and observe balance after sync
+- self-send with change output tracking
+- RBF fee bump with mempool replacement and confirmation checks
+
 ## Development Roadmap
 
 1. implement wallet primitives in `wallet_core`
-2. continue expanding `wallet_sync` as the chain-backend boundary
+2. continue expanding `wallet_sync` as the multi-backend chain boundary
 3. add persistence in `wallet_storage`
 4. expose real operations through `wallet_api`
 5. expand `wallet_cli` into a usable development interface

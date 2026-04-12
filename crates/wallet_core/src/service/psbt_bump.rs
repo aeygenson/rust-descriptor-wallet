@@ -24,7 +24,7 @@ impl WalletService {
     /// - This function is intentionally synchronous and pure wallet-core logic.
     /// - It validates existence, confirmation status, and replaceability before
     ///   delegating to BDK's fee-bump builder.
-    /// - `WalletPsbtInfo::from_psbt(...)` is expected to be the same conversion path
+    /// - `WalletPsbtInfo::from_psbt_minimal(...)` is expected to be the same conversion path
     ///   used by your existing create/send PSBT flow.
     pub fn bump_fee_psbt(
         &mut self,
@@ -81,7 +81,7 @@ impl WalletService {
             })?;
 
         let original_txid = txid.to_string();
-        let mut info = WalletPsbtInfo::from_psbt(psbt).map_err(|source| WalletCoreError::PsbtConversionFailed {
+        let mut info = WalletPsbtInfo::from_psbt_minimal(psbt).map_err(|source| WalletCoreError::PsbtConversionFailed {
             txid: original_txid.clone(),
             reason: source.to_string(),
         })?;
@@ -210,6 +210,6 @@ mod tests {
 //
 // Expected model integration points:
 // - FeeRateSatPerVb should expose an accessor returning sat/vB, such as `as_u64()`.
-// - WalletPsbtInfo should expose `from_psbt(psbt) -> WalletCoreResult<Self>` or equivalent.
+// - WalletPsbtInfo should expose `from_psbt_minimal(psbt) -> WalletCoreResult<Self>` or equivalent.
 // - If your repository uses a wallet wrapper type instead of `bdk_wallet::Wallet`, adapt the
 //   function receiver accordingly and keep this internal logic unchanged.

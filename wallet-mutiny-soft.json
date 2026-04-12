@@ -1,8 +1,19 @@
 {
   "name": "mutiny-soft",
   "network": "signet",
-  "esplora_url": "https://mutinynet.com/api",
-  "external_descriptor": "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn",
-  "internal_descriptor": "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct",
+  "descriptors": {
+    "external": "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn",
+    "internal": "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct"
+  },
+  "backend": {
+    "sync": {
+      "kind": "esplora",
+      "url": "https://mutinynet.com/api"
+    },
+    "broadcast": {
+      "kind": "esplora",
+      "url": "https://mutinynet.com/api"
+    }
+  },
   "is_watch_only": false
 }

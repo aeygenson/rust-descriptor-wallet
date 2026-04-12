@@ -18,7 +18,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             wallet::get_wallet(api, &name).await?;
         }
         Commands::ImportWallet { file } => {
-            wallet::import_wallet(api, &file).await?;
+            wallet::import_wallet(api, file.as_path()).await?;
         }
         Commands::DeleteWallet { name } => {
             wallet::delete_wallet(api, &name).await?;

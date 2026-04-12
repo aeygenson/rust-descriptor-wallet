@@ -26,6 +26,12 @@ pub enum WalletApiError {
     #[error("sync error: {0}")]
     Sync(String),
 
+    #[error("invalid backend: {0}")]
+    InvalidBackend(String),
+
+    #[error("backend unavailable: {0}")]
+    BackendUnavailable(String),
+
     #[error(transparent)]
     Storage(#[from] WalletStorageError),
 
@@ -124,6 +130,12 @@ impl From<WalletSyncError> for WalletApiError {
             }
             WalletSyncError::PsbtNotFinalized => {
                 WalletApiError::PsbtNotFinalized
+            }
+            WalletSyncError::InvalidBackend(s) => {
+                WalletApiError::InvalidBackend(s)
+            }
+            WalletSyncError::BackendUnavailable(s) => {
+                WalletApiError::BackendUnavailable(s)
             }
             WalletSyncError::Core(core) => WalletApiError::from(core),
             other => WalletApiError::Sync(other.to_string()),

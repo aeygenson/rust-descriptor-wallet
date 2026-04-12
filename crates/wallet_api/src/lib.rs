@@ -1,8 +1,8 @@
 pub mod error;
-mod api;
-mod factory;
+pub  mod api;
+pub  mod factory;
 mod service;
-pub mod dto;
+pub mod model;
 pub use api::WalletApi;
 pub use error::WalletApiError;
 

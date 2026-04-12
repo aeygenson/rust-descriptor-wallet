@@ -11,13 +11,11 @@ pub struct WalletCore;
 impl WalletCore {
     pub fn new() -> Self { Self }
 
-    /// Lightweight health check for the core layer.
-    pub fn health_check(&self) -> WalletCoreResult<&'static str> {
-        Ok("wallet_core OK")
-    }
-
     /// Returns true when a descriptor string appears to contain private key
     /// material and therefore should be able to produce a signing keymap.
+    ///
+    /// This is intentionally a lightweight heuristic, not full descriptor
+    /// parsing or semantic validation.
     pub fn descriptor_looks_private(&self, descriptor: &str) -> bool {
         descriptor.contains("xprv")
             || descriptor.contains("tprv")
@@ -63,28 +61,11 @@ impl WalletCore {
             (false, false) => PsbtSigningStatus::Unchanged,
         }
     }
-
-    /// TODO: validate descriptors and invariants (no IO).
-    pub fn validate_descriptors(&self) -> WalletCoreResult<()> {
-        Ok(())
-    }
-
-    /// TODO: compute derived values (e.g. fees, selection strategies).
-    pub fn compute_policy(&self) -> WalletCoreResult<()> {
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn health_check_ok() {
-        let core = WalletCore::new();
-        let result = core.health_check().unwrap();
-        assert_eq!(result, "wallet_core OK");
-    }
 
     #[test]
     fn descriptor_looks_private_detects_private_keys() {

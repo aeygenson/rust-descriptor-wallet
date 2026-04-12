@@ -1,19 +1,22 @@
 use thiserror::Error;
 use wallet_core::WalletCoreError;
-use bdk_esplora::esplora_client;
-use bdk_chain;
 
 #[derive(Debug, Error)]
 pub enum WalletSyncError {
-    // ---- passthroughs ----
+    // ---- core passthrough ----
     #[error(transparent)]
     Core(#[from] WalletCoreError),
 
-    #[error(transparent)]
-    Esplora(#[from] Box<esplora_client::Error>),
+    // ---- backend selection / config ----
+    #[error("invalid backend: {0}")]
+    InvalidBackend(String),
 
-    #[error(transparent)]
-    CannotConnectError(#[from] bdk_chain::local_chain::CannotConnectError),
+    // ---- sync / connectivity ----
+    #[error("backend unavailable: {0}")]
+    BackendUnavailable(String),
+
+    #[error("sync failed: {0}")]
+    SyncFailed(String),
 
     // ---- broadcast / transport ----
     #[error("broadcast transport error: {0}")]
@@ -36,6 +39,12 @@ pub enum WalletSyncError {
 
     #[error("psbt not finalized")]
     PsbtNotFinalized,
+}
+
+impl From<bdk_chain::local_chain::CannotConnectError> for WalletSyncError {
+    fn from(err: bdk_chain::local_chain::CannotConnectError) -> Self {
+        WalletSyncError::SyncFailed(err.to_string())
+    }
 }
 
 impl WalletSyncError {

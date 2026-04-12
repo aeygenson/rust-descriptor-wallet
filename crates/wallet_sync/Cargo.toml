@@ -8,10 +8,17 @@ authors.workspace = true
 [dependencies]
 thiserror.workspace = true
 bdk_esplora.workspace = true
-bdk_wallet.workspace = true
 wallet_core={path="../wallet_core"}
 tracing.workspace = true
 bdk_chain.workspace = true
 reqwest.workspace = true
+bdk_electrum = { workspace = true, optional = true }
+serde_json.workspace = true
+[features]
+default = []
+electrum = ["bdk_electrum"]
+
 [dev-dependencies]
 httpmock.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+bitcoin.workspace = true

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use wallet_core::model::{
     WalletPsbtInfo,
-    WalletPublishedTxInfo,
     WalletSignedPsbtInfo,
     WalletTxInfo,
     WalletUtxoInfo,
@@ -20,9 +19,8 @@ pub struct WalletSummaryDto {
 pub struct WalletDetailsDto {
     pub name: String,
     pub network: String,
-    pub external_descriptor: String,
-    pub internal_descriptor: String,
-    pub esplora_url: String,
+    pub descriptors: WalletDescriptorsDto,
+    pub backend: WalletBackendDto,
     pub is_watch_only: bool,
 }
 
@@ -152,20 +150,11 @@ impl From<WalletSignedPsbtInfo> for WalletSignedPsbtDto {
     }
 }
 
-/// Published transaction information returned after broadcast
+/// Broadcast result returned after sending a transaction
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletPublishedTxDto {
+pub struct TxBroadcastResultDto {
     pub txid: String,
     pub replaceable: Option<bool>,
-}
-
-impl From<WalletPublishedTxInfo> for WalletPublishedTxDto {
-    fn from(value: WalletPublishedTxInfo) -> Self {
-        Self {
-            txid: value.txid,
-            replaceable: value.replaceable,
-        }
-    }
 }
 
 /// Import wallet request (from JSON or CLI)
@@ -173,8 +162,64 @@ impl From<WalletPublishedTxInfo> for WalletPublishedTxDto {
 pub struct ImportWalletDto {
     pub name: String,
     pub network: String,
-    pub external_descriptor: String,
-    pub internal_descriptor: String,
-    pub esplora_url: String,
+    pub descriptors: WalletDescriptorsDto,
+    pub backend: WalletBackendDto,
     pub is_watch_only: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletDescriptorsDto {
+    pub external: String,
+    pub internal: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletBackendDto {
+    pub sync: SyncBackendDto,
+    pub broadcast: Option<BroadcastBackendDto>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SyncBackendDto {
+    Esplora { url: String },
+    Electrum { url: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum BroadcastBackendDto {
+    Esplora { url: String },
+    Rpc {
+        url: String,
+        rpc_user: String,
+        rpc_pass: String,
+    },
+}
+
+// Conversion from storage-layer backend models
+impl From<wallet_storage::models::SyncBackendFile> for SyncBackendDto {
+    fn from(value: wallet_storage::models::SyncBackendFile) -> Self {
+        match value {
+            wallet_storage::models::SyncBackendFile::Esplora { url } => Self::Esplora { url },
+            wallet_storage::models::SyncBackendFile::Electrum { url } => Self::Electrum { url },
+        }
+    }
+}
+
+impl From<wallet_storage::models::BroadcastBackendFile> for BroadcastBackendDto {
+    fn from(value: wallet_storage::models::BroadcastBackendFile) -> Self {
+        match value {
+            wallet_storage::models::BroadcastBackendFile::Esplora { url } => Self::Esplora { url },
+            wallet_storage::models::BroadcastBackendFile::Rpc {
+                url,
+                rpc_user,
+                rpc_pass,
+            } => Self::Rpc {
+                url,
+                rpc_user,
+                rpc_pass,
+            },
+        }
+    }
 }

@@ -19,12 +19,12 @@ impl WalletService {
         let (mut db, _changeset) =
             Store::<ChangeSet>::load_or_create(MAGIC_BYTES, &config.db_path)?;
 
-        let external_descriptor = config.external_descriptor.clone();
-        let internal_descriptor = config.internal_descriptor.clone();
+        let external_descriptor = config.external_descriptor().to_string();
+        let internal_descriptor = config.internal_descriptor().to_string();
         let core = crate::core::WalletCore::new();
         core.validate_signing_descriptors(
-            &config.external_descriptor,
-            &config.internal_descriptor,
+            config.external_descriptor(),
+            config.internal_descriptor(),
             config.is_watch_only,
         )?;
 
@@ -77,8 +77,8 @@ impl WalletService {
         config: &WalletConfig,
     ) -> WalletCoreResult<()> {
         let core = crate::core::WalletCore::new();
-        let external_private = core.descriptor_looks_private(&config.external_descriptor);
-        let internal_private = core.descriptor_looks_private(&config.internal_descriptor);
+        let external_private = core.descriptor_looks_private(config.external_descriptor());
+        let internal_private = core.descriptor_looks_private(config.internal_descriptor());
 
         debug!(
             "wallet_service: attach_signers_if_present external_private={} internal_private={}",
@@ -104,8 +104,8 @@ impl WalletService {
 
         if external_private {
             let (_descriptor, external_keymap): (_, KeyMap) = config
-                .external_descriptor
-                .clone()
+                .external_descriptor()
+                .to_string()
                 .into_wallet_descriptor(&secp, config.network)
                 .map_err(|e| {
                     crate::WalletCoreError::Create(format!(
@@ -123,8 +123,8 @@ impl WalletService {
 
         if internal_private {
             let (_descriptor, internal_keymap): (_, KeyMap) = config
-                .internal_descriptor
-                .clone()
+                .internal_descriptor()
+                .to_string()
                 .into_wallet_descriptor(&secp, config.network)
                 .map_err(|e| {
                     crate::WalletCoreError::Create(format!(
@@ -194,6 +194,9 @@ impl WalletService {
 mod tests {
     use super::*;
     use bitcoin::Network;
+    use crate::config::{
+        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
+    };
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -202,10 +205,19 @@ mod tests {
     fn test_config() -> WalletConfig {
         WalletConfig {
             network: Network::Signet,
-            external_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-            internal_descriptor: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            descriptors: WalletDescriptors {
+                external: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
+                internal: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
+            },
+            backend: WalletBackendConfig {
+                sync: SyncBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                },
+                broadcast: Some(BroadcastBackendConfig::Esplora {
+                    url: "https://mempool.space/signet/api".to_string(),
+                }),
+            },
             db_path: unique_test_db_path("wallet_core_lifecycle"),
-            esplora_url: "https://mempool.space/signet/api".to_string(),
             is_watch_only: true,
         }
     }
@@ -213,10 +225,19 @@ mod tests {
     fn signing_test_config() -> WalletConfig {
         WalletConfig {
             network: Network::Signet,
-            external_descriptor: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn".to_string(),
-            internal_descriptor: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct".to_string(),
+            descriptors: WalletDescriptors {
+                external: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn".to_string(),
+                internal: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct".to_string(),
+            },
+            backend: WalletBackendConfig {
+                sync: SyncBackendConfig::Esplora {
+                    url: "https://mutinynet.com/api".to_string(),
+                },
+                broadcast: Some(BroadcastBackendConfig::Esplora {
+                    url: "https://mutinynet.com/api".to_string(),
+                }),
+            },
             db_path: unique_test_db_path("wallet_core_lifecycle_signing"),
-            esplora_url: "https://mutinynet.com/api".to_string(),
             is_watch_only: false,
         }
     }

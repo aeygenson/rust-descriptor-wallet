@@ -39,7 +39,8 @@ impl WalletStorage {
         network: &str,
         external_descriptor: &str,
         internal_descriptor: &str,
-        esplora_url: &str,
+        sync_backend: &str,
+        broadcast_backend: Option<&str>,
         is_watch_only: bool,
     ) -> WalletStorageResult<()> {
         repository::create_wallet(
@@ -48,7 +49,8 @@ impl WalletStorage {
             network,
             external_descriptor,
             internal_descriptor,
-            esplora_url,
+            sync_backend,
+            broadcast_backend,
             is_watch_only,
         )
         .await

@@ -2,6 +2,18 @@ use anyhow::Result;
 use wallet_api::WalletApi;
 use tracing::{debug, info};
 
+fn print_optional_rbf(replaceable: Option<bool>) {
+    if let Some(rbf) = replaceable {
+        println!("rbf={}", rbf);
+    }
+}
+
+fn print_broadcast_success(title: &str, txid: &str, replaceable: Option<bool>) {
+    println!("{}", title);
+    println!("txid={}", txid);
+    print_optional_rbf(replaceable);
+}
+
 pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
     debug!("cli runtime: address start name={}", name);
     let addr = api.address(name).await?;
@@ -130,7 +142,6 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
 
     Ok(())
 }
-
 
 pub async fn create_psbt(
     api: &WalletApi,
@@ -262,9 +273,7 @@ pub async fn bump_fee(
     println!("Replacement transaction broadcasted successfully:");
     println!("original_txid={}", txid);
     println!("replacement_txid={}", published.txid);
-    if let Some(rbf) = published.replaceable {
-        println!("rbf={}", rbf);
-    }
+    print_optional_rbf(published.replaceable);
 
     Ok(())
 }
@@ -307,11 +316,11 @@ pub async fn publish_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Res
         published.txid
     );
 
-    println!("Transaction broadcasted successfully:");
-    println!("txid={}", published.txid);
-    if let Some(rbf) = published.replaceable {
-        println!("rbf={}", rbf);
-    }
+    print_broadcast_success(
+        "Transaction broadcasted successfully:",
+        &published.txid,
+        published.replaceable,
+    );
 
     Ok(())
 }
@@ -331,7 +340,7 @@ pub async fn send_psbt(
         fee_rate_sat_per_vb
     );
 
-    let published = api.send(name, to, amount_sat, fee_rate_sat_per_vb).await?;
+    let published = api.send_psbt(name, to, amount_sat, fee_rate_sat_per_vb).await?;
 
     info!(
         "cli runtime: send success name={} to={} amount={} txid={}",
@@ -345,9 +354,7 @@ pub async fn send_psbt(
     println!("to={}", to);
     println!("amount={} sats", amount_sat);
     println!("txid={}", published.txid);
-    if let Some(rbf) = published.replaceable {
-        println!("rbf={}", rbf);
-    }
+    print_optional_rbf(published.replaceable);
 
     Ok(())
 }
