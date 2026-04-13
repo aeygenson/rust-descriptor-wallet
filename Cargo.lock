@@ -3226,6 +3226,7 @@ dependencies = [
  "serde",
  "thiserror",
  "tracing",
+ "wallet_storage",
 ]
 
 [[package]]

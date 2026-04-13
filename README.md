@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports local multi-backend chain integration, including Electrum sync, Bitcoin Core RPC broadcast, and regtest-based integration tests.
+Current milestone: the project now supports CPFP transaction acceleration on top of the existing send and RBF flows, with regtest-backed integration coverage.
 
 ## Vision
 
@@ -64,11 +64,13 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - end-to-end create/sign/publish orchestration in the API layer
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
+- CPFP PSBT creation for unconfirmed parent transactions
+- end-to-end CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 - regtest support scripts under `infra/regtest`
 - reusable `test_support` helpers for local node control, mining, funding, and mempool inspection
-- local integration tests covering receive, self-send/change, and RBF replacement flows
+- local integration tests covering receive, self-send/change, RBF replacement, and CPFP flows
 
 ### In Progress
 
@@ -101,6 +103,7 @@ The intended feature set includes:
 - finalized transaction broadcast
 - one-shot send flow through create + sign + publish
 - RBF fee bump flow
+- CPFP child-transaction flow
 - watch-only support
 - hardware signer support
 - desktop UI built on the same API boundary
@@ -125,6 +128,13 @@ For replaceable transactions, the code also supports a fee-bump path:
 2. build a replacement PSBT at a higher fee rate
 3. sign the replacement transaction
 4. publish the replacement through the configured broadcast backend
+
+For stuck transactions with wallet-owned unconfirmed outputs, the code also supports a CPFP path:
+
+1. inspect an unconfirmed parent transaction
+2. select an eligible wallet-owned child input from the parent outputs
+3. build a CPFP PSBT at the requested fee rate
+4. sign and publish the child transaction through the configured backend
 
 ## Getting Started
 
@@ -171,8 +181,15 @@ cargo run -p wallet_cli -- sign-psbt --name regtest-local --psbt '<base64>'
 cargo run -p wallet_cli -- publish-psbt --name regtest-local --psbt '<base64>'
 cargo run -p wallet_cli -- bump-fee-psbt --name regtest-local --txid <txid> --fee-rate 5
 cargo run -p wallet_cli -- bump-fee --name regtest-local --txid <txid> --fee-rate 5
+cargo run -p wallet_cli -- cpfp-psbt --name regtest-local --parent-txid <txid> --outpoint <txid:vout> --fee-rate 5
 cargo run -p wallet_cli -- send-psbt --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2
 ```
+
+Current note on `cpfp-psbt`:
+
+- use `txs` and `utxos` to choose a wallet-owned unconfirmed parent output
+- pass that outpoint explicitly with `--outpoint`
+- then run `cpfp-psbt`, `sign-psbt`, and `publish-psbt` for the full manual flow
 
 What is stored right now:
 
@@ -202,6 +219,8 @@ What works at runtime now:
 - inspect fee rate and replaceability on wallet transactions
 - build replacement PSBTs for eligible RBF transactions
 - execute a full fee-bump flow through replacement build, sign, and publish
+- build CPFP PSBTs for eligible unconfirmed parent transactions
+- sign and publish CPFP child transactions through the same PSBT pipeline
 - run local regtest-backed integration flows against real node services
 
 Core domain types introduced:
@@ -217,7 +236,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, and RBF fee bumping. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, RBF fee bumping, and CPFP PSBT creation. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 
@@ -287,6 +306,7 @@ Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](/Users
 - receive funds and observe balance after sync
 - self-send with change output tracking
 - RBF fee bump with mempool replacement and confirmation checks
+- CPFP child transaction build, publish, and confirmation checks
 
 ## Development Roadmap
 

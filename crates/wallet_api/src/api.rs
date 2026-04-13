@@ -5,6 +5,7 @@ use crate::service::{wallet, inspect, psbt, registry};
 use crate::WalletApiResult;
 
 use crate::model::{
+    WalletCpfpPsbtDto,
     WalletDetailsDto,
     WalletPsbtDto,
     TxBroadcastResultDto,
@@ -128,6 +129,40 @@ impl WalletApi {
         fee_rate_sat_per_vb: u64,
     ) -> WalletApiResult<TxBroadcastResultDto> {
         psbt::bump_fee(&self.storage, name, txid, fee_rate_sat_per_vb).await
+    }
+
+    pub async fn cpfp_psbt(
+        &self,
+        name: &str,
+        parent_txid: &str,
+        selected_outpoint: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<WalletCpfpPsbtDto> {
+        psbt::cpfp_psbt(
+            &self.storage,
+            name,
+            parent_txid,
+            selected_outpoint,
+            fee_rate_sat_per_vb,
+        )
+        .await
+    }
+
+    pub async fn cpfp(
+        &self,
+        name: &str,
+        parent_txid: &str,
+        selected_outpoint: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        psbt::cpfp(
+            &self.storage,
+            name,
+            parent_txid,
+            selected_outpoint,
+            fee_rate_sat_per_vb,
+        )
+        .await
     }
 
     pub async fn send_psbt(

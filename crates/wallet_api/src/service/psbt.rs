@@ -1,4 +1,4 @@
-use crate::model::{TxBroadcastResultDto, WalletPsbtDto, WalletSignedPsbtDto};
+use crate::model::{TxBroadcastResultDto, WalletCpfpPsbtDto, WalletPsbtDto, WalletSignedPsbtDto};
 use crate::WalletApiResult;
 
 use wallet_core::types::{AmountSat, FeeRateSatPerVb};
@@ -10,6 +10,7 @@ use super::wallet::load_wallet_config;
 
 use tracing::{debug, info};
 use tokio::task;
+use tokio::runtime::Handle;
 
 fn log_publish_error(name: &str, error: &WalletSyncError) {
     match error {
@@ -269,6 +270,72 @@ pub async fn bump_fee_psbt(
     Ok(psbt.into())
 }
 
+/// Build a CPFP PSBT for an existing unconfirmed parent transaction.
+///
+/// This mirrors `bump_fee_psbt(...)`, but instead of replacing the parent,
+/// it creates a child transaction that spends an unconfirmed wallet output
+/// belonging to the parent transaction.
+pub async fn cpfp_psbt(
+    storage: &WalletStorage,
+    name: &str,
+    parent_txid: &str,
+    selected_outpoint: &str,
+    fee_rate_sat_per_vb: u64,
+) -> WalletApiResult<WalletCpfpPsbtDto> {
+    debug!(
+        "api psbt: cpfp_psbt start name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={}",
+        name,
+        parent_txid,
+        selected_outpoint,
+        fee_rate_sat_per_vb
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let parent_txid = parent_txid.to_string();
+    let selected_outpoint = selected_outpoint.to_string();
+    let name_for_error = name.to_string();
+
+    let cpfp = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        Handle::current().block_on(async {
+            wallet
+                .create_cpfp_psbt(&parent_txid, &selected_outpoint, fee_rate_sat_per_vb.as_u64())
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "api psbt: cpfp_psbt failed name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={} error={}",
+                        name_for_error,
+                        parent_txid,
+                        selected_outpoint,
+                        fee_rate_sat_per_vb.as_u64(),
+                        e
+                    );
+                    e
+                })
+        })
+    })?;
+
+    info!(
+        "api psbt: cpfp_psbt success name={} parent_txid={} child_txid={} selected_outpoint={} input_value_sat={} child_output_value_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} estimated_vsize={} psbt_len={}",
+        name,
+        cpfp.parent_txid,
+        cpfp.txid,
+        cpfp.selected_outpoint,
+        cpfp.input_value_sat.as_u64(),
+        cpfp.child_output_value_sat.as_u64(),
+        cpfp.fee_sat.as_u64(),
+        cpfp.fee_rate_sat_per_vb,
+        cpfp.replaceable,
+        cpfp.estimated_vsize,
+        cpfp.psbt_base64.len()
+    );
+
+    Ok(cpfp.into())
+}
+
 /// Build, sign, and publish a replacement transaction for an existing
 /// unconfirmed RBF transaction.
 pub async fn bump_fee(
@@ -335,6 +402,90 @@ pub async fn bump_fee(
         name,
         txid,
         published.txid,
+        published.replaceable,
+    );
+
+    Ok(published)
+}
+
+/// Build, sign, and publish a CPFP transaction for an existing unconfirmed
+/// parent transaction.
+pub async fn cpfp(
+    storage: &WalletStorage,
+    name: &str,
+    parent_txid: &str,
+    selected_outpoint: &str,
+    fee_rate_sat_per_vb: u64,
+) -> WalletApiResult<TxBroadcastResultDto> {
+    debug!(
+        "api psbt: cpfp start name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={}",
+        name,
+        parent_txid,
+        selected_outpoint,
+        fee_rate_sat_per_vb
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let parent_txid = parent_txid.to_string();
+    let selected_outpoint = selected_outpoint.to_string();
+    let name_for_error = name.to_string();
+
+    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
+        let mut wallet = WalletService::load_or_create(&config)?;
+        let sync_service = WalletSyncService::new();
+
+        let cpfp_psbt = Handle::current()
+            .block_on(async {
+                wallet
+                    .create_cpfp_psbt(&parent_txid, &selected_outpoint, fee_rate_sat_per_vb.as_u64())
+                    .await
+            })
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: cpfp build failed name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    parent_txid,
+                    selected_outpoint,
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })?;
+
+        let signed = wallet.sign_psbt(&cpfp_psbt.psbt_base64).map_err(|e| {
+            tracing::error!(
+                "api psbt: cpfp sign failed name={} parent_txid={} error={}",
+                name_for_error,
+                parent_txid,
+                e
+            );
+            e
+        })?;
+
+        let finalized = wallet.finalize_psbt_for_broadcast(&signed.psbt_base64)?;
+
+        sync_service
+            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .map_err(|e| {
+                log_publish_error(&name_for_error, &e);
+                e
+            })?;
+
+        Ok(TxBroadcastResultDto {
+            txid: finalized.txid,
+            replaceable: Some(finalized.replaceable),
+        })
+    })?;
+
+    info!(
+        "api psbt: cpfp success name={} parent_txid={} selected_outpoint={} child_txid={} fee_rate_sat_per_vb={} replaceable={:?}",
+        name,
+        parent_txid,
+        selected_outpoint,
+        published.txid,
+        fee_rate_sat_per_vb.as_u64(),
         published.replaceable,
     );
 

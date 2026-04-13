@@ -74,6 +74,27 @@ pub enum WalletCoreError {
     #[error("psbt build failed: {0}")]
     PsbtBuildFailed(String),
 
+    #[error("parent transaction id cannot be empty")]
+    CpfpEmptyParentTxid,
+
+    #[error("no suitable unconfirmed utxo found for parent transaction {0}")]
+    CpfpNoCandidateUtxo(String),
+
+    #[error("parent transaction not found: {0}")]
+    CpfpParentNotFound(String),
+
+    #[error("parent transaction already confirmed: {0}")]
+    CpfpParentAlreadyConfirmed(String),
+
+    #[error("insufficient value in selected utxo for cpfp: {0}")]
+    CpfpInsufficientValue(String),
+
+    #[error("cpfp transaction build failed for parent {parent_txid}: {reason}")]
+    CpfpBuildFailed {
+        parent_txid: String,
+        reason: String,
+    },
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
 

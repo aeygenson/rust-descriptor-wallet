@@ -149,3 +149,15 @@ mod tests {
         assert!(matches!(result, Err(WalletCoreError::InvalidTxid(_))));
     }
 }
+/// Parse an outpoint string in the form "txid:vout".
+pub fn parse_outpoint(outpoint: &str) -> WalletCoreResult<(&str, u32)> {
+    let (txid, vout) = outpoint
+        .split_once(':')
+        .ok_or_else(|| WalletCoreError::InvalidTxid(outpoint.to_string()))?;
+
+    let vout = vout.parse::<u32>().map_err(|_| {
+        WalletCoreError::InvalidTxid(outpoint.to_string())
+    })?;
+
+    Ok((txid, vout))
+}

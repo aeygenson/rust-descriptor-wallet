@@ -13,3 +13,5 @@ bdk_file_store.workspace = true
 bitcoin.workspace = true
 tracing.workspace = true
 bdk_chain.workspace = true
+[dev-dependencies]
+wallet_storage={path="../wallet_storage"}

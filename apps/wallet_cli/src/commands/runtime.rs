@@ -248,6 +248,52 @@ pub async fn bump_fee_psbt(
     Ok(())
 }
 
+pub async fn cpfp_psbt(
+    api: &WalletApi,
+    name: &str,
+    parent_txid: &str,
+    selected_outpoint: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: cpfp_psbt start name={} parent_txid={} selected_outpoint={} fee_rate={}",
+        name,
+        parent_txid,
+        selected_outpoint,
+        fee_rate_sat_per_vb
+    );
+
+    let psbt = api
+        .cpfp_psbt(name, parent_txid, selected_outpoint, fee_rate_sat_per_vb)
+        .await?;
+
+    info!(
+        "cli runtime: cpfp_psbt success name={} parent_txid={} child_txid={} selected_outpoint={} input_value_sat={} child_output_value_sat={} fee_sat={} vsize={}",
+        name,
+        psbt.parent_txid,
+        psbt.txid,
+        psbt.selected_outpoint,
+        psbt.input_value_sat,
+        psbt.child_output_value_sat,
+        psbt.fee_sat,
+        psbt.estimated_vsize,
+    );
+
+    println!("CPFP PSBT created:");
+    println!("parent_txid={}", psbt.parent_txid);
+    println!("child_txid={}", psbt.txid);
+    println!("selected_outpoint={}", psbt.selected_outpoint);
+    println!("input_value={} sats", psbt.input_value_sat);
+    println!("child_output_value={} sats", psbt.child_output_value_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
 pub async fn bump_fee(
     api: &WalletApi,
     name: &str,
@@ -273,6 +319,41 @@ pub async fn bump_fee(
     println!("Replacement transaction broadcasted successfully:");
     println!("original_txid={}", txid);
     println!("replacement_txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn cpfp(
+    api: &WalletApi,
+    name: &str,
+    parent_txid: &str,
+    selected_outpoint: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: cpfp start name={} parent_txid={} selected_outpoint={} fee_rate={}",
+        name,
+        parent_txid,
+        selected_outpoint,
+        fee_rate_sat_per_vb
+    );
+
+    let published = api
+        .cpfp(name, parent_txid, selected_outpoint, fee_rate_sat_per_vb)
+        .await?;
+
+    info!(
+        "cli runtime: cpfp success name={} parent_txid={} child_txid={}",
+        name,
+        parent_txid,
+        published.txid
+    );
+
+    println!("CPFP transaction broadcasted successfully:");
+    println!("parent_txid={}", parent_txid);
+    println!("selected_outpoint={}", selected_outpoint);
+    println!("child_txid={}", published.txid);
     print_optional_rbf(published.replaceable);
 
     Ok(())

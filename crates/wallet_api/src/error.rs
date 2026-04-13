@@ -70,6 +70,9 @@ pub enum WalletApiError {
     #[error("fee bump build failed: {0}")]
     FeeBumpBuildFailed(String),
 
+    #[error("cpfp build failed: {0}")]
+    CpfpBuildFailed(String),
+
     #[error("invalid destination address: {0}")]
     InvalidDestinationAddress(String),
 
@@ -167,6 +170,9 @@ impl From<WalletCoreError> for WalletApiError {
             },
             WalletCoreError::FeeBumpBuildFailed { reason, .. } => {
                 WalletApiError::FeeBumpBuildFailed(reason)
+            }
+            WalletCoreError::CpfpBuildFailed { reason, .. } => {
+                WalletApiError::CpfpBuildFailed(reason)
             }
             WalletCoreError::InvalidDestinationAddress(s) => {
                 WalletApiError::InvalidDestinationAddress(s)

@@ -9,5 +9,5 @@ pub use config::WalletConfig;
 pub use core::WalletCore;
 pub use error::WalletCoreError;
 pub use service::WalletService;
-
+pub use types::WalletKeychain;
 pub type WalletCoreResult<T> = Result<T, WalletCoreError>;

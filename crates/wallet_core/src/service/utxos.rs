@@ -57,6 +57,27 @@ impl WalletService {
         debug!("wallet_service: utxos count={}", result.len());
         result
     }
+
+    /// Return the transaction id portion of an outpoint string (`txid:vout`).
+    pub fn outpoint_txid(outpoint: &str) -> &str {
+        outpoint.split(':').next().unwrap_or("")
+    }
+
+    /// Return all wallet UTXOs belonging to the given parent transaction id.
+    pub fn utxos_for_txid(&self, txid: &str) -> Vec<WalletUtxoInfo> {
+        self.utxos()
+            .into_iter()
+            .filter(|u| Self::outpoint_txid(&u.outpoint) == txid)
+            .collect()
+    }
+
+    /// Return unconfirmed wallet UTXOs belonging to the given parent transaction id.
+    pub fn unconfirmed_utxos_for_txid(&self, txid: &str) -> Vec<WalletUtxoInfo> {
+        self.utxos_for_txid(txid)
+            .into_iter()
+            .filter(|u| !u.confirmed)
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -141,5 +162,22 @@ mod tests {
                 "unexpected keychain"
             );
         }
+    }
+
+    #[test]
+    fn outpoint_txid_extracts_txid_prefix() {
+        let txid = WalletService::outpoint_txid(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+        );
+        assert_eq!(
+            txid,
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee"
+        );
+    }
+
+    #[test]
+    fn outpoint_txid_returns_whole_string_when_separator_missing() {
+        let txid = WalletService::outpoint_txid("not_an_outpoint");
+        assert_eq!(txid, "not_an_outpoint");
     }
 }

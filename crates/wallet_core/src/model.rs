@@ -229,3 +229,61 @@ pub struct WalletFinalizedTxInfo {
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
 }
+/// Core model describing the build plan for a CPFP (Child Pays For Parent)
+/// child transaction before the PSBT is created.
+///
+/// This is an internal domain model in `wallet_core` and keeps CPFP planning
+/// data structured in the same style as the other wallet models.
+#[derive(Debug, Clone)]
+pub struct WalletCpfpBuildPlan {
+    /// Selected input outpoint used for the CPFP child transaction.
+    pub input_outpoint: String,
+
+    /// Input value in satoshis.
+    pub input_value_sat: AmountSat,
+
+    /// Planned child output value in satoshis.
+    pub child_output_value_sat: AmountSat,
+
+    /// Planned transaction fee in satoshis.
+    pub fee_sat: AmountSat,
+
+    /// Estimated virtual size of the child transaction.
+    pub estimated_vsize: u64,
+}
+
+/// Core model describing a CPFP (Child Pays For Parent) PSBT created by the wallet.
+///
+/// This is a domain model (not API DTO) and mirrors the style of `WalletPsbtInfo`.
+#[derive(Debug, Clone)]
+pub struct WalletCpfpPsbtInfo {
+    /// Base64-encoded PSBT payload.
+    pub psbt_base64: String,
+
+    /// Transaction id of the CPFP child transaction.
+    pub txid: String,
+
+    /// Parent transaction id being accelerated.
+    pub parent_txid: String,
+
+    /// Selected outpoint (txid:vout) used for CPFP.
+    pub selected_outpoint: String,
+
+    /// Input value in satoshis used for the CPFP child transaction.
+    pub input_value_sat: AmountSat,
+
+    /// Child output value in satoshis after subtracting the fee.
+    pub child_output_value_sat: AmountSat,
+
+    /// Transaction fee in satoshis for the CPFP child transaction.
+    pub fee_sat: AmountSat,
+
+    /// Requested fee rate in sat/vB used for CPFP.
+    pub fee_rate_sat_per_vb: u64,
+
+    /// Whether the transaction is replaceable via RBF.
+    pub replaceable: bool,
+
+    /// Estimated virtual size of the transaction.
+    pub estimated_vsize: u64,
+}

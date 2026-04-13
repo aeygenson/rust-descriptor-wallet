@@ -4,6 +4,7 @@ use wallet_core::model::{
     WalletSignedPsbtInfo,
     WalletTxInfo,
     WalletUtxoInfo,
+    WalletCpfpPsbtInfo,
 };
 
 /// Lightweight wallet summary for listing and UI
@@ -121,6 +122,38 @@ impl From<WalletPsbtInfo> for WalletPsbtDto {
             input_count: value.input_count,
             output_count: value.output_count,
             recipient_count: value.recipient_count,
+            estimated_vsize: value.estimated_vsize,
+        }
+    }
+}
+
+/// CPFP PSBT information for child-pays-for-parent transactions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletCpfpPsbtDto {
+    pub psbt_base64: String,
+    pub txid: String,
+    pub parent_txid: String,
+    pub selected_outpoint: String,
+    pub input_value_sat: u64,
+    pub child_output_value_sat: u64,
+    pub fee_sat: u64,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub estimated_vsize: u64,
+}
+
+impl From<WalletCpfpPsbtInfo> for WalletCpfpPsbtDto {
+    fn from(value: WalletCpfpPsbtInfo) -> Self {
+        Self {
+            psbt_base64: value.psbt_base64,
+            txid: value.txid,
+            parent_txid: value.parent_txid,
+            selected_outpoint: value.selected_outpoint,
+            input_value_sat: value.input_value_sat.as_u64(),
+            child_output_value_sat: value.child_output_value_sat.as_u64(),
+            fee_sat: value.fee_sat.as_u64(),
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
+            replaceable: value.replaceable,
             estimated_vsize: value.estimated_vsize,
         }
     }

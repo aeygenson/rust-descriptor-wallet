@@ -5,7 +5,10 @@ mod lifecycle;
 pub mod psbt_sign;
 pub mod psbt_publish;
 pub mod psbt_common;
-pub mod psbt_bump;
+pub mod psbt_rbf;
+pub mod psbt_cpfp;
+
+
 
 use bdk_file_store::Store;
 use bdk_wallet::{ChangeSet, PersistedWallet, Wallet};

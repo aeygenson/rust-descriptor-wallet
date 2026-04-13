@@ -93,7 +93,7 @@ pub enum Commands {
         /// Wallet name.
         name: String,
 
-        #[arg(long = "psbt")]
+        #[arg(long = "psbt-base64")]
         /// PSBT encoded as base64.
         psbt_base64: String,
     },
@@ -103,7 +103,7 @@ pub enum Commands {
         /// Wallet name.
         name: String,
 
-        #[arg(long = "psbt")]
+        #[arg(long = "psbt-base64")]
         /// PSBT encoded as base64.
         psbt_base64: String,
     },
@@ -113,8 +113,8 @@ pub enum Commands {
         /// Wallet name.
         name: String,
 
-        #[arg(long)]
-        /// Transaction id.
+        #[arg(long, alias = "txid")]
+        /// Transaction id (RBF parent) to bump.
         txid: String,
 
         #[arg(long = "fee-rate")]
@@ -127,8 +127,8 @@ pub enum Commands {
         /// Wallet name.
         name: String,
 
-        #[arg(long)]
-        /// Transaction id.
+        #[arg(long, alias = "txid")]
+        /// Transaction id (RBF parent) to bump.
         txid: String,
 
         #[arg(long = "fee-rate")]
@@ -151,6 +151,24 @@ pub enum Commands {
 
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
+        fee_rate: u64,
+    },
+    /// Create a CPFP (Child-Pays-For-Parent) PSBT to accelerate a stuck transaction.
+    CpfpPsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Parent transaction id to accelerate.
+        parent_txid: String,
+
+        #[arg(long = "outpoint")]
+        /// Selected outpoint in the form <txid>:<vout> to spend for CPFP.
+        selected_outpoint: String,
+
+        #[arg(long = "fee-rate")]
+        /// Target fee rate in sat/vB for the package.
         fee_rate: u64,
     },
 }
