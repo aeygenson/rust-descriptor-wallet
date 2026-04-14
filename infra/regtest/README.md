@@ -8,6 +8,7 @@ This directory contains a fully local Bitcoin regtest setup using:
 This environment is used for:
 
 - integration testing
+- explicit coin control testing
 - RBF (Replace-By-Fee) testing
 - CPFP (Child Pays For Parent)
 - controlled mempool behavior
@@ -123,7 +124,7 @@ Use these settings in your wallet:
 
 ```env
 NETWORK=regtest
-ELECTRUM_URL=tcp://127.0.0.1:50001
+ELECTRUM_URL=tcp://127.0.0.1:60401
 BITCOIN_RPC_URL=http://127.0.0.1:18443
 BITCOIN_RPC_USER=bitcoin
 BITCOIN_RPC_PASS=bitcoin
@@ -136,6 +137,7 @@ BITCOIN_RPC_PASS=bitcoin
 You can now reliably test:
 
 - send transactions without immediate confirmation
+- coin control with explicit include/exclude outpoints
 - RBF (bump-fee)
 - CPFP
 - mempool behavior
@@ -148,12 +150,18 @@ Unlike Signet, regtest allows full control over block production.
 
 - Do not run multiple regtest instances on the same ports
 - Always reset if you see inconsistent state
-- Scripts are for manual control only (tests should use Rust `test_support`)
+- Scripts are for manual control; automated tests should prefer Rust `test_support`
+- The sample wallet config lives at `wallet-regtest-local.json`
+- This local profile uses Electrum for sync and Bitcoin Core RPC for broadcast
 
 ---
 
-## Next steps
+## Current Coverage
 
-- integrate `test_support` crate
-- add automated regtest tests
-- implement CPFP
+Current automated regtest coverage includes:
+
+- receive funds and observe balance after sync
+- self-send flows with change output tracking
+- coin-control PSBT creation and send flows
+- RBF replacement and confirmation checks
+- CPFP child build, publish, and confirmation checks
