@@ -48,7 +48,7 @@
   <rect class="accent" x="380" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="505" y="246" text-anchor="middle" class="small">SELECT</text>
   <text x="505" y="278" text-anchor="middle" class="label">Coin Selection</text>
-  <text x="505" y="306" text-anchor="middle" class="subtle">policy or manual coin control</text>
+  <text x="505" y="306" text-anchor="middle" class="subtle">policy or strict manual coin control</text>
 
   <rect class="card" x="680" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="805" y="246" text-anchor="middle" class="small">CREATE</text>

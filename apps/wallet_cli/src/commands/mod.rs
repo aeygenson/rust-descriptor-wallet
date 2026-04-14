@@ -116,6 +116,14 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         } => {
             runtime::cpfp_psbt(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
         }
+        Commands::Cpfp {
+            name,
+            parent_txid,
+            selected_outpoint,
+            fee_rate,
+        } => {
+            runtime::cpfp(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
+        }
     }
 
     Ok(())

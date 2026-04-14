@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports explicit coin control for send flows, including manual UTXO inclusion, exclusion, and confirmed-only selection.
+Current milestone: the project now supports strict coin control for send flows, where explicit included outpoints are treated as an exact selection and the builder refuses to silently add extra inputs.
 
 ## Vision
 
@@ -63,6 +63,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - Bitcoin Core RPC broadcast backend for local/regtest transaction publication
 - end-to-end create/sign/publish orchestration in the API layer
 - coin-control transaction building with explicit include/exclude outpoints
+- strict coin-control enforcement for explicitly included input sets
 - confirmed-only coin-control selection for safer manual spending
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
@@ -130,7 +131,8 @@ For manually managed spend construction, the code also supports coin control:
 1. inspect wallet UTXOs
 2. explicitly include and/or exclude outpoints
 3. optionally require confirmed-only selected inputs
-4. build a PSBT or full send flow using only the allowed input set
+4. when `--include` is used, treat that set as strict and reject builds that would need extra wallet inputs
+5. build a PSBT or full send flow using only the allowed input set
 
 For replaceable transactions, the code also supports a fee-bump path:
 
@@ -202,6 +204,7 @@ Current note on coin control:
 - `--include` explicitly locks the spend to the listed wallet outpoints
 - `--exclude` marks wallet outpoints as unspendable for that build
 - `--confirmed-only` rejects selected unconfirmed inputs
+- included outpoints are now strict: if they do not fully fund the amount plus estimated fee, the build fails instead of auto-selecting more wallet inputs
 - use `utxos` first, then `create-psbt-with-coin-control` or `send-psbt-with-coin-control`
 
 Current note on `cpfp-psbt`:
@@ -231,6 +234,7 @@ What works at runtime now:
 - inspect spendable UTXOs from the current synced state
 - create an unsigned PSBT with destination, amount, fee, and selected input summary
 - create PSBTs with explicit include/exclude coin-control constraints
+- enforce strict exact-input selection when explicit include sets are provided
 - sign a PSBT using wallet-owned private descriptor material
 - classify signing results as unchanged, partial, or finalized
 - validate and extract a finalized PSBT into a raw transaction
@@ -257,7 +261,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, explicit coin control, RBF fee bumping, and CPFP PSBT creation. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, strict coin control, RBF fee bumping, and CPFP PSBT creation. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 
@@ -326,7 +330,7 @@ Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](crates
 
 - receive funds and observe balance after sync
 - self-send with change output tracking
-- coin-control PSBT creation and send flows with explicit input validation
+- coin-control PSBT creation and send flows with explicit input validation and strict exact-selection enforcement
 - RBF fee bump with mempool replacement and confirmation checks
 - CPFP child transaction build, publish, and confirmation checks
 

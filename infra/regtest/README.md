@@ -138,6 +138,7 @@ You can now reliably test:
 
 - send transactions without immediate confirmation
 - coin control with explicit include/exclude outpoints
+- strict coin control where included outpoints must fully fund the spend
 - RBF (bump-fee)
 - CPFP
 - mempool behavior

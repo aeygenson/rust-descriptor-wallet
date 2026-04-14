@@ -40,6 +40,12 @@ pub async fn create_psbt_with_coin_control(
     println!("fee={} sats", psbt.fee_sat);
     println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
     println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
     println!("inputs={}", psbt.input_count);
     println!("outputs={}", psbt.output_count);
     println!("estimated_vsize={} vB", psbt.estimated_vsize);
@@ -233,6 +239,12 @@ pub async fn create_psbt(
     println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
     println!("replaceable={}", psbt.replaceable);
     println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
     println!("inputs={}", psbt.input_count);
     println!("outputs={}", psbt.output_count);
     println!("recipients={}", psbt.recipient_count);
@@ -284,6 +296,12 @@ pub async fn bump_fee_psbt(
     println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
     println!("replaceable={}", psbt.replaceable);
     println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
     println!("inputs={}", psbt.input_count);
     println!("outputs={}", psbt.output_count);
     println!("recipients={}", psbt.recipient_count);

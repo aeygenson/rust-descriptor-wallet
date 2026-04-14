@@ -121,7 +121,7 @@ pub async fn create(
     })?;
 
     info!(
-        "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -130,6 +130,7 @@ pub async fn create(
         psbt.fee_rate_sat_per_vb,
         psbt.replaceable,
         psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -197,7 +198,7 @@ pub async fn create_with_coin_control(
     })?;
 
     info!(
-        "api psbt: create_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -206,6 +207,7 @@ pub async fn create_with_coin_control(
         psbt.fee_rate_sat_per_vb,
         psbt.replaceable,
         psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -334,7 +336,7 @@ pub async fn bump_fee_psbt(
     })?;
 
     info!(
-        "api psbt: bump_fee_psbt success name={} original_txid={} replacement_txid={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: bump_fee_psbt success name={} original_txid={} replacement_txid={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         txid,
         psbt.txid,
@@ -342,6 +344,7 @@ pub async fn bump_fee_psbt(
         psbt.fee_rate_sat_per_vb,
         psbt.replaceable,
         psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -612,5 +615,36 @@ mod tests {
         assert_eq!(dto.include_outpoints.len(), 1);
         assert_eq!(dto.exclude_outpoints.len(), 1);
         assert!(dto.confirmed_only);
+    }
+
+    #[test]
+    fn wallet_psbt_dto_can_carry_selected_inputs() {
+        let dto = WalletPsbtDto {
+            psbt_base64: "dummy_psbt".to_string(),
+            txid: "dummy_txid".to_string(),
+            original_txid: None,
+            to_address: "tb1qexampleaddress".to_string(),
+            amount_sat: 10_000,
+            fee_sat: 123,
+            fee_rate_sat_per_vb: 1,
+            replaceable: true,
+            change_amount_sat: Some(9_000),
+            selected_utxo_count: 2,
+            selected_inputs: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000002:1"
+                    .to_string(),
+            ],
+            input_count: 2,
+            output_count: 2,
+            recipient_count: 1,
+            estimated_vsize: 140,
+        };
+
+        assert_eq!(dto.selected_utxo_count, 2);
+        assert_eq!(dto.selected_inputs.len(), 2);
+        assert_eq!(dto.input_count, 2);
+        assert!(dto.replaceable);
     }
 }

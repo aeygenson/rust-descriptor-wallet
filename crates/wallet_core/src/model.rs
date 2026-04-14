@@ -108,6 +108,9 @@ pub struct WalletPsbtInfo {
     /// Number of wallet UTXOs selected for this PSBT.
     pub selected_utxo_count: usize,
 
+    /// Exact selected input outpoints used for this PSBT.
+    pub selected_inputs: Vec<String>,
+
     /// Total number of inputs in the transaction.
     pub input_count: usize,
 
@@ -132,6 +135,7 @@ impl WalletPsbtInfo {
     /// - base64 PSBT payload is preserved
     /// - RBF flag is derived from input sequence numbers
     /// - selected input count is preserved
+    /// - selected input outpoints are preserved
     ///
     /// The remaining fields are populated conservatively:
     /// - `to_address` = empty string
@@ -152,6 +156,12 @@ impl WalletPsbtInfo {
 
         let txid = psbt.unsigned_tx.compute_txid().to_string();
         let input_count = psbt.unsigned_tx.input.len();
+        let selected_inputs = psbt
+            .unsigned_tx
+            .input
+            .iter()
+            .map(|txin| txin.previous_output.to_string())
+            .collect();
         let output_count = psbt.unsigned_tx.output.len();
         let recipient_count = output_count;
         let estimated_vsize = psbt.unsigned_tx.vsize() as u64;
@@ -167,6 +177,7 @@ impl WalletPsbtInfo {
             replaceable,
             change_amount_sat: None,
             selected_utxo_count: input_count,
+            selected_inputs,
             input_count,
             output_count,
             recipient_count,

@@ -1,825 +1,1097 @@
 pub mod support;
 
 mod regtest_suite {
-use serial_test::serial;
-use test_support::{mempool_contains, RegtestEnv};use test_support::wallet::*;
-use wallet_api::factory::build_default_api;
-use crate::support::ensure_confirmed_wallet_utxos;
+    use crate::support::ensure_confirmed_wallet_utxos;
+    use serial_test::serial;
+    use test_support::wallet::*;
+    use test_support::{mempool_contains, RegtestEnv};
+    use wallet_api::factory::build_default_api;
 
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
+        // 1. Start regtest environment
+        let env = RegtestEnv::new();
+        env.start()?;
 
+        // 2. Build API
+        let api = build_default_api().await?;
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
-    // 1. Start regtest environment
-    let env = RegtestEnv::new();
-    env.start()?;
+        let wallet_name = "regtest-local";
 
-    // 2. Build API
-    let api = build_default_api().await?;
-
-    let wallet_name = "regtest-local";
-
-    // 3. Initial sync
-    api.sync_wallet(wallet_name).await?;
-
-    // 4. Get a new address
-    let addr = api.address(wallet_name).await?;
-
-    // 5. Fund the address (50_000 sats)
-    let btc_addr = parse_regtest_address(&addr)?;
-    env.fund_sats(&btc_addr, 50_000)?;
-
-    // 6. Mine a block to confirm
-    env.mine(1)?;
-
-    // 7. Sync again
-    api.sync_wallet(wallet_name).await?;
-
-    // 8. Check balance
-    let balance = api.balance(wallet_name).await?;
-
-    // 9. Assert balance increased
-    assert!(balance >= 50_000, "expected at least 50_000 sats, got {}", balance);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_self_send_creates_change() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    // Make sure wallet state is up to date before building the spend.
-    api.sync_wallet(wallet_name).await?;
-
-    let balance_before = api.balance(wallet_name).await?;
-
-    // Generate a fresh wallet address and send funds to ourselves.
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_psbt(wallet_name, &destination, 10_000, 1)
-        .await?;
-
-    assert!(!published.txid.is_empty(), "expected broadcast txid to be present");
-
-    // Sync to observe the unconfirmed transaction and its outputs.
-    api.sync_wallet(wallet_name).await?;
-
-    let txs = api.txs(wallet_name).await?;
-    let sent_tx = txs
-        .iter()
-        .find(|tx| tx.txid == published.txid)
-        .expect("expected self-send transaction to appear in tx list");
-
-    let fee = sent_tx.fee.expect("expected self-send transaction fee to be present");
-    assert!(fee > 0, "expected positive fee, got {}", fee);
-    assert_eq!(sent_tx.net_value, -(fee as i64));
-    assert!(!sent_tx.confirmed, "expected self-send transaction to be unconfirmed before mining");
-
-    let utxos = api.utxos(wallet_name).await?;
-    assert!(
-        utxos.iter().any(|u| {
-            outpoint_txid(&u.outpoint) == published.txid
-                && u.value == 10_000
-                && u.keychain == "external"
-        }),
-        "expected recipient output with value 10000 sats"
-    );
-    assert!(
-        utxos.iter().any(|u| {
-            outpoint_txid(&u.outpoint) == published.txid
-                && u.value > 0
-                && u.keychain == "internal"
-        }),
-        "expected internal change output for self-send transaction"
-    );
-
-    // Confirm the transaction, then re-sync and verify final accounting.
-    env.mine(1)?;
-    api.sync_wallet(wallet_name).await?;
-
-    let txs = api.txs(wallet_name).await?;
-    let sent_tx = txs
-        .iter()
-        .find(|tx| tx.txid == published.txid)
-        .expect("expected self-send transaction after mining");
-    assert!(sent_tx.confirmed, "expected self-send transaction to be confirmed after mining");
-
-    let balance = api.balance(wallet_name).await?;
-    assert_eq!(
-        balance,
-        balance_before - fee,
-        "expected balance to decrease only by fee"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_bump_fee_replaces_unconfirmed_transaction() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    // Make sure wallet state is up to date and the wallet has enough funds.
-    api.sync_wallet(wallet_name).await?;
-    let mut balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
+        // 3. Initial sync
         api.sync_wallet(wallet_name).await?;
-        balance_before = api.balance(wallet_name).await?;
+
+        // 4. Get a new address
+        let addr = api.address(wallet_name).await?;
+
+        // 5. Fund the address (50_000 sats)
+        let btc_addr = parse_regtest_address(&addr)?;
+        env.fund_sats(&btc_addr, 50_000)?;
+
+        // 6. Mine a block to confirm
+        env.mine(1)?;
+
+        // 7. Sync again
+        api.sync_wallet(wallet_name).await?;
+
+        // 8. Check balance
+        let balance = api.balance(wallet_name).await?;
+
+        // 9. Assert balance increased
+        assert!(
+            balance >= 50_000,
+            "expected at least 50_000 sats, got {}",
+            balance
+        );
+
+        Ok(())
     }
 
-    // Create a self-send we can replace.
-    let destination = api.address(wallet_name).await?;
-    let original = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(
-        !original.txid.is_empty(),
-        "expected original broadcast txid to be present"
-    );
-    let original_txid = parse_txid(&original.txid)?;
-    assert!(
-        mempool_contains(&original_txid)?,
-        "expected original transaction to be present in mempool before bump"
-    );
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_self_send_creates_change() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    api.sync_wallet(wallet_name).await?;
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    let txs = api.txs(wallet_name).await?;
-    let original_tx = txs
-        .iter()
-        .find(|tx| tx.txid == original.txid)
-        .expect("expected original unconfirmed transaction to appear in tx list");
-    let original_fee = original_tx
-        .fee
-        .expect("expected original transaction fee to be present");
-    assert!(
-        !original_tx.confirmed,
-        "expected original transaction to be unconfirmed before bump"
-    );
+        // Make sure wallet state is up to date before building the spend.
+        api.sync_wallet(wallet_name).await?;
 
-    // Replace it with a higher fee transaction.
-    let replacement = api.bump_fee(wallet_name, &original.txid, 5).await?;
-    assert!(
-        !replacement.txid.is_empty(),
-        "expected replacement broadcast txid to be present"
-    );
-    assert_ne!(
-        replacement.txid, original.txid,
-        "expected replacement txid to differ from original txid"
-    );
-    let replacement_txid_rpc = parse_txid(&replacement.txid)?;
-    assert!(
-        mempool_contains(&replacement_txid_rpc)?,
-        "expected replacement transaction to be present in mempool after bump"
-    );
-    assert!(
-        !mempool_contains(&original_txid)?,
-        "expected original transaction to be removed from mempool after replacement"
-    );
+        let balance_before = api.balance(wallet_name).await?;
 
-    api.sync_wallet(wallet_name).await?;
+        // Generate a fresh wallet address and send funds to ourselves.
+        let destination = api.address(wallet_name).await?;
+        let published = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
 
-    let txs = api.txs(wallet_name).await?;
-    let replacement_tx = txs
-        .iter()
-        .find(|tx| tx.txid == replacement.txid)
-        .or_else(|| {
-            txs.iter().find(|tx| {
-                tx.txid != original.txid
-                    && !tx.confirmed
-                    && tx.direction == "sent"
+        assert!(
+            !published.txid.is_empty(),
+            "expected broadcast txid to be present"
+        );
+
+        // Sync to observe the unconfirmed transaction and its outputs.
+        api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let sent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected self-send transaction to appear in tx list");
+
+        let fee = sent_tx
+            .fee
+            .expect("expected self-send transaction fee to be present");
+        assert!(fee > 0, "expected positive fee, got {}", fee);
+        assert_eq!(sent_tx.net_value, -(fee as i64));
+        assert!(
+            !sent_tx.confirmed,
+            "expected self-send transaction to be unconfirmed before mining"
+        );
+
+        let utxos = api.utxos(wallet_name).await?;
+        assert!(
+            utxos.iter().any(|u| {
+                outpoint_txid(&u.outpoint) == published.txid
+                    && u.value == 10_000
+                    && u.keychain == "external"
+            }),
+            "expected recipient output with value 10000 sats"
+        );
+        assert!(
+            utxos.iter().any(|u| {
+                outpoint_txid(&u.outpoint) == published.txid
+                    && u.value > 0
+                    && u.keychain == "internal"
+            }),
+            "expected internal change output for self-send transaction"
+        );
+
+        // Confirm the transaction, then re-sync and verify final accounting.
+        env.mine(1)?;
+        api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let sent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected self-send transaction after mining");
+        assert!(
+            sent_tx.confirmed,
+            "expected self-send transaction to be confirmed after mining"
+        );
+
+        let balance = api.balance(wallet_name).await?;
+        assert_eq!(
+            balance,
+            balance_before - fee,
+            "expected balance to decrease only by fee"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_bump_fee_replaces_unconfirmed_transaction() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        // Make sure wallet state is up to date and the wallet has enough funds.
+        api.sync_wallet(wallet_name).await?;
+        let mut balance_before = api.balance(wallet_name).await?;
+
+        if balance_before < 50_000 {
+            let refill_addr = api.address(wallet_name).await?;
+            let refill_addr = parse_regtest_address(&refill_addr)?;
+            env.fund_sats(&refill_addr, 100_000)?;
+            env.mine(1)?;
+            api.sync_wallet(wallet_name).await?;
+            balance_before = api.balance(wallet_name).await?;
+        }
+
+        // Create a self-send we can replace.
+        let destination = api.address(wallet_name).await?;
+        let original = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !original.txid.is_empty(),
+            "expected original broadcast txid to be present"
+        );
+        let original_txid = parse_txid(&original.txid)?;
+        assert!(
+            mempool_contains(&original_txid)?,
+            "expected original transaction to be present in mempool before bump"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let original_tx = txs
+            .iter()
+            .find(|tx| tx.txid == original.txid)
+            .expect("expected original unconfirmed transaction to appear in tx list");
+        let original_fee = original_tx
+            .fee
+            .expect("expected original transaction fee to be present");
+        assert!(
+            !original_tx.confirmed,
+            "expected original transaction to be unconfirmed before bump"
+        );
+
+        // Replace it with a higher fee transaction.
+        let replacement = api.bump_fee(wallet_name, &original.txid, 5).await?;
+        assert!(
+            !replacement.txid.is_empty(),
+            "expected replacement broadcast txid to be present"
+        );
+        assert_ne!(
+            replacement.txid, original.txid,
+            "expected replacement txid to differ from original txid"
+        );
+        let replacement_txid_rpc = parse_txid(&replacement.txid)?;
+        assert!(
+            mempool_contains(&replacement_txid_rpc)?,
+            "expected replacement transaction to be present in mempool after bump"
+        );
+        assert!(
+            !mempool_contains(&original_txid)?,
+            "expected original transaction to be removed from mempool after replacement"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let replacement_tx = txs
+            .iter()
+            .find(|tx| tx.txid == replacement.txid)
+            .or_else(|| {
+                txs.iter()
+                    .find(|tx| tx.txid != original.txid && !tx.confirmed && tx.direction == "sent")
             })
-        })
-        .expect("expected replacement transaction to appear in tx list");
-    let replacement_txid = replacement_tx.txid.clone();
-    let replacement_fee = replacement_tx
-        .fee
-        .expect("expected replacement transaction fee to be present");
+            .expect("expected replacement transaction to appear in tx list");
+        let replacement_txid = replacement_tx.txid.clone();
+        let replacement_fee = replacement_tx
+            .fee
+            .expect("expected replacement transaction fee to be present");
 
-    assert!(
-        !replacement_tx.confirmed,
-        "expected replacement transaction to be unconfirmed before mining"
-    );
-    assert!(
-        replacement_fee >= original_fee,
-        "expected replacement fee ({}) to be >= original fee ({})",
-        replacement_fee,
-        original_fee
-    );
-    assert_eq!(replacement_tx.net_value, -(replacement_fee as i64));
+        assert!(
+            !replacement_tx.confirmed,
+            "expected replacement transaction to be unconfirmed before mining"
+        );
+        assert!(
+            replacement_fee >= original_fee,
+            "expected replacement fee ({}) to be >= original fee ({})",
+            replacement_fee,
+            original_fee
+        );
+        assert_eq!(replacement_tx.net_value, -(replacement_fee as i64));
 
-    // Confirm replacement and verify final accounting.
-    env.mine(1)?;
-    api.sync_wallet(wallet_name).await?;
-    assert!(
-        !mempool_contains(&replacement_txid_rpc)?,
-        "expected replacement transaction to leave mempool after confirmation"
-    );
-
-    let txs = api.txs(wallet_name).await?;
-    let replacement_tx = txs
-        .iter()
-        .find(|tx| tx.txid == replacement_txid)
-        .expect("expected replacement transaction after mining");
-
-    assert!(
-        replacement_tx.confirmed,
-        "expected replacement transaction to be confirmed after mining"
-    );
-
-    let utxos = api.utxos(wallet_name).await?;
-    assert!(
-        utxos.iter().any(|u| {
-            outpoint_txid(&u.outpoint) == replacement_txid && u.value == 10_000 && u.keychain == "external"
-        }),
-        "expected replacement recipient output with value 10000 sats"
-    );
-    assert!(
-        utxos.iter().any(|u| {
-            outpoint_txid(&u.outpoint) == replacement_txid && u.value > 0 && u.keychain == "internal"
-        }),
-        "expected replacement internal change output"
-    );
-
-    let balance = api.balance(wallet_name).await?;
-    assert_eq!(
-        balance,
-        balance_before - replacement_fee,
-        "expected balance to decrease only by final replacement fee"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    // Make sure wallet state is current and we have enough confirmed funds.
-    api.sync_wallet(wallet_name).await?;
-    let balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
-        env.fund_sats(&refill_addr, 100_000)?;
+        // Confirm replacement and verify final accounting.
         env.mine(1)?;
         api.sync_wallet(wallet_name).await?;
-        // No need to reassign balance_before
+        assert!(
+            !mempool_contains(&replacement_txid_rpc)?,
+            "expected replacement transaction to leave mempool after confirmation"
+        );
+
+        let txs = api.txs(wallet_name).await?;
+        let replacement_tx = txs
+            .iter()
+            .find(|tx| tx.txid == replacement_txid)
+            .expect("expected replacement transaction after mining");
+
+        assert!(
+            replacement_tx.confirmed,
+            "expected replacement transaction to be confirmed after mining"
+        );
+
+        let utxos = api.utxos(wallet_name).await?;
+        assert!(
+            utxos.iter().any(|u| {
+                outpoint_txid(&u.outpoint) == replacement_txid
+                    && u.value == 10_000
+                    && u.keychain == "external"
+            }),
+            "expected replacement recipient output with value 10000 sats"
+        );
+        assert!(
+            utxos.iter().any(|u| {
+                outpoint_txid(&u.outpoint) == replacement_txid
+                    && u.value > 0
+                    && u.keychain == "internal"
+            }),
+            "expected replacement internal change output"
+        );
+
+        let balance = api.balance(wallet_name).await?;
+        assert_eq!(
+            balance,
+            balance_before - replacement_fee,
+            "expected balance to decrease only by final replacement fee"
+        );
+
+        Ok(())
     }
 
-    // Create an unconfirmed parent transaction by self-sending.
-    let destination = api.address(wallet_name).await?;
-    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    let parent_txid = parse_txid(&parent.txid)?;
-    assert!(
-        mempool_contains(&parent_txid)?,
-        "expected parent transaction to be present in mempool before CPFP"
-    );
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    api.sync_wallet(wallet_name).await?;
-    let balance_before_cpfp = api.balance(wallet_name).await?;
-    // Select one of the parent's unconfirmed wallet-owned outputs for CPFP.
-    let utxos = api.utxos(wallet_name).await?;
-    let selected = utxos
-        .iter()
-        .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
-        .expect("expected at least one parent output to be available for CPFP");
+        // Make sure wallet state is current and we have enough confirmed funds.
+        api.sync_wallet(wallet_name).await?;
+        let balance_before = api.balance(wallet_name).await?;
 
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
-        .await?;
+        if balance_before < 50_000 {
+            let refill_addr = api.address(wallet_name).await?;
+            let refill_addr = parse_regtest_address(&refill_addr)?;
+            env.fund_sats(&refill_addr, 100_000)?;
+            env.mine(1)?;
+            api.sync_wallet(wallet_name).await?;
+            // No need to reassign balance_before
+        }
 
-    assert!(
-        !cpfp.psbt_base64.is_empty(),
-        "expected CPFP PSBT payload to be present"
-    );
-    assert!(!cpfp.txid.is_empty(), "expected CPFP child txid to be present");
-    assert_eq!(cpfp.parent_txid, parent.txid);
-    assert_eq!(
-        cpfp.selected_outpoint, selected.outpoint,
-        "expected CPFP to use the explicitly requested outpoint"
-    );
-    assert_eq!(cpfp.input_value_sat, selected.value);
-    assert!(
-        cpfp.fee_sat > 0,
-        "expected CPFP fee to be positive, got {}",
-        cpfp.fee_sat
-    );
-    assert!(
-        cpfp.child_output_value_sat < cpfp.input_value_sat,
-        "expected child output value {} to be less than input value {}",
-        cpfp.child_output_value_sat,
-        cpfp.input_value_sat
-    );
-    assert_eq!(
-        cpfp.input_value_sat - cpfp.child_output_value_sat,
-        cpfp.fee_sat,
-        "expected CPFP fee to equal input minus child output value"
-    );
-    assert_eq!(cpfp.fee_rate_sat_per_vb, 5);
-    assert!(cpfp.estimated_vsize > 0, "expected positive virtual size");
-    assert!(cpfp.replaceable, "expected CPFP child transaction to be replaceable");
+        // Create an unconfirmed parent transaction by self-sending.
+        let destination = api.address(wallet_name).await?;
+        let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !parent.txid.is_empty(),
+            "expected parent txid to be present"
+        );
 
-    // Building the CPFP PSBT should not alter chain state or wallet balance.
-    let balance_after = api.balance(wallet_name).await?;
-    assert_eq!(
-        balance_after, balance_before_cpfp,
-        "building a CPFP PSBT should not change wallet balance"
-    );
-    assert!(
-        mempool_contains(&parent_txid)?,
-        "expected parent transaction to remain in mempool after CPFP PSBT creation"
-    );
+        let parent_txid = parse_txid(&parent.txid)?;
+        assert!(
+            mempool_contains(&parent_txid)?,
+            "expected parent transaction to be present in mempool before CPFP"
+        );
 
-    Ok(())
-}
+        api.sync_wallet(wallet_name).await?;
+        let balance_before_cpfp = api.balance(wallet_name).await?;
+        // Select one of the parent's unconfirmed wallet-owned outputs for CPFP.
+        let utxos = api.utxos(wallet_name).await?;
+        let selected = utxos
+            .iter()
+            .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
+            .expect("expected at least one parent output to be available for CPFP");
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
+        let cpfp = api
+            .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
+            .await?;
 
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+        assert!(
+            !cpfp.psbt_base64.is_empty(),
+            "expected CPFP PSBT payload to be present"
+        );
+        assert!(
+            !cpfp.txid.is_empty(),
+            "expected CPFP child txid to be present"
+        );
+        assert_eq!(cpfp.parent_txid, parent.txid);
+        assert_eq!(
+            cpfp.selected_outpoint, selected.outpoint,
+            "expected CPFP to use the explicitly requested outpoint"
+        );
+        assert_eq!(cpfp.input_value_sat, selected.value);
+        assert!(
+            cpfp.fee_sat > 0,
+            "expected CPFP fee to be positive, got {}",
+            cpfp.fee_sat
+        );
+        assert!(
+            cpfp.child_output_value_sat < cpfp.input_value_sat,
+            "expected child output value {} to be less than input value {}",
+            cpfp.child_output_value_sat,
+            cpfp.input_value_sat
+        );
+        assert_eq!(
+            cpfp.input_value_sat - cpfp.child_output_value_sat,
+            cpfp.fee_sat,
+            "expected CPFP fee to equal input minus child output value"
+        );
+        assert_eq!(cpfp.fee_rate_sat_per_vb, 5);
+        assert!(cpfp.estimated_vsize > 0, "expected positive virtual size");
+        assert!(
+            cpfp.replaceable,
+            "expected CPFP child transaction to be replaceable"
+        );
 
-    api.sync_wallet(wallet_name).await?;
-    let balance_before = api.balance(wallet_name).await?;
+        // Building the CPFP PSBT should not alter chain state or wallet balance.
+        let balance_after = api.balance(wallet_name).await?;
+        assert_eq!(
+            balance_after, balance_before_cpfp,
+            "building a CPFP PSBT should not change wallet balance"
+        );
+        assert!(
+            mempool_contains(&parent_txid)?,
+            "expected parent transaction to remain in mempool after CPFP PSBT creation"
+        );
 
-    if balance_before < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
-        env.fund_sats(&refill_addr, 100_000)?;
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        api.sync_wallet(wallet_name).await?;
+        let balance_before = api.balance(wallet_name).await?;
+
+        if balance_before < 50_000 {
+            let refill_addr = api.address(wallet_name).await?;
+            let refill_addr = parse_regtest_address(&refill_addr)?;
+            env.fund_sats(&refill_addr, 100_000)?;
+            env.mine(1)?;
+            api.sync_wallet(wallet_name).await?;
+        }
+
+        // Create an unconfirmed self-send parent transaction that should produce at least
+        // an external recipient output and an internal change output.
+        let destination = api.address(wallet_name).await?;
+        let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !parent.txid.is_empty(),
+            "expected parent txid to be present"
+        );
+
+        let parent_txid = parse_txid(&parent.txid)?;
+        assert!(
+            mempool_contains(&parent_txid)?,
+            "expected parent transaction to be present in mempool before CPFP"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+        let utxos = api.utxos(wallet_name).await?;
+        let parent_outputs: Vec<_> = utxos
+            .iter()
+            .filter(|u| outpoint_txid(&u.outpoint) == parent.txid)
+            .collect();
+
+        assert!(
+            parent_outputs.len() >= 2,
+            "expected at least two wallet-owned parent outputs for explicit CPFP selection"
+        );
+
+        // Pick a specific output deterministically and verify it is the one used.
+        let requested = parent_outputs
+            .iter()
+            .max_by_key(|u| &u.outpoint)
+            .expect("expected a requested parent output")
+            .to_owned();
+
+        let cpfp = api
+            .cpfp_psbt(wallet_name, &parent.txid, &requested.outpoint, 5)
+            .await?;
+
+        assert_eq!(cpfp.parent_txid, parent.txid);
+        assert_eq!(
+            cpfp.selected_outpoint, requested.outpoint,
+            "expected CPFP to honor the explicitly requested outpoint"
+        );
+        assert_eq!(cpfp.input_value_sat, requested.value);
+        assert!(
+            cpfp.fee_sat > 0,
+            "expected CPFP fee to be positive, got {}",
+            cpfp.fee_sat
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        // Ensure the wallet is synced and has enough confirmed funds.
+        api.sync_wallet(wallet_name).await?;
+        let initial_balance = api.balance(wallet_name).await?;
+
+        if initial_balance < 50_000 {
+            let refill_addr = api.address(wallet_name).await?;
+            let refill_addr = parse_regtest_address(&refill_addr)?;
+            env.fund_sats(&refill_addr, 100_000)?;
+            env.mine(1)?;
+            api.sync_wallet(wallet_name).await?;
+        }
+
+        // Create a low-fee unconfirmed parent transaction.
+        let destination = api.address(wallet_name).await?;
+        let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !parent.txid.is_empty(),
+            "expected parent txid to be present"
+        );
+
+        let parent_txid = parse_txid(&parent.txid)?;
+        assert!(
+            mempool_contains(&parent_txid)?,
+            "expected parent transaction to be present in mempool before CPFP"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+        let utxos = api.utxos(wallet_name).await?;
+        let selected = utxos
+            .iter()
+            .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
+            .expect("expected at least one parent output to be available for CPFP");
+
+        // Build, sign, and publish the CPFP child transaction.
+        let cpfp = api
+            .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
+            .await?;
+        assert!(
+            !cpfp.psbt_base64.is_empty(),
+            "expected CPFP PSBT payload to be present"
+        );
+        assert!(
+            !cpfp.txid.is_empty(),
+            "expected CPFP child txid to be present"
+        );
+        assert_eq!(
+            cpfp.selected_outpoint, selected.outpoint,
+            "expected CPFP to use the explicitly requested outpoint"
+        );
+        assert_eq!(cpfp.input_value_sat, selected.value);
+
+        let signed = api.sign_psbt(wallet_name, &cpfp.psbt_base64).await?;
+        let published = api.publish_psbt(wallet_name, &signed.psbt_base64).await?;
+
+        assert_eq!(
+            published.txid, cpfp.txid,
+            "expected published CPFP child txid to match planned child txid"
+        );
+
+        let child_txid = parse_txid(&published.txid)?;
+        assert!(
+            mempool_contains(&parent_txid)?,
+            "expected parent transaction to remain in mempool after CPFP child broadcast"
+        );
+        assert!(
+            mempool_contains(&child_txid)?,
+            "expected CPFP child transaction to be present in mempool after broadcast"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let parent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == parent.txid)
+            .expect("expected parent transaction to appear in tx list after CPFP broadcast");
+        let child_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected CPFP child transaction to appear in tx list after broadcast");
+
+        assert!(
+            !parent_tx.confirmed,
+            "expected parent transaction to remain unconfirmed before mining"
+        );
+        assert!(
+            !child_tx.confirmed,
+            "expected CPFP child transaction to remain unconfirmed before mining"
+        );
+
+        // Mine a block and verify both transactions confirm.
         env.mine(1)?;
         api.sync_wallet(wallet_name).await?;
+
+        assert!(
+            !mempool_contains(&parent_txid)?,
+            "expected parent transaction to leave mempool after confirmation"
+        );
+        assert!(
+            !mempool_contains(&child_txid)?,
+            "expected CPFP child transaction to leave mempool after confirmation"
+        );
+
+        let txs = api.txs(wallet_name).await?;
+        let parent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == parent.txid)
+            .expect("expected parent transaction after mining");
+        let child_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected CPFP child transaction after mining");
+
+        assert!(
+            parent_tx.confirmed,
+            "expected parent transaction to be confirmed after mining"
+        );
+        assert!(
+            child_tx.confirmed,
+            "expected CPFP child transaction to be confirmed after mining"
+        );
+
+        Ok(())
     }
 
-    // Create an unconfirmed self-send parent transaction that should produce at least
-    // an external recipient output and an internal change output.
-    let destination = api.address(wallet_name).await?;
-    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    let parent_txid = parse_txid(&parent.txid)?;
-    assert!(
-        mempool_contains(&parent_txid)?,
-        "expected parent transaction to be present in mempool before CPFP"
-    );
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    api.sync_wallet(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
-    let parent_outputs: Vec<_> = utxos
-        .iter()
-        .filter(|u| outpoint_txid(&u.outpoint) == parent.txid)
-        .collect();
+        // Ensure we have enough confirmed funds.
+        api.sync_wallet(wallet_name).await?;
+        let balance = api.balance(wallet_name).await?;
 
-    assert!(
-        parent_outputs.len() >= 2,
-        "expected at least two wallet-owned parent outputs for explicit CPFP selection"
-    );
+        if balance < 50_000 {
+            let refill_addr = api.address(wallet_name).await?;
+            let refill_addr = parse_regtest_address(&refill_addr)?;
+            env.fund_sats(&refill_addr, 100_000)?;
+            env.mine(1)?;
+            api.sync_wallet(wallet_name).await?;
+        }
 
-    // Pick a specific output deterministically and verify it is the one used.
-    let requested = parent_outputs
-        .iter()
-        .max_by_key(|u| &u.outpoint)
-        .expect("expected a requested parent output")
-        .to_owned();
+        // Create a parent transaction and then confirm it.
+        let destination = api.address(wallet_name).await?;
+        let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !parent.txid.is_empty(),
+            "expected parent txid to be present"
+        );
+        api.sync_wallet(wallet_name).await?;
+        let utxos = api.utxos(wallet_name).await?;
+        let selected = utxos
+            .iter()
+            .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
+            .expect(
+                "expected at least one parent output to be available before parent confirmation",
+            );
 
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &requested.outpoint, 5)
-        .await?;
-
-    assert_eq!(cpfp.parent_txid, parent.txid);
-    assert_eq!(
-        cpfp.selected_outpoint, requested.outpoint,
-        "expected CPFP to honor the explicitly requested outpoint"
-    );
-    assert_eq!(cpfp.input_value_sat, requested.value);
-    assert!(
-        cpfp.fee_sat > 0,
-        "expected CPFP fee to be positive, got {}",
-        cpfp.fee_sat
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    // Ensure the wallet is synced and has enough confirmed funds.
-    api.sync_wallet(wallet_name).await?;
-    let initial_balance = api.balance(wallet_name).await?;
-
-    if initial_balance < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
-        env.fund_sats(&refill_addr, 100_000)?;
         env.mine(1)?;
         api.sync_wallet(wallet_name).await?;
+
+        // Confirm the transaction is no longer in mempool.
+        let parent_txid = parse_txid(&parent.txid)?;
+        assert!(
+            !mempool_contains(&parent_txid)?,
+            "expected confirmed parent transaction to be absent from mempool"
+        );
+
+        // CPFP should fail for a confirmed parent.
+        let err = api
+            .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
+            .await
+            .expect_err("expected CPFP PSBT creation to fail for confirmed parent");
+
+        let msg = err.to_string();
+        assert!(
+            !msg.is_empty(),
+            "expected CPFP confirmed-parent failure to produce an error message"
+        );
+
+        Ok(())
     }
 
-    // Create a low-fee unconfirmed parent transaction.
-    let destination = api.address(wallet_name).await?;
-    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    let parent_txid = parse_txid(&parent.txid)?;
-    assert!(
-        mempool_contains(&parent_txid)?,
-        "expected parent transaction to be present in mempool before CPFP"
-    );
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    api.sync_wallet(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
-    let selected = utxos
-        .iter()
-        .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
-        .expect("expected at least one parent output to be available for CPFP");
+        api.sync_wallet(wallet_name).await?;
 
-    // Build, sign, and publish the CPFP child transaction.
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
-        .await?;
-    assert!(
-        !cpfp.psbt_base64.is_empty(),
-        "expected CPFP PSBT payload to be present"
-    );
-    assert!(!cpfp.txid.is_empty(), "expected CPFP child txid to be present");
-    assert_eq!(
-        cpfp.selected_outpoint, selected.outpoint,
-        "expected CPFP to use the explicitly requested outpoint"
-    );
-    assert_eq!(cpfp.input_value_sat, selected.value);
+        // Use a deterministic fake txid that should not exist on regtest.
+        let missing_parent_txid =
+            "0000000000000000000000000000000000000000000000000000000000000001";
 
-    let signed = api.sign_psbt(wallet_name, &cpfp.psbt_base64).await?;
-    let published = api.publish_psbt(wallet_name, &signed.psbt_base64).await?;
+        let err = api
+            .cpfp_psbt(
+                wallet_name,
+                missing_parent_txid,
+                "0000000000000000000000000000000000000000000000000000000000000001:0",
+                5,
+            )
+            .await
+            .expect_err("expected CPFP PSBT creation to fail for missing parent transaction");
 
-    assert_eq!(
-        published.txid, cpfp.txid,
-        "expected published CPFP child txid to match planned child txid"
-    );
+        let msg = err.to_string();
+        assert!(
+            !msg.is_empty(),
+            "expected CPFP missing-parent failure to produce an error message"
+        );
 
-    let child_txid = parse_txid(&published.txid)?;
-    assert!(
-        mempool_contains(&parent_txid)?,
-        "expected parent transaction to remain in mempool after CPFP child broadcast"
-    );
-    assert!(
-        mempool_contains(&child_txid)?,
-        "expected CPFP child transaction to be present in mempool after broadcast"
-    );
+        Ok(())
+    }
 
-    api.sync_wallet(wallet_name).await?;
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_uses_requested_utxo() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    let txs = api.txs(wallet_name).await?;
-    let parent_tx = txs
-        .iter()
-        .find(|tx| tx.txid == parent.txid)
-        .expect("expected parent transaction to appear in tx list after CPFP broadcast");
-    let child_tx = txs
-        .iter()
-        .find(|tx| tx.txid == published.txid)
-        .expect("expected CPFP child transaction to appear in tx list after broadcast");
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    assert!(
-        !parent_tx.confirmed,
-        "expected parent transaction to remain unconfirmed before mining"
-    );
-    assert!(
-        !child_tx.confirmed,
-        "expected CPFP child transaction to remain unconfirmed before mining"
-    );
+        let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+        let requested = confirmed
+            .into_iter()
+            .max_by_key(|(_, value)| *value)
+            .expect("expected a confirmed UTXO for coin control");
 
-    // Mine a block and verify both transactions confirm.
-    env.mine(1)?;
-    api.sync_wallet(wallet_name).await?;
+        let destination = api.address(wallet_name).await?;
+        let psbt = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![requested.0.clone()],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await?;
 
-    assert!(
-        !mempool_contains(&parent_txid)?,
-        "expected parent transaction to leave mempool after confirmation"
-    );
-    assert!(
-        !mempool_contains(&child_txid)?,
-        "expected CPFP child transaction to leave mempool after confirmation"
-    );
+        let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
+        assert_eq!(inputs.len(), 1, "expected exactly one selected input");
+        assert_eq!(
+            inputs[0], requested.0,
+            "expected PSBT to use the requested UTXO"
+        );
 
-    let txs = api.txs(wallet_name).await?;
-    let parent_tx = txs
-        .iter()
-        .find(|tx| tx.txid == parent.txid)
-        .expect("expected parent transaction after mining");
-    let child_tx = txs
-        .iter()
-        .find(|tx| tx.txid == published.txid)
-        .expect("expected CPFP child transaction after mining");
+        Ok(())
+    }
 
-    assert!(
-        parent_tx.confirmed,
-        "expected parent transaction to be confirmed after mining"
-    );
-    assert!(
-        child_tx.confirmed,
-        "expected CPFP child transaction to be confirmed after mining"
-    );
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    Ok(())
-}
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
+        let mut confirmed =
+            ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
+        confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+        let requested: Vec<String> = confirmed
+            .iter()
+            .take(2)
+            .map(|(outpoint, _)| outpoint.clone())
+            .collect();
 
-    // Ensure we have enough confirmed funds.
-    api.sync_wallet(wallet_name).await?;
-    let balance = api.balance(wallet_name).await?;
+        let destination = api.address(wallet_name).await?;
+        let psbt = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                150_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: requested.clone(),
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await?;
 
-    if balance < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
-        env.fund_sats(&refill_addr, 100_000)?;
+        let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
+        assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
+        for outpoint in &requested {
+            assert!(
+                inputs.contains(outpoint),
+                "expected PSBT inputs {:?} to contain requested outpoint {}",
+                inputs,
+                outpoint
+            );
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_excludes_requested_utxo() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        let mut confirmed =
+            ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
+        confirmed.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let excluded = confirmed[0].0.clone();
+        let destination = api.address(wallet_name).await?;
+
+        let psbt = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: Vec::new(),
+                    exclude_outpoints: vec![excluded.clone()],
+                    confirmed_only: true,
+                },
+            )
+            .await?;
+
+        let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
+        assert!(
+            !inputs.is_empty(),
+            "expected PSBT to contain at least one input"
+        );
+        assert!(
+            !inputs.contains(&excluded),
+            "expected excluded outpoint {} not to be used in PSBT inputs {:?}",
+            excluded,
+            inputs
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_rejects_unconfirmed_selected_utxo_when_confirmed_only(
+    ) -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        api.sync_wallet(wallet_name).await?;
+
+        let destination = api.address(wallet_name).await?;
+        let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+        assert!(
+            !parent.txid.is_empty(),
+            "expected parent txid to be present"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+        let utxos = api.utxos(wallet_name).await?;
+        let selected = utxos
+            .iter()
+            .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
+            .expect("expected at least one unconfirmed wallet-owned output");
+
+        let next_destination = api.address(wallet_name).await?;
+        let err = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &next_destination,
+                5_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![selected.outpoint.clone()],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await
+            .expect_err("expected confirmed-only coin control to reject unconfirmed selected UTXO");
+
+        let msg = err.to_string();
+        assert!(
+            msg.contains("not confirmed"),
+            "expected error to mention not confirmed, got: {}",
+            msg
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+        let requested = confirmed
+            .into_iter()
+            .max_by_key(|(_, value)| *value)
+            .expect("expected a confirmed UTXO for coin control send");
+
+        let destination = api.address(wallet_name).await?;
+        let published = api
+            .send_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![requested.0.clone()],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await?;
+
+        assert!(
+            !published.txid.is_empty(),
+            "expected published txid to be present"
+        );
+
+        api.sync_wallet(wallet_name).await?;
+        let utxos_after_send = api.utxos(wallet_name).await?;
+        assert!(
+            !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
+            "expected requested outpoint {} to be spent after coin-control send",
+            requested.0
+        );
+
         env.mine(1)?;
         api.sync_wallet(wallet_name).await?;
+
+        let txs = api.txs(wallet_name).await?;
+        let sent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected published coin-control transaction in tx list");
+        assert!(
+            sent_tx.confirmed,
+            "expected coin-control send to confirm after mining"
+        );
+
+        Ok(())
+    }
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_rejects_invalid_outpoint() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        api.sync_wallet(wallet_name).await?;
+
+        let destination = api.address(wallet_name).await?;
+
+        let err = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec!["invalid_outpoint".to_string()],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: false,
+                },
+            )
+            .await
+            .expect_err("expected invalid outpoint to fail");
+
+        assert!(!err.to_string().is_empty());
+
+        Ok(())
     }
 
-    // Create a parent transaction and then confirm it.
-    let destination = api.address(wallet_name).await?;
-    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
-    api.sync_wallet(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
-    let selected = utxos
-        .iter()
-        .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
-        .expect("expected at least one parent output to be available before parent confirmation");
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_rejects_conflicting_rules() -> anyhow::Result<()>
+    {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    env.mine(1)?;
-    api.sync_wallet(wallet_name).await?;
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    // Confirm the transaction is no longer in mempool.
-    let parent_txid = parse_txid(&parent.txid)?;
-    assert!(
-        !mempool_contains(&parent_txid)?,
-        "expected confirmed parent transaction to be absent from mempool"
-    );
+        let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+        let outpoint = confirmed[0].0.clone();
 
-    // CPFP should fail for a confirmed parent.
-    let err = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
-        .await
-        .expect_err("expected CPFP PSBT creation to fail for confirmed parent");
+        let destination = api.address(wallet_name).await?;
 
-    let msg = err.to_string();
-    assert!(
-        !msg.is_empty(),
-        "expected CPFP confirmed-parent failure to produce an error message"
-    );
+        let err = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![outpoint.clone()],
+                    exclude_outpoints: vec![outpoint.clone()],
+                    confirmed_only: true,
+                },
+            )
+            .await
+            .expect_err("expected conflicting include/exclude to fail");
 
-    Ok(())
-}
+        assert!(!err.to_string().is_empty());
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
+        Ok(())
+    }
 
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_create_psbt_with_coin_control_rejects_insufficient_selected_inputs(
+    ) -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    api.sync_wallet(wallet_name).await?;
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    // Use a deterministic fake txid that should not exist on regtest.
-    let missing_parent_txid =
-        "0000000000000000000000000000000000000000000000000000000000000001";
+        let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+        let requested = confirmed[0].0.clone();
 
-    let err = api
-        .cpfp_psbt(
-            wallet_name,
-            missing_parent_txid,
-            "0000000000000000000000000000000000000000000000000000000000000001:0",
-            5,
-        )
-        .await
-        .expect_err("expected CPFP PSBT creation to fail for missing parent transaction");
+        let destination = api.address(wallet_name).await?;
+        let err = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                500_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![requested],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await
+            .expect_err("expected insufficient selected inputs to fail");
 
-    let msg = err.to_string();
-    assert!(
-        !msg.is_empty(),
-        "expected CPFP missing-parent failure to produce an error message"
-    );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("insufficient") || msg.contains("funds") || msg.contains("build"),
+            "expected error to mention insufficient funds/build failure, got: {}",
+            msg
+        );
 
-    Ok(())
-}
+        Ok(())
+    }
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_create_psbt_with_coin_control_uses_requested_utxo() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
+    #[tokio::test(flavor = "multi_thread")]
+    #[serial]
+    async fn wallet_send_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
 
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
 
-    let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
-    let requested = confirmed
-        .into_iter()
-        .max_by_key(|(_, value)| *value)
-        .expect("expected a confirmed UTXO for coin control");
+        let mut confirmed =
+            ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
+        confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-            },
-        )
-        .await?;
+        let requested: Vec<String> = confirmed
+            .iter()
+            .take(2)
+            .map(|(outpoint, _)| outpoint.clone())
+            .collect();
 
-    let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
-    assert_eq!(inputs.len(), 1, "expected exactly one selected input");
-    assert_eq!(inputs[0], requested.0, "expected PSBT to use the requested UTXO");
+        let destination = api.address(wallet_name).await?;
+        let published = api
+            .send_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                150_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: requested.clone(),
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                },
+            )
+            .await?;
 
-    Ok(())
-}
+        assert!(
+            !published.txid.is_empty(),
+            "expected published txid to be present"
+        );
 
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_create_psbt_with_coin_control_excludes_requested_utxo() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
+        api.sync_wallet(wallet_name).await?;
+        let utxos_after_send = api.utxos(wallet_name).await?;
+        for outpoint in &requested {
+            assert!(
+                !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
+                "expected requested outpoint {} to be spent after multi-input coin-control send",
+                outpoint
+            );
+        }
 
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+        env.mine(1)?;
+        api.sync_wallet(wallet_name).await?;
 
-    let mut confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
-    confirmed.sort_by(|a, b| a.0.cmp(&b.0));
+        let txs = api.txs(wallet_name).await?;
+        let sent_tx = txs
+            .iter()
+            .find(|tx| tx.txid == published.txid)
+            .expect("expected published multi-input coin-control transaction in tx list");
+        assert!(
+            sent_tx.confirmed,
+            "expected multi-input coin-control send to confirm after mining"
+        );
 
-    let excluded = confirmed[0].0.clone();
-    let destination = api.address(wallet_name).await?;
-
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: Vec::new(),
-                exclude_outpoints: vec![excluded.clone()],
-                confirmed_only: true,
-            },
-        )
-        .await?;
-
-    let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
-    assert!(!inputs.is_empty(), "expected PSBT to contain at least one input");
-    assert!(
-        !inputs.contains(&excluded),
-        "expected excluded outpoint {} not to be used in PSBT inputs {:?}",
-        excluded,
-        inputs
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_create_psbt_with_coin_control_rejects_unconfirmed_selected_utxo_when_confirmed_only() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    api.sync_wallet(wallet_name).await?;
-
-    let destination = api.address(wallet_name).await?;
-    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
-    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
-
-    api.sync_wallet(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
-    let selected = utxos
-        .iter()
-        .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
-        .expect("expected at least one unconfirmed wallet-owned output");
-
-    let next_destination = api.address(wallet_name).await?;
-    let err = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &next_destination,
-            5_000,
-            1,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![selected.outpoint.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-            },
-        )
-        .await
-        .expect_err("expected confirmed-only coin control to reject unconfirmed selected UTXO");
-
-    let msg = err.to_string();
-    assert!(
-        msg.contains("not confirmed"),
-        "expected error to mention not confirmed, got: {}",
-        msg
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-#[serial]
-async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::Result<()> {
-    let env = RegtestEnv::new();
-    env.start()?;
-
-    let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
-
-    let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
-    let requested = confirmed
-        .into_iter()
-        .max_by_key(|(_, value)| *value)
-        .expect("expected a confirmed UTXO for coin control send");
-
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-            },
-        )
-        .await?;
-
-    assert!(!published.txid.is_empty(), "expected published txid to be present");
-
-    api.sync_wallet(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
-    assert!(
-        !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
-        "expected requested outpoint {} to be spent after coin-control send",
-        requested.0
-    );
-
-    env.mine(1)?;
-    api.sync_wallet(wallet_name).await?;
-
-    let txs = api.txs(wallet_name).await?;
-    let sent_tx = txs
-        .iter()
-        .find(|tx| tx.txid == published.txid)
-        .expect("expected published coin-control transaction in tx list");
-    assert!(sent_tx.confirmed, "expected coin-control send to confirm after mining");
-
-    Ok(())
-}
+        Ok(())
+    }
 }

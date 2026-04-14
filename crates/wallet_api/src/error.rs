@@ -215,13 +215,16 @@ impl From<WalletCoreError> for WalletApiError {
             WalletCoreError::CoinControlConflict(s) => {
                 WalletApiError::InvalidInput(format!("coin control conflict: {}", s))
             }
+            WalletCoreError::CoinControlEmptySelection => {
+                WalletApiError::InvalidInput("coin control selection is empty".to_string())
+            }
             WalletCoreError::CoinControlInvalidOutpoint(s) => {
                 WalletApiError::InvalidInput(format!("invalid coin control outpoint: {}", s))
             }
-            WalletCoreError::CoinControlInsufficientSelectedFunds { selected_sat, required_sat } => {
+            WalletCoreError::CoinControlInsufficientSelectedFunds { selected_sat, required_sat, fee_estimate_sat } => {
                 WalletApiError::InvalidInput(format!(
-                    "coin control insufficient funds: selected={} required={}",
-                    selected_sat, required_sat
+                    "coin control insufficient funds: selected={} required={} fee_estimate={}",
+                    selected_sat, required_sat, fee_estimate_sat
                 ))
             }
             other => WalletApiError::Core(other),

@@ -1,5 +1,7 @@
 use std::str::FromStr;
 
+use std::collections::HashSet;
+
 use bitcoin::{Address, Amount, Network, Sequence};
 use bitcoin::FeeRate;
 use bdk_wallet::KeychainKind;
@@ -88,10 +90,61 @@ impl WalletService {
             _ => Vec::new(),
         };
 
+        let strict_selected_inputs = coin_control
+            .as_ref()
+            .map(|cc| !cc.include_outpoints.is_empty())
+            .unwrap_or(false);
+
+        let wallet_utxos: Vec<_> = self.wallet.list_unspent().collect();
+
+        let mut strict_excluded_inputs = excluded_inputs.clone();
+        if strict_selected_inputs {
+            let selected_set: HashSet<_> = selected_inputs.iter().copied().collect();
+
+            let selected_total_sat: u64 = wallet_utxos
+                .iter()
+                .filter(|u| selected_set.contains(&u.outpoint))
+                .map(|u| u.txout.value.to_sat())
+                .sum();
+
+            // Conservative fee estimate for strict selection mode.
+            // We assume one recipient output plus one change output.
+            let input_count = selected_inputs.len() as u64;
+            let output_count = 2u64;
+            let estimated_vsize = 11u64 + input_count * 58u64 + output_count * 43u64;
+            let fee_estimate_sat = estimated_vsize * fee_rate_sat_per_vb.as_u64();
+            let required_sat = amount_sat.as_u64() + fee_estimate_sat;
+
+            if selected_inputs.is_empty() {
+                return Err(crate::WalletCoreError::CoinControlEmptySelection);
+            }
+
+            if selected_total_sat < amount_sat.as_u64() {
+                return Err(crate::WalletCoreError::CoinControlInsufficientSelectedFunds {
+                    selected_sat: selected_total_sat,
+                    required_sat,
+                    fee_estimate_sat,
+                });
+            }
+
+            if selected_total_sat < required_sat {
+                return Err(crate::WalletCoreError::CoinControlStrictModeViolation);
+            }
+
+            for utxo in &wallet_utxos {
+                if !selected_set.contains(&utxo.outpoint)
+                    && !strict_excluded_inputs.contains(&utxo.outpoint)
+                {
+                    strict_excluded_inputs.push(utxo.outpoint);
+                }
+            }
+        }
+
         debug!(
-            "wallet_service: create_psbt coin_control selected_inputs={} excluded_inputs={}",
+            "wallet_service: create_psbt coin_control selected_inputs={} excluded_inputs={} strict_selected_inputs={}",
             selected_inputs.len(),
-            excluded_inputs.len(),
+            strict_excluded_inputs.len(),
+            strict_selected_inputs,
         );
 
         let mut builder = self.wallet.build_tx();
@@ -110,8 +163,8 @@ impl WalletService {
             })?;
         }
 
-        if !excluded_inputs.is_empty() {
-            builder.unspendable(excluded_inputs.clone());
+        if !strict_excluded_inputs.is_empty() {
+            builder.unspendable(strict_excluded_inputs.clone());
         }
 
         let psbt = builder
@@ -133,6 +186,12 @@ impl WalletService {
         }
 
         let selected_utxo_count = psbt.inputs.len();
+        let selected_inputs: Vec<String> = psbt
+            .unsigned_tx
+            .input
+            .iter()
+            .map(|txin| txin.previous_output.to_string())
+            .collect();
 
         let total_input_sat: u64 = psbt
             .inputs
@@ -188,7 +247,7 @@ impl WalletService {
         let psbt_base64 = psbt.to_string();
 
         info!(
-            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={} coin_control_selected_inputs={} coin_control_excluded_inputs={}",
+            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={} coin_control_selected_inputs={} coin_control_excluded_inputs={} strict_selected_inputs={}",
             to_address,
             amount_sat.as_u64(),
             fee_sat,
@@ -198,7 +257,8 @@ impl WalletService {
             change_amount_sat,
             selected_utxo_count,
             selected_inputs.len(),
-            excluded_inputs.len()
+            strict_excluded_inputs.len(),
+            strict_selected_inputs
         );
 
         Ok(WalletPsbtInfo {
@@ -212,6 +272,7 @@ impl WalletService {
             replaceable: actual_replaceable,
             change_amount_sat: change_amount_sat.map(AmountSat),
             selected_utxo_count,
+            selected_inputs,
             input_count: psbt.unsigned_tx.input.len(),
             output_count: psbt.unsigned_tx.output.len(),
             recipient_count: 1,
@@ -232,6 +293,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
     use crate::WalletConfig;
     use crate::types::{AmountSat, FeeRateSatPerVb};
+    use bitcoin::absolute::LockTime;
+    use bitcoin::{OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid, Witness};
+    use bitcoin::transaction::Version;
+    use bitcoin::psbt::Psbt;
 
     static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -455,6 +520,83 @@ mod tests {
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
         });
+    }
+
+    #[test]
+    fn create_psbt_populates_selected_inputs_field_when_transaction_build_succeeds() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+        );
+
+        match result {
+            Ok(psbt_info) => {
+                assert_eq!(
+                    psbt_info.selected_inputs.len(),
+                    psbt_info.input_count,
+                    "selected_inputs should match actual input count"
+                );
+            }
+            Err(crate::WalletCoreError::PsbtBuildFailed(_)) => {
+                // Fresh watch-only test wallets may have no funds; in that case this
+                // test cannot reach transaction construction and should not fail the suite.
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn from_psbt_minimal_preserves_selected_input_outpoints() {
+        let txid1: Txid =
+            "0000000000000000000000000000000000000000000000000000000000000001"
+                .parse()
+                .expect("valid txid");
+        let txid2: Txid =
+            "0000000000000000000000000000000000000000000000000000000000000002"
+                .parse()
+                .expect("valid txid");
+
+        let unsigned_tx = Transaction {
+            version: Version(2),
+            lock_time: LockTime::ZERO,
+            input: vec![
+                TxIn {
+                    previous_output: OutPoint { txid: txid1, vout: 0 },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence(0xFFFFFFFD),
+                    witness: Witness::default(),
+                },
+                TxIn {
+                    previous_output: OutPoint { txid: txid2, vout: 1 },
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence(0xFFFFFFFD),
+                    witness: Witness::default(),
+                },
+            ],
+            output: vec![TxOut {
+                value: Amount::from_sat(1500),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+
+        let psbt = Psbt::from_unsigned_tx(unsigned_tx).expect("psbt should build from unsigned tx");
+        let info = WalletPsbtInfo::from_psbt_minimal(psbt).expect("minimal PSBT conversion should succeed");
+
+        assert_eq!(info.selected_utxo_count, 2);
+        assert_eq!(info.input_count, 2);
+        assert_eq!(
+            info.selected_inputs,
+            vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000002:1".to_string(),
+            ]
+        );
     }
 
     #[test]

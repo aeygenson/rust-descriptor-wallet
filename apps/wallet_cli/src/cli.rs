@@ -231,4 +231,22 @@ pub enum Commands {
         /// Target fee rate in sat/vB for the package.
         fee_rate: u64,
     },
+    /// Create, sign, and broadcast a CPFP (Child-Pays-For-Parent) transaction.
+    Cpfp {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Parent transaction id to accelerate.
+        parent_txid: String,
+
+        #[arg(long = "outpoint")]
+        /// Selected outpoint in the form <txid>:<vout> to spend for CPFP.
+        selected_outpoint: String,
+
+        #[arg(long = "fee-rate")]
+        /// Target fee rate in sat/vB for the package.
+        fee_rate: u64,
+    },
 }

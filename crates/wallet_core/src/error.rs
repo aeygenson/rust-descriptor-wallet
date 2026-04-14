@@ -110,10 +110,17 @@ pub enum WalletCoreError {
     #[error("coin control conflict: outpoint present in both include and exclude: {0}")]
     CoinControlConflict(String),
 
-    #[error("coin control insufficient selected funds: selected={selected_sat}, required={required_sat}")]
+    #[error("coin control include set is empty while exact selection is required")]
+    CoinControlEmptySelection,
+
+    #[error("coin control strict mode violation: selected inputs do not fully fund the transaction and automatic additional inputs are not allowed")]
+    CoinControlStrictModeViolation,
+
+    #[error("coin control insufficient selected funds: selected={selected_sat}, required={required_sat}, fee_estimate={fee_estimate_sat}")]
     CoinControlInsufficientSelectedFunds {
         selected_sat: u64,
         required_sat: u64,
+        fee_estimate_sat: u64,
     },
 
     #[error("fee calculation failed")]
