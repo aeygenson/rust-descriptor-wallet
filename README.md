@@ -287,21 +287,21 @@ wpkh([fingerprint/84'/1'/0']tpub.../1/*)
 
 ## Local Regtest
 
-The repository now includes a local regtest environment in [infra/regtest/README.md](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/infra/regtest/README.md).
+The repository now includes a local regtest environment in [infra/regtest/README.md](infra/regtest/README.md).
 
 It provides:
 
 - `bitcoind` in regtest mode
 - `electrs` for Electrum sync
 - helper scripts for start, stop, reset, mine, and fund
-- a sample local wallet config in [wallet-regtest-local.json](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/wallet-regtest-local.json)
+- a sample local wallet config in [wallet-regtest-local.json](wallet-regtest-local.json)
 
 This local profile uses:
 
 - Electrum for sync
 - Bitcoin Core RPC for broadcast
 
-Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/crates/wallet_api/tests/regtest_flow.rs):
+Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](crates/wallet_api/tests/regtest_flow.rs):
 
 - receive funds and observe balance after sync
 - self-send with change output tracking
