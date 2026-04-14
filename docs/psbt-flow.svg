@@ -46,34 +46,39 @@
   <text x="205" y="306" text-anchor="middle" class="subtle">wallet state, UTXOs, policy</text>
 
   <rect class="accent" x="380" y="190" rx="28" ry="28" width="250" height="130" />
-  <text x="505" y="246" text-anchor="middle" class="small">CREATE</text>
-  <text x="505" y="278" text-anchor="middle" class="label">Unsigned PSBT</text>
-  <text x="505" y="306" text-anchor="middle" class="subtle">recipient, amount, fee rate</text>
+  <text x="505" y="246" text-anchor="middle" class="small">SELECT</text>
+  <text x="505" y="278" text-anchor="middle" class="label">Coin Selection</text>
+  <text x="505" y="306" text-anchor="middle" class="subtle">policy or manual coin control</text>
 
   <rect class="card" x="680" y="190" rx="28" ry="28" width="250" height="130" />
-  <text x="805" y="246" text-anchor="middle" class="small">SIGN</text>
-  <text x="805" y="278" text-anchor="middle" class="label">Signer</text>
-  <text x="805" y="306" text-anchor="middle" class="subtle">software or hardware keys</text>
+  <text x="805" y="246" text-anchor="middle" class="small">CREATE</text>
+  <text x="805" y="278" text-anchor="middle" class="label">Unsigned PSBT</text>
+  <text x="805" y="306" text-anchor="middle" class="subtle">recipient, amount, fee rate</text>
 
   <rect class="card" x="980" y="190" rx="28" ry="28" width="250" height="130" />
-  <text x="1105" y="246" text-anchor="middle" class="small">FINALIZE</text>
-  <text x="1105" y="278" text-anchor="middle" class="label">Finalized PSBT</text>
-  <text x="1105" y="306" text-anchor="middle" class="subtle">extract transaction hex</text>
+  <text x="1105" y="246" text-anchor="middle" class="small">SIGN</text>
+  <text x="1105" y="278" text-anchor="middle" class="label">Signer</text>
+  <text x="1105" y="306" text-anchor="middle" class="subtle">software or hardware keys</text>
 
   <rect class="card" x="1280" y="190" rx="28" ry="28" width="250" height="130" />
-  <text x="1405" y="246" text-anchor="middle" class="small">PUBLISH</text>
-  <text x="1405" y="278" text-anchor="middle" class="label">wallet_sync</text>
-  <text x="1405" y="306" text-anchor="middle" class="subtle">Esplora broadcast, returns txid</text>
+  <text x="1405" y="246" text-anchor="middle" class="small">FINALIZE</text>
+  <text x="1405" y="278" text-anchor="middle" class="label">Finalized PSBT</text>
+  <text x="1405" y="306" text-anchor="middle" class="subtle">extract transaction hex</text>
 
-  <rect class="card" x="640" y="340" rx="28" ry="28" width="320" height="90" />
-  <text x="800" y="392" text-anchor="middle" class="label">wallet_api</text>
-  <text x="800" y="418" text-anchor="middle" class="subtle">orchestrates create, sign, finalize, publish</text>
+  <rect class="card" x="1280" y="340" rx="28" ry="28" width="250" height="90" />
+  <text x="1405" y="392" text-anchor="middle" class="label">wallet_sync</text>
+  <text x="1405" y="418" text-anchor="middle" class="subtle">publish through configured backend</text>
+
+  <rect class="card" x="820" y="340" rx="28" ry="28" width="320" height="90" />
+  <text x="980" y="392" text-anchor="middle" class="label">wallet_api</text>
+  <text x="980" y="418" text-anchor="middle" class="subtle">orchestrates select, create, sign, finalize, publish</text>
 
   <path class="edge" d="M330 255H380" />
   <path class="edge" d="M630 255H680" />
   <path class="edge" d="M930 255H980" />
   <path class="edge" d="M1230 255H1280" />
-  <path class="edge" d="M800 340V320" />
+  <path class="edge" d="M1405 320V340" />
+  <path class="edge" d="M980 340V320" />
 
   <rect x="40" y="470" width="1520" height="320" rx="30" class="laneBox" />
   <text x="90" y="510" class="lane">RBF FEE-BUMP FLOW</text>

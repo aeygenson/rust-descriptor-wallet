@@ -1,23 +1,12 @@
+pub mod support;
+
 mod regtest_suite {
 use serial_test::serial;
-use test_support::{mempool_contains, RegtestEnv};
+use test_support::{mempool_contains, RegtestEnv};use test_support::wallet::*;
 use wallet_api::factory::build_default_api;
+use crate::support::ensure_confirmed_wallet_utxos;
 
-fn parse_regtest_address(
-    s: &str,
-) -> anyhow::Result<bitcoin::Address<bitcoin::address::NetworkChecked>> {
-    Ok(s
-        .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()?
-        .require_network(bitcoin::Network::Regtest)?)
-}
 
-fn parse_txid(s: &str) -> anyhow::Result<bitcoin::Txid> {
-    Ok(s.parse()?)
-}
-
-fn outpoint_txid(outpoint: &str) -> &str {
-    outpoint.split(':').next().unwrap_or("")
-}
 
 #[tokio::test(flavor = "multi_thread")]
 #[serial]
@@ -653,4 +642,184 @@ async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
     );
 
     Ok(())
-}}
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn wallet_create_psbt_with_coin_control_uses_requested_utxo() -> anyhow::Result<()> {
+    let env = RegtestEnv::new();
+    env.start()?;
+
+    let api = build_default_api().await?;
+    let wallet_name = "regtest-local";
+
+    let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+    let requested = confirmed
+        .into_iter()
+        .max_by_key(|(_, value)| *value)
+        .expect("expected a confirmed UTXO for coin control");
+
+    let destination = api.address(wallet_name).await?;
+    let psbt = api
+        .create_psbt_with_coin_control(
+            wallet_name,
+            &destination,
+            10_000,
+            1,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints: vec![requested.0.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+            },
+        )
+        .await?;
+
+    let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
+    assert_eq!(inputs.len(), 1, "expected exactly one selected input");
+    assert_eq!(inputs[0], requested.0, "expected PSBT to use the requested UTXO");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn wallet_create_psbt_with_coin_control_excludes_requested_utxo() -> anyhow::Result<()> {
+    let env = RegtestEnv::new();
+    env.start()?;
+
+    let api = build_default_api().await?;
+    let wallet_name = "regtest-local";
+
+    let mut confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
+    confirmed.sort_by(|a, b| a.0.cmp(&b.0));
+
+    let excluded = confirmed[0].0.clone();
+    let destination = api.address(wallet_name).await?;
+
+    let psbt = api
+        .create_psbt_with_coin_control(
+            wallet_name,
+            &destination,
+            10_000,
+            1,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: vec![excluded.clone()],
+                confirmed_only: true,
+            },
+        )
+        .await?;
+
+    let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
+    assert!(!inputs.is_empty(), "expected PSBT to contain at least one input");
+    assert!(
+        !inputs.contains(&excluded),
+        "expected excluded outpoint {} not to be used in PSBT inputs {:?}",
+        excluded,
+        inputs
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn wallet_create_psbt_with_coin_control_rejects_unconfirmed_selected_utxo_when_confirmed_only() -> anyhow::Result<()> {
+    let env = RegtestEnv::new();
+    env.start()?;
+
+    let api = build_default_api().await?;
+    let wallet_name = "regtest-local";
+
+    api.sync_wallet(wallet_name).await?;
+
+    let destination = api.address(wallet_name).await?;
+    let parent = api.send_psbt(wallet_name, &destination, 10_000, 1).await?;
+    assert!(!parent.txid.is_empty(), "expected parent txid to be present");
+
+    api.sync_wallet(wallet_name).await?;
+    let utxos = api.utxos(wallet_name).await?;
+    let selected = utxos
+        .iter()
+        .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
+        .expect("expected at least one unconfirmed wallet-owned output");
+
+    let next_destination = api.address(wallet_name).await?;
+    let err = api
+        .create_psbt_with_coin_control(
+            wallet_name,
+            &next_destination,
+            5_000,
+            1,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints: vec![selected.outpoint.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+            },
+        )
+        .await
+        .expect_err("expected confirmed-only coin control to reject unconfirmed selected UTXO");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("not confirmed"),
+        "expected error to mention not confirmed, got: {}",
+        msg
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::Result<()> {
+    let env = RegtestEnv::new();
+    env.start()?;
+
+    let api = build_default_api().await?;
+    let wallet_name = "regtest-local";
+
+    let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+    let requested = confirmed
+        .into_iter()
+        .max_by_key(|(_, value)| *value)
+        .expect("expected a confirmed UTXO for coin control send");
+
+    let destination = api.address(wallet_name).await?;
+    let published = api
+        .send_psbt_with_coin_control(
+            wallet_name,
+            &destination,
+            10_000,
+            1,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints: vec![requested.0.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+            },
+        )
+        .await?;
+
+    assert!(!published.txid.is_empty(), "expected published txid to be present");
+
+    api.sync_wallet(wallet_name).await?;
+    let utxos_after_send = api.utxos(wallet_name).await?;
+    assert!(
+        !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
+        "expected requested outpoint {} to be spent after coin-control send",
+        requested.0
+    );
+
+    env.mine(1)?;
+    api.sync_wallet(wallet_name).await?;
+
+    let txs = api.txs(wallet_name).await?;
+    let sent_tx = txs
+        .iter()
+        .find(|tx| tx.txid == published.txid)
+        .expect("expected published coin-control transaction in tx list");
+    assert!(sent_tx.confirmed, "expected coin-control send to confirm after mining");
+
+    Ok(())
+}
+}

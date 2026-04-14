@@ -6,6 +6,7 @@ use crate::WalletApiResult;
 
 use crate::model::{
     WalletCpfpPsbtDto,
+    WalletCoinControlDto,
     WalletDetailsDto,
     WalletPsbtDto,
     TxBroadcastResultDto,
@@ -95,6 +96,52 @@ impl WalletApi {
             fee_rate_sat_per_vb,
         )
         .await
+    }
+
+    pub async fn create_psbt_with_coin_control(
+        &self,
+        name: &str,
+        to_address: &str,
+        amount_sat: u64,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::create_with_coin_control(
+            &self.storage,
+            name,
+            to_address,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            coin_control,
+        )
+        .await
+    }
+
+    pub async fn send_psbt_with_coin_control(
+        &self,
+        name: &str,
+        to_address: &str,
+        amount_sat: u64,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        let created = self
+            .create_psbt_with_coin_control(
+                name,
+                to_address,
+                amount_sat,
+                fee_rate_sat_per_vb,
+                coin_control,
+            )
+            .await?;
+
+        let signed = self.sign_psbt(name, &created.psbt_base64).await?;
+
+        if !signed.finalized {
+            return Err(crate::WalletApiError::SendNotFinalized);
+        }
+
+        self.publish_psbt(name, &signed.psbt_base64).await
     }
 
     pub async fn sign_psbt(

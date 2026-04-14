@@ -5,6 +5,7 @@ use wallet_core::model::{
     WalletTxInfo,
     WalletUtxoInfo,
     WalletCpfpPsbtInfo,
+    WalletCoinControlInfo,
 };
 
 /// Lightweight wallet summary for listing and UI
@@ -85,6 +86,25 @@ pub struct WalletStatusDto {
     pub balance: u64,
     pub utxo_count: usize,
     pub last_block_height: Option<u32>,
+}
+
+/// Coin control options for transaction building
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WalletCoinControlDto {
+    pub include_outpoints: Vec<String>,
+    pub exclude_outpoints: Vec<String>,
+    pub confirmed_only: bool,
+}
+
+// Conversion into core model
+impl From<WalletCoinControlDto> for WalletCoinControlInfo {
+    fn from(value: WalletCoinControlDto) -> Self {
+        Self {
+            include_outpoints: value.include_outpoints,
+            exclude_outpoints: value.exclude_outpoints,
+            confirmed_only: value.confirmed_only,
+        }
+    }
 }
 
 /// PSBT information for unsigned transaction creation

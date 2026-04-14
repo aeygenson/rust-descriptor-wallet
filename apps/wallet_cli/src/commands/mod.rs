@@ -46,6 +46,27 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         } => {
             runtime::create_psbt(api, &name, &to, amount, fee_rate).await?;
         }
+        Commands::CreatePsbtWithCoinControl {
+            name,
+            to,
+            amount,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::create_psbt_with_coin_control(
+                api,
+                &name,
+                &to,
+                amount,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
+        }
         Commands::SignPsbt { name, psbt_base64 } => {
             runtime::sign_psbt(api, &name, &psbt_base64).await?;
         }
@@ -65,6 +86,27 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             fee_rate,
         } => {
             runtime::send_psbt(api, &name, &to, amount, fee_rate).await?;
+        }
+        Commands::SendPsbtWithCoinControl {
+            name,
+            to,
+            amount,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::send_psbt_with_coin_control(
+                api,
+                &name,
+                &to,
+                amount,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
         }
         Commands::CpfpPsbt {
             name,

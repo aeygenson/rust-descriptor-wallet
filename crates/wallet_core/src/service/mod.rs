@@ -7,8 +7,7 @@ pub mod psbt_publish;
 pub mod psbt_common;
 pub mod psbt_rbf;
 pub mod psbt_cpfp;
-
-
+pub mod psbt_coin_control;
 
 use bdk_file_store::Store;
 use bdk_wallet::{ChangeSet, PersistedWallet, Wallet};

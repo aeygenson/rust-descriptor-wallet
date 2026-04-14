@@ -5,14 +5,10 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
-tempfile.workspace = true
-serde.workspace = true
-serde_json.workspace = true
+
 bitcoincore-rpc.workspace = true
-reqwest.workspace = true
-thiserror.workspace = true
+
 tracing.workspace = true
-once_cell.workspace = true
+
 bitcoin.workspace = true
 [dev-dependencies]
-serial_test = "3"

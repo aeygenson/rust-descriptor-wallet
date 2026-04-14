@@ -5,7 +5,7 @@ use bitcoin::FeeRate;
 use bdk_wallet::KeychainKind;
 use tracing::{debug, info};
 
-use crate::model::WalletPsbtInfo;
+use crate::model::{WalletCoinControlInfo, WalletPsbtInfo};
 use crate::types::{AmountSat, FeeRateSatPerVb};
 use crate::WalletCoreResult;
 use super::*;
@@ -24,12 +24,33 @@ impl WalletService {
         fee_rate_sat_per_vb: FeeRateSatPerVb,
         enable_rbf: bool,
     ) -> WalletCoreResult<WalletPsbtInfo> {
+        self.create_psbt_with_coin_control(
+            wallet_network,
+            to_address,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            None,
+        )
+    }
+
+    /// Create an unsigned PSBT for a send flow with optional coin control.
+    pub fn create_psbt_with_coin_control(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        amount_sat: AmountSat,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+        coin_control: Option<WalletCoinControlInfo>,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
         debug!(
-            "wallet_service: create_psbt start to={} amount_sat={} fee_rate_sat_per_vb={} enable_rbf={}",
+            "wallet_service: create_psbt start to={} amount_sat={} fee_rate_sat_per_vb={} enable_rbf={} has_coin_control={}",
             to_address,
             amount_sat.as_u64(),
             fee_rate_sat_per_vb.as_u64(),
             enable_rbf,
+            coin_control.is_some(),
         );
 
         // Keep defensive validation in core even though wrapper constructors
@@ -57,11 +78,40 @@ impl WalletService {
         let recipient_script = checked.script_pubkey();
         let recipient_amount = Amount::from_sat(amount_sat.as_u64());
 
+        let selected_inputs = match coin_control.as_ref() {
+            Some(cc) if !cc.is_empty() => self.resolve_coin_control_inputs(cc)?,
+            _ => Vec::new(),
+        };
+
+        let excluded_inputs = match coin_control.as_ref() {
+            Some(cc) if !cc.exclude_outpoints.is_empty() => self.resolve_coin_control_exclusions(cc)?,
+            _ => Vec::new(),
+        };
+
+        debug!(
+            "wallet_service: create_psbt coin_control selected_inputs={} excluded_inputs={}",
+            selected_inputs.len(),
+            excluded_inputs.len(),
+        );
+
         let mut builder = self.wallet.build_tx();
         builder.add_recipient(recipient_script.clone(), recipient_amount);
         builder.fee_rate(fee_rate);
         if enable_rbf {
             builder.set_exact_sequence(Sequence(0xFFFFFFFD));
+        }
+
+        for outpoint in &selected_inputs {
+            builder.add_utxo(*outpoint).map_err(|e| {
+                crate::WalletCoreError::CoinControlOutpointNotSpendable(format!(
+                    "{} ({})",
+                    outpoint, e
+                ))
+            })?;
+        }
+
+        if !excluded_inputs.is_empty() {
+            builder.unspendable(excluded_inputs.clone());
         }
 
         let psbt = builder
@@ -138,7 +188,7 @@ impl WalletService {
         let psbt_base64 = psbt.to_string();
 
         info!(
-            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={}",
+            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={} coin_control_selected_inputs={} coin_control_excluded_inputs={}",
             to_address,
             amount_sat.as_u64(),
             fee_sat,
@@ -146,7 +196,9 @@ impl WalletService {
             enable_rbf,
             actual_replaceable,
             change_amount_sat,
-            selected_utxo_count
+            selected_utxo_count,
+            selected_inputs.len(),
+            excluded_inputs.len()
         );
 
         Ok(WalletPsbtInfo {
@@ -227,6 +279,25 @@ mod tests {
         )
     }
 
+    fn create_psbt_with_coin_control(
+        wallet: &mut WalletService,
+        network: Network,
+        to_address: &str,
+        amount_sat: u64,
+        fee_rate_sat_per_vb: u64,
+        enable_rbf: bool,
+        coin_control: WalletCoinControlInfo,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        wallet.create_psbt_with_coin_control(
+            network,
+            to_address,
+            AmountSat::from(amount_sat),
+            FeeRateSatPerVb::from(fee_rate_sat_per_vb),
+            enable_rbf,
+            Some(coin_control),
+        )
+    }
+
     fn assert_create_psbt_err(
         result: WalletCoreResult<WalletPsbtInfo>,
         matcher: impl FnOnce(crate::WalletCoreError) -> bool,
@@ -301,6 +372,7 @@ mod tests {
         });
     }
 
+
     #[test]
     fn create_psbt_fails_for_insufficient_funds() {
         let (config, mut wallet) = load_test_wallet();
@@ -309,6 +381,79 @@ mod tests {
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
+        });
+    }
+
+    #[test]
+    fn create_psbt_with_coin_control_fails_for_invalid_included_outpoint() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_psbt_with_coin_control(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+            WalletCoinControlInfo {
+                include_outpoints: vec!["not_an_outpoint".to_string()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+            },
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::CoinControlInvalidOutpoint(_))
+        });
+    }
+
+    #[test]
+    fn create_psbt_with_coin_control_fails_for_include_exclude_conflict() {
+        let (config, mut wallet) = load_test_wallet();
+        let outpoint =
+            "0000000000000000000000000000000000000000000000000000000000000001:0".to_string();
+
+        let result = create_psbt_with_coin_control(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+            WalletCoinControlInfo {
+                include_outpoints: vec![outpoint.clone()],
+                exclude_outpoints: vec![outpoint.clone()],
+                confirmed_only: false,
+            },
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::CoinControlConflict(conflict) if conflict == outpoint)
+        });
+    }
+
+    #[test]
+    fn create_psbt_with_coin_control_fails_for_missing_selected_outpoint() {
+        let (config, mut wallet) = load_test_wallet();
+        let outpoint =
+            "0000000000000000000000000000000000000000000000000000000000000001:0".to_string();
+
+        let result = create_psbt_with_coin_control(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+            WalletCoinControlInfo {
+                include_outpoints: vec![outpoint.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+            },
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
         });
     }
 

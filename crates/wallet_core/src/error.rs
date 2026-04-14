@@ -95,6 +95,27 @@ pub enum WalletCoreError {
         reason: String,
     },
 
+    #[error("coin control outpoint not found in wallet: {0}")]
+    CoinControlOutpointNotFound(String),
+
+    #[error("coin control outpoint is invalid: {0}")]
+    CoinControlInvalidOutpoint(String),
+
+    #[error("coin control outpoint is not spendable: {0}")]
+    CoinControlOutpointNotSpendable(String),
+
+    #[error("coin control requested outpoint is not confirmed: {0}")]
+    CoinControlOutpointNotConfirmed(String),
+
+    #[error("coin control conflict: outpoint present in both include and exclude: {0}")]
+    CoinControlConflict(String),
+
+    #[error("coin control insufficient selected funds: selected={selected_sat}, required={required_sat}")]
+    CoinControlInsufficientSelectedFunds {
+        selected_sat: u64,
+        required_sat: u64,
+    },
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
 

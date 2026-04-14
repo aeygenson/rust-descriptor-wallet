@@ -1,4 +1,10 @@
-use crate::model::{TxBroadcastResultDto, WalletCpfpPsbtDto, WalletPsbtDto, WalletSignedPsbtDto};
+use crate::model::{
+    TxBroadcastResultDto,
+    WalletCoinControlDto,
+    WalletCpfpPsbtDto,
+    WalletPsbtDto,
+    WalletSignedPsbtDto,
+};
 use crate::WalletApiResult;
 
 use wallet_core::types::{AmountSat, FeeRateSatPerVb};
@@ -116,6 +122,82 @@ pub async fn create(
 
     info!(
         "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        name,
+        psbt.txid,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.fee_rate_sat_per_vb,
+        psbt.replaceable,
+        psbt.selected_utxo_count,
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+        psbt.psbt_base64.len()
+    );
+
+    Ok(psbt.into())
+}
+
+/// Create an unsigned PSBT for a send flow using explicit coin control.
+///
+/// This mirrors `create(...)`, but allows the caller to explicitly include or
+/// exclude wallet UTXOs during transaction construction.
+pub async fn create_with_coin_control(
+    storage: &WalletStorage,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    coin_control: WalletCoinControlDto,
+) -> WalletApiResult<WalletPsbtDto> {
+    debug!(
+        "api psbt: create_with_coin_control start name={} to={} amount_sat={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        name,
+        to_address,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        coin_control.include_outpoints.len(),
+        coin_control.exclude_outpoints.len(),
+        coin_control.confirmed_only,
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let amount_sat = AmountSat::new(amount_sat)?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let to_address = to_address.to_string();
+    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let name_for_error = name.to_string();
+
+    let psbt = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        wallet
+            .create_psbt_with_coin_control(
+                config.network,
+                &to_address,
+                amount_sat,
+                fee_rate_sat_per_vb,
+                true,
+                Some(coin_control),
+            )
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: create_with_coin_control failed name={} to={} amount_sat={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    to_address,
+                    amount_sat.as_u64(),
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })
+    })?;
+
+    info!(
+        "api psbt: create_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -490,4 +572,45 @@ pub async fn cpfp(
     );
 
     Ok(published)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn log_publish_error_handles_known_sync_variants_without_panicking() {
+        let errors = vec![
+            WalletSyncError::BroadcastTransport("transport down".to_string()),
+            WalletSyncError::BroadcastMempoolConflict("conflict".to_string()),
+            WalletSyncError::BroadcastAlreadyConfirmed("confirmed".to_string()),
+            WalletSyncError::BroadcastMissingInputs("missing inputs".to_string()),
+            WalletSyncError::BroadcastInsufficientFee("insufficient fee".to_string()),
+            WalletSyncError::PsbtNotFinalized,
+            WalletSyncError::SyncFailed("generic sync failure".to_string()),
+        ];
+
+        for error in &errors {
+            log_publish_error("test-wallet", error);
+        }
+    }
+
+    #[test]
+    fn wallet_coin_control_dto_can_be_constructed_for_psbt_create_calls() {
+        let dto = WalletCoinControlDto {
+            include_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+                    .to_string(),
+            ],
+            exclude_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000002:1"
+                    .to_string(),
+            ],
+            confirmed_only: true,
+        };
+
+        assert_eq!(dto.include_outpoints.len(), 1);
+        assert_eq!(dto.exclude_outpoints.len(), 1);
+        assert!(dto.confirmed_only);
+    }
 }

@@ -87,6 +87,36 @@ pub enum Commands {
         /// Fee rate in sat/vB.
         fee_rate: u64,
     },
+    /// Create a PSBT using explicit coin control.
+    CreatePsbtWithCoinControl {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long)]
+        /// Amount in satoshis.
+        amount: u64,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+    },
     /// Sign an existing PSBT.
     SignPsbt {
         #[arg(long)]
@@ -152,6 +182,36 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+    },
+    /// Create, sign, and broadcast a transaction using coin control.
+    SendPsbtWithCoinControl {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long)]
+        /// Amount in satoshis.
+        amount: u64,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
     },
     /// Create a CPFP (Child-Pays-For-Parent) PSBT to accelerate a stuck transaction.
     CpfpPsbt {

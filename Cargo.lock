@@ -2845,13 +2845,6 @@ dependencies = [
  "anyhow",
  "bitcoin",
  "bitcoincore-rpc",
- "once_cell",
- "reqwest 0.11.27",
- "serde",
- "serde_json",
- "serial_test",
- "tempfile",
- "thiserror",
  "tracing",
 ]
 

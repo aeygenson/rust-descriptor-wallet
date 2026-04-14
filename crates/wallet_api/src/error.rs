@@ -203,6 +203,27 @@ impl From<WalletCoreError> for WalletApiError {
             WalletCoreError::InvalidConfig(s) => {
                 WalletApiError::InvalidInput(s)
             }
+            WalletCoreError::CoinControlOutpointNotFound(s) => {
+                WalletApiError::InvalidInput(format!("coin control outpoint not found: {}", s))
+            }
+            WalletCoreError::CoinControlOutpointNotSpendable(s) => {
+                WalletApiError::InvalidInput(format!("coin control outpoint not spendable: {}", s))
+            }
+            WalletCoreError::CoinControlOutpointNotConfirmed(s) => {
+                WalletApiError::InvalidInput(format!("coin control outpoint not confirmed: {}", s))
+            }
+            WalletCoreError::CoinControlConflict(s) => {
+                WalletApiError::InvalidInput(format!("coin control conflict: {}", s))
+            }
+            WalletCoreError::CoinControlInvalidOutpoint(s) => {
+                WalletApiError::InvalidInput(format!("invalid coin control outpoint: {}", s))
+            }
+            WalletCoreError::CoinControlInsufficientSelectedFunds { selected_sat, required_sat } => {
+                WalletApiError::InvalidInput(format!(
+                    "coin control insufficient funds: selected={} required={}",
+                    selected_sat, required_sat
+                ))
+            }
             other => WalletApiError::Core(other),
         }
     }

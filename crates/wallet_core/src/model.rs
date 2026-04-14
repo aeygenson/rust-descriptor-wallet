@@ -49,6 +49,29 @@ pub struct WalletUtxoInfo {
     pub keychain: WalletKeychain,
 }
 
+/// Core model describing coin control options for transaction building.
+///
+/// This is a domain model (not API DTO) and should not depend on wallet_api.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WalletCoinControlInfo {
+    /// Explicitly included outpoints (txid:vout) to be used as inputs.
+    pub include_outpoints: Vec<String>,
+
+    /// Explicitly excluded outpoints (txid:vout) that must not be used.
+    pub exclude_outpoints: Vec<String>,
+
+    /// If true, only confirmed UTXOs may be used.
+    pub confirmed_only: bool,
+}
+
+impl WalletCoinControlInfo {
+    pub fn is_empty(&self) -> bool {
+        self.include_outpoints.is_empty()
+            && self.exclude_outpoints.is_empty()
+            && !self.confirmed_only
+    }
+}
+
 /// Core model describing an unsigned PSBT created by the wallet.
 ///
 /// This represents the result of transaction construction and is independent

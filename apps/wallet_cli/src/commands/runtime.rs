@@ -1,3 +1,53 @@
+pub async fn create_psbt_with_coin_control(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_psbt_with_coin_control start name={} to={} amount={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let psbt = api
+        .create_psbt_with_coin_control(
+            name,
+            to,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("PSBT created with coin control:");
+    println!("txid={}", psbt.txid);
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
 use anyhow::Result;
 use wallet_api::WalletApi;
 use tracing::{debug, info};
@@ -432,6 +482,50 @@ pub async fn send_psbt(
     );
 
     println!("Transaction sent successfully:");
+    println!("to={}", to);
+    println!("amount={} sats", amount_sat);
+    println!("txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn send_psbt_with_coin_control(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send_psbt_with_coin_control start name={} to={} amount={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let published = api
+        .send_psbt_with_coin_control(
+            name,
+            to,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("Transaction sent with coin control:");
     println!("to={}", to);
     println!("amount={} sats", amount_sat);
     println!("txid={}", published.txid);
