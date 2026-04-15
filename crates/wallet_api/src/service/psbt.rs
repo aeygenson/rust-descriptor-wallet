@@ -218,6 +218,211 @@ pub async fn create_with_coin_control(
     Ok(psbt.into())
 }
 
+/// Create an unsigned PSBT for a send-max flow.
+///
+/// This sends the maximum available amount (after fees) to the destination.
+pub async fn create_send_max(
+    storage: &WalletStorage,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+) -> WalletApiResult<WalletPsbtDto> {
+    debug!(
+        "api psbt: create_send_max start name={} to={} fee_rate_sat_per_vb={}",
+        name,
+        to_address,
+        fee_rate_sat_per_vb
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let to_address = to_address.to_string();
+    let name_for_error = name.to_string();
+
+    let psbt = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        wallet
+            .create_send_max_psbt(
+                config.network,
+                &to_address,
+                fee_rate_sat_per_vb,
+                true,
+            )
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: create_send_max failed name={} to={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    to_address,
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })
+    })?;
+
+    info!(
+        "api psbt: create_send_max success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        name,
+        psbt.txid,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.fee_rate_sat_per_vb,
+        psbt.replaceable,
+        psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+        psbt.psbt_base64.len()
+    );
+
+    Ok(psbt.into())
+}
+
+/// Create an unsigned PSBT for a send-max flow using explicit coin control.
+pub async fn create_send_max_with_coin_control(
+    storage: &WalletStorage,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    coin_control: WalletCoinControlDto,
+) -> WalletApiResult<WalletPsbtDto> {
+    debug!(
+        "api psbt: create_send_max_with_coin_control start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        name,
+        to_address,
+        fee_rate_sat_per_vb,
+        coin_control.include_outpoints.len(),
+        coin_control.exclude_outpoints.len(),
+        coin_control.confirmed_only,
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let to_address = to_address.to_string();
+    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let name_for_error = name.to_string();
+
+    let psbt = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        wallet
+            .create_send_max_psbt_with_coin_control(
+                config.network,
+                &to_address,
+                fee_rate_sat_per_vb,
+                true,
+                Some(coin_control),
+            )
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: create_send_max_with_coin_control failed name={} to={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    to_address,
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })
+    })?;
+
+    info!(
+        "api psbt: create_send_max_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        name,
+        psbt.txid,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.fee_rate_sat_per_vb,
+        psbt.replaceable,
+        psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+        psbt.psbt_base64.len()
+    );
+
+    Ok(psbt.into())
+}
+
+/// Create an unsigned PSBT for a sweep flow using explicit coin control.
+///
+/// Sweep is implemented as strict send-max with an explicit include set.
+pub async fn create_sweep(
+    storage: &WalletStorage,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    coin_control: WalletCoinControlDto,
+) -> WalletApiResult<WalletPsbtDto> {
+    debug!(
+        "api psbt: create_sweep start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        name,
+        to_address,
+        fee_rate_sat_per_vb,
+        coin_control.include_outpoints.len(),
+        coin_control.exclude_outpoints.len(),
+        coin_control.confirmed_only,
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let to_address = to_address.to_string();
+    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let name_for_error = name.to_string();
+
+    let psbt = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        wallet
+            .create_sweep_psbt(
+                config.network,
+                &to_address,
+                fee_rate_sat_per_vb,
+                true,
+                coin_control,
+            )
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: create_sweep failed name={} to={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    to_address,
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })
+    })?;
+
+    info!(
+        "api psbt: create_sweep success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        name,
+        psbt.txid,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.fee_rate_sat_per_vb,
+        psbt.replaceable,
+        psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+        psbt.psbt_base64.len()
+    );
+
+    Ok(psbt.into())
+}
+
 pub async fn sign(
     storage: &WalletStorage,
     name: &str,
@@ -293,6 +498,42 @@ pub async fn publish(
     );
 
     Ok(published)
+}
+
+/// Create, sign, and publish a sweep transaction.
+pub async fn sweep(
+    storage: &WalletStorage,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    coin_control: WalletCoinControlDto,
+) -> WalletApiResult<TxBroadcastResultDto> {
+    debug!(
+        "api psbt: sweep start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        name,
+        to_address,
+        fee_rate_sat_per_vb,
+        coin_control.include_outpoints.len(),
+        coin_control.exclude_outpoints.len(),
+        coin_control.confirmed_only,
+    );
+
+    let created = create_sweep(
+        storage,
+        name,
+        to_address,
+        fee_rate_sat_per_vb,
+        coin_control,
+    )
+    .await?;
+
+    let signed = sign(storage, name, &created.psbt_base64).await?;
+
+    if !signed.finalized {
+        return Err(crate::WalletApiError::SendNotFinalized);
+    }
+
+    publish(storage, name, &signed.psbt_base64).await
 }
 
 /// Build a replacement PSBT for an existing unconfirmed RBF transaction.
@@ -645,6 +886,37 @@ mod tests {
         assert_eq!(dto.selected_utxo_count, 2);
         assert_eq!(dto.selected_inputs.len(), 2);
         assert_eq!(dto.input_count, 2);
+        assert!(dto.replaceable);
+    }
+
+    #[test]
+    fn wallet_psbt_dto_can_represent_send_max_result() {
+        let dto = WalletPsbtDto {
+            psbt_base64: "dummy_send_max_psbt".to_string(),
+            txid: "dummy_send_max_txid".to_string(),
+            original_txid: None,
+            to_address: "tb1qsendmaxexampleaddress".to_string(),
+            amount_sat: 49_500,
+            fee_sat: 500,
+            fee_rate_sat_per_vb: 2,
+            replaceable: true,
+            change_amount_sat: None,
+            selected_utxo_count: 1,
+            selected_inputs: vec![
+                "0000000000000000000000000000000000000000000000000000000000000003:0"
+                    .to_string(),
+            ],
+            input_count: 1,
+            output_count: 1,
+            recipient_count: 1,
+            estimated_vsize: 110,
+        };
+
+        assert_eq!(dto.amount_sat, 49_500);
+        assert_eq!(dto.fee_sat, 500);
+        assert_eq!(dto.selected_utxo_count, 1);
+        assert_eq!(dto.selected_inputs.len(), 1);
+        assert!(dto.change_amount_sat.is_none());
         assert!(dto.replaceable);
     }
 }

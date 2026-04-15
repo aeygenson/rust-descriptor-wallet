@@ -67,6 +67,28 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             )
             .await?;
         }
+        Commands::CreateSendMaxPsbt { name, to, fee_rate } => {
+            runtime::create_send_max_psbt(api, &name, &to, fee_rate).await?;
+        }
+        Commands::CreateSendMaxPsbtWithCoinControl {
+            name,
+            to,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::create_send_max_psbt_with_coin_control(
+                api,
+                &name,
+                &to,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
+        }
         Commands::SignPsbt { name, psbt_base64 } => {
             runtime::sign_psbt(api, &name, &psbt_base64).await?;
         }
@@ -101,6 +123,66 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 &name,
                 &to,
                 amount,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
+        }
+        Commands::SendMaxPsbt { name, to, fee_rate } => {
+            runtime::send_max_psbt(api, &name, &to, fee_rate).await?;
+        }
+        Commands::SendMaxPsbtWithCoinControl {
+            name,
+            to,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::send_max_psbt_with_coin_control(
+                api,
+                &name,
+                &to,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
+        }
+        Commands::SweepPsbt {
+            name,
+            to,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::create_sweep_psbt(
+                api,
+                &name,
+                &to,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+            )
+            .await?;
+        }
+        Commands::Sweep {
+            name,
+            to,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+        } => {
+            runtime::sweep_psbt(
+                api,
+                &name,
+                &to,
                 fee_rate,
                 include,
                 exclude,

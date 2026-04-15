@@ -117,6 +117,98 @@ pub enum Commands {
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
     },
+    /// Create a send-max PSBT without signing or broadcasting it.
+    CreateSendMaxPsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+    },
+    /// Create a send-max PSBT using explicit coin control.
+    CreateSendMaxPsbtWithCoinControl {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+    },
+    /// Create a sweep PSBT using explicit coin control.
+    SweepPsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+    },
+    /// Create, sign, and broadcast a sweep transaction using explicit coin control.
+    Sweep {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+    },
     /// Sign an existing PSBT.
     SignPsbt {
         #[arg(long)]
@@ -196,6 +288,46 @@ pub enum Commands {
         #[arg(long)]
         /// Amount in satoshis.
         amount: u64,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+    },
+    /// Create, sign, and broadcast a send-max transaction in one step.
+    SendMaxPsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+    },
+    /// Create, sign, and broadcast a send-max transaction using coin control.
+    SendMaxPsbtWithCoinControl {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Destination address.
+        to: String,
 
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.

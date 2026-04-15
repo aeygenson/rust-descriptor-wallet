@@ -117,6 +117,66 @@ impl WalletApi {
         .await
     }
 
+    pub async fn create_send_max_psbt(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::create_send_max(&self.storage, name, to_address, fee_rate_sat_per_vb).await
+    }
+
+    pub async fn create_send_max_psbt_with_coin_control(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::create_send_max_with_coin_control(
+            &self.storage,
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            coin_control,
+        )
+        .await
+    }
+
+    pub async fn create_sweep_psbt(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::create_sweep(
+            &self.storage,
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            coin_control,
+        )
+        .await
+    }
+
+    pub async fn sweep_psbt(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        psbt::sweep(
+            &self.storage,
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            coin_control,
+        )
+        .await
+    }
+
     pub async fn send_psbt_with_coin_control(
         &self,
         name: &str,
@@ -142,6 +202,66 @@ impl WalletApi {
         }
 
         self.publish_psbt(name, &signed.psbt_base64).await
+    }
+
+    pub async fn send_max_psbt(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        let created = self
+            .create_send_max_psbt(name, to_address, fee_rate_sat_per_vb)
+            .await?;
+
+        let signed = self.sign_psbt(name, &created.psbt_base64).await?;
+
+        if !signed.finalized {
+            return Err(crate::WalletApiError::SendNotFinalized);
+        }
+
+        self.publish_psbt(name, &signed.psbt_base64).await
+    }
+
+    pub async fn send_max_psbt_with_coin_control(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        let created = self
+            .create_send_max_psbt_with_coin_control(
+                name,
+                to_address,
+                fee_rate_sat_per_vb,
+                coin_control,
+            )
+            .await?;
+
+        let signed = self.sign_psbt(name, &created.psbt_base64).await?;
+
+        if !signed.finalized {
+            return Err(crate::WalletApiError::SendNotFinalized);
+        }
+
+        self.publish_psbt(name, &signed.psbt_base64).await
+    }
+
+    pub async fn send_sweep_psbt(
+        &self,
+        name: &str,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        coin_control: WalletCoinControlDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        self.sweep_psbt(
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            coin_control,
+        )
+        .await
     }
 
     pub async fn sign_psbt(

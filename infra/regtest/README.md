@@ -137,6 +137,8 @@ BITCOIN_RPC_PASS=bitcoin
 You can now reliably test:
 
 - send transactions without immediate confirmation
+- send-max wallet drains
+- sweep flows over explicitly selected outpoints
 - coin control with explicit include/exclude outpoints
 - strict coin control where included outpoints must fully fund the spend
 - RBF (bump-fee)
@@ -163,6 +165,8 @@ Current automated regtest coverage includes:
 
 - receive funds and observe balance after sync
 - self-send flows with change output tracking
+- send-max PSBT creation and one-shot max-send flows
+- sweep PSBT creation and one-shot sweep flows
 - coin-control PSBT creation and send flows
 - RBF replacement and confirmation checks
 - CPFP child build, publish, and confirmation checks

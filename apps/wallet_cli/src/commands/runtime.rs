@@ -1,3 +1,7 @@
+use anyhow::Result;
+use tracing::{debug, info};
+use wallet_api::WalletApi;
+
 pub async fn create_psbt_with_coin_control(
     api: &WalletApi,
     name: &str,
@@ -54,9 +58,171 @@ pub async fn create_psbt_with_coin_control(
 
     Ok(())
 }
-use anyhow::Result;
-use wallet_api::WalletApi;
-use tracing::{debug, info};
+
+pub async fn create_send_max_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_send_max_psbt start name={} to={} fee_rate={}",
+        name,
+        to,
+        fee_rate_sat_per_vb
+    );
+
+    let psbt = api
+        .create_send_max_psbt(name, to, fee_rate_sat_per_vb)
+        .await?;
+
+    println!("Send-max PSBT created:");
+    println!("txid={}", psbt.txid);
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
+pub async fn create_send_max_psbt_with_coin_control(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_send_max_psbt_with_coin_control start name={} to={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let psbt = api
+        .create_send_max_psbt_with_coin_control(
+            name,
+            to,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("Send-max PSBT created with coin control:");
+    println!("txid={}", psbt.txid);
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
+pub async fn create_sweep_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_sweep_psbt start name={} to={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let psbt = api
+        .create_sweep_psbt(
+            name,
+            to,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("Sweep PSBT created:");
+    println!("txid={}", psbt.txid);
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
 
 fn print_optional_rbf(replaceable: Option<bool>) {
     if let Some(rbf) = replaceable {
@@ -546,6 +712,109 @@ pub async fn send_psbt_with_coin_control(
     println!("Transaction sent with coin control:");
     println!("to={}", to);
     println!("amount={} sats", amount_sat);
+    println!("txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn send_max_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send_max_psbt start name={} to={} fee_rate={}",
+        name,
+        to,
+        fee_rate_sat_per_vb
+    );
+
+    let published = api.send_max_psbt(name, to, fee_rate_sat_per_vb).await?;
+
+    println!("Send-max transaction sent successfully:");
+    println!("to={}", to);
+    println!("txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn send_max_psbt_with_coin_control(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send_max_psbt_with_coin_control start name={} to={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let published = api
+        .send_max_psbt_with_coin_control(
+            name,
+            to,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("Send-max transaction sent with coin control:");
+    println!("to={}", to);
+    println!("txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn sweep_psbt(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+) -> Result<()> {
+    debug!(
+        "cli runtime: sweep_psbt start name={} to={} fee_rate={} include={} exclude={} confirmed_only={}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only
+    );
+
+    let published = api
+        .sweep_psbt(
+            name,
+            to,
+            fee_rate_sat_per_vb,
+            wallet_api::model::WalletCoinControlDto {
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+            },
+        )
+        .await?;
+
+    println!("Sweep transaction sent successfully:");
+    println!("to={}", to);
     println!("txid={}", published.txid);
     print_optional_rbf(published.replaceable);
 

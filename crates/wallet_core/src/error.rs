@@ -123,6 +123,9 @@ pub enum WalletCoreError {
         fee_estimate_sat: u64,
     },
 
+    #[error("send-max/sweep amount is too small after fees")]
+    SendMaxAmountTooSmall,
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
 

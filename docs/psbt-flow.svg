@@ -53,7 +53,7 @@
   <rect class="card" x="680" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="805" y="246" text-anchor="middle" class="small">CREATE</text>
   <text x="805" y="278" text-anchor="middle" class="label">Unsigned PSBT</text>
-  <text x="805" y="306" text-anchor="middle" class="subtle">recipient, amount, fee rate</text>
+  <text x="805" y="306" text-anchor="middle" class="subtle">recipient, amount, send-max, or sweep</text>
 
   <rect class="card" x="980" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="1105" y="246" text-anchor="middle" class="small">SIGN</text>

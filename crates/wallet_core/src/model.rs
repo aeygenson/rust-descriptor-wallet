@@ -51,6 +51,9 @@ pub struct WalletUtxoInfo {
 
 /// Core model describing coin control options for transaction building.
 ///
+/// This also serves as the explicit input-selection model for sweep flows,
+/// where the caller provides the exact outpoints to drain to a destination.
+///
 /// This is a domain model (not API DTO) and should not depend on wallet_api.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WalletCoinControlInfo {
@@ -69,6 +72,14 @@ impl WalletCoinControlInfo {
         self.include_outpoints.is_empty()
             && self.exclude_outpoints.is_empty()
             && !self.confirmed_only
+    }
+
+    /// Returns true when an explicit include set is present.
+    ///
+    /// This is the domain signal used by strict coin control and sweep-style
+    /// flows, where only the selected inputs may be used.
+    pub fn has_explicit_include_set(&self) -> bool {
+        !self.include_outpoints.is_empty()
     }
 }
 
@@ -297,7 +308,7 @@ pub struct WalletCpfpPsbtInfo {
     /// Transaction id of the CPFP child transaction.
     pub txid: String,
 
-    /// Parent transaction id being accelerated.
+    /// Transaction id of the parent transaction being accelerated via CPFP.
     pub parent_txid: String,
 
     /// Selected outpoint (txid:vout) used for CPFP.
@@ -320,4 +331,29 @@ pub struct WalletCpfpPsbtInfo {
 
     /// Estimated virtual size of the transaction.
     pub estimated_vsize: u64,
+}
+
+/// Domain mode describing how a send amount should be interpreted when building a PSBT.
+///
+/// This stays in `wallet_core` because it is part of transaction-construction behavior,
+/// not API formatting.
+///
+/// Behavior notes:
+/// - In `Max` mode with strict coin control (when `include_outpoints` is provided),
+///   only the selected inputs are used and the transaction will fail if they do not
+///   fully fund the transaction including fees.
+/// - In `Fixed` mode, the provided amount is respected and additional inputs are
+///   not automatically added when strict coin control is active.
+/// - Sweep flows are represented as `Max` mode combined with an explicit include
+///   set in `WalletCoinControlInfo`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalletSendAmountMode {
+    /// Build a transaction for an explicit fixed amount.
+    Fixed(AmountSat),
+
+    /// Build a transaction that drains the selected or otherwise eligible inputs
+    /// to the recipient, after subtracting fees.
+    ///
+    /// When combined with an explicit include set, this represents a sweep.
+    Max,
 }

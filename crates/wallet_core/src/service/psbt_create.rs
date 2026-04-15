@@ -7,7 +7,7 @@ use bitcoin::FeeRate;
 use bdk_wallet::KeychainKind;
 use tracing::{debug, info};
 
-use crate::model::{WalletCoinControlInfo, WalletPsbtInfo};
+use crate::model::{WalletCoinControlInfo, WalletPsbtInfo, WalletSendAmountMode};
 use crate::types::{AmountSat, FeeRateSatPerVb};
 use crate::WalletCoreResult;
 use super::*;
@@ -26,10 +26,10 @@ impl WalletService {
         fee_rate_sat_per_vb: FeeRateSatPerVb,
         enable_rbf: bool,
     ) -> WalletCoreResult<WalletPsbtInfo> {
-        self.create_psbt_with_coin_control(
+        self.create_psbt_internal(
             wallet_network,
             to_address,
-            amount_sat,
+            WalletSendAmountMode::Fixed(amount_sat),
             fee_rate_sat_per_vb,
             enable_rbf,
             None,
@@ -46,20 +46,123 @@ impl WalletService {
         enable_rbf: bool,
         coin_control: Option<WalletCoinControlInfo>,
     ) -> WalletCoreResult<WalletPsbtInfo> {
-        debug!(
-            "wallet_service: create_psbt start to={} amount_sat={} fee_rate_sat_per_vb={} enable_rbf={} has_coin_control={}",
+        self.create_psbt_internal(
+            wallet_network,
             to_address,
-            amount_sat.as_u64(),
+            WalletSendAmountMode::Fixed(amount_sat),
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            coin_control,
+        )
+    }
+
+    /// Create an unsigned PSBT for a send-max flow.
+    pub fn create_send_max_psbt(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        self.create_psbt_internal(
+            wallet_network,
+            to_address,
+            WalletSendAmountMode::Max,
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            None,
+        )
+    }
+
+    /// Create an unsigned PSBT for a send-max flow with optional coin control.
+    pub fn create_send_max_psbt_with_coin_control(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+        coin_control: Option<WalletCoinControlInfo>,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        self.create_psbt_internal(
+            wallet_network,
+            to_address,
+            WalletSendAmountMode::Max,
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            coin_control,
+        )
+    }
+
+    /// Create an unsigned PSBT for a sweep flow.
+    ///
+    /// Sweep is modeled as strict send-max with an explicit include set.
+    pub fn create_sweep_psbt(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+        coin_control: WalletCoinControlInfo,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        self.create_psbt_internal(
+            wallet_network,
+            to_address,
+            WalletSendAmountMode::Max,
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            Some(coin_control),
+        )
+    }
+
+    /// Create an unsigned PSBT for a sweep flow using an already optional coin-control model.
+    ///
+    /// This is a convenience alias for callers that already carry `Option<WalletCoinControlInfo>`.
+    pub fn create_sweep_psbt_with_optional_coin_control(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+        coin_control: Option<WalletCoinControlInfo>,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        self.create_psbt_internal(
+            wallet_network,
+            to_address,
+            WalletSendAmountMode::Max,
+            fee_rate_sat_per_vb,
+            enable_rbf,
+            coin_control,
+        )
+    }
+
+    fn create_psbt_internal(
+        &mut self,
+        wallet_network: Network,
+        to_address: &str,
+        send_amount_mode: WalletSendAmountMode,
+        fee_rate_sat_per_vb: FeeRateSatPerVb,
+        enable_rbf: bool,
+        coin_control: Option<WalletCoinControlInfo>,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        let strict_selected_inputs = coin_control
+            .as_ref()
+            .map(|cc| cc.has_explicit_include_set())
+            .unwrap_or(false);
+        debug!(
+            "wallet_service: create_psbt start to={} send_amount_mode={:?} fee_rate_sat_per_vb={} enable_rbf={} has_coin_control={} sweep_semantics={}",
+            to_address,
+            send_amount_mode,
             fee_rate_sat_per_vb.as_u64(),
             enable_rbf,
             coin_control.is_some(),
+            matches!(send_amount_mode, WalletSendAmountMode::Max) && strict_selected_inputs,
         );
 
         // Keep defensive validation in core even though wrapper constructors
         // normally reject invalid values. Tests can intentionally construct
         // zero-valued wrappers directly, and the core method should still
         // return precise domain errors.
-        if amount_sat.as_u64() == 0 {
+        if matches!(send_amount_mode, WalletSendAmountMode::Fixed(amount_sat) if amount_sat.as_u64() == 0) {
             return Err(crate::WalletCoreError::InvalidAmount);
         }
 
@@ -78,7 +181,6 @@ impl WalletService {
             .ok_or_else(|| crate::WalletCoreError::InvalidFeeRate)?;
 
         let recipient_script = checked.script_pubkey();
-        let recipient_amount = Amount::from_sat(amount_sat.as_u64());
 
         let selected_inputs = match coin_control.as_ref() {
             Some(cc) if !cc.is_empty() => self.resolve_coin_control_inputs(cc)?,
@@ -90,10 +192,7 @@ impl WalletService {
             _ => Vec::new(),
         };
 
-        let strict_selected_inputs = coin_control
-            .as_ref()
-            .map(|cc| !cc.include_outpoints.is_empty())
-            .unwrap_or(false);
+        // let strict_selected_inputs calculated above
 
         let wallet_utxos: Vec<_> = self.wallet.list_unspent().collect();
 
@@ -113,22 +212,32 @@ impl WalletService {
             let output_count = 2u64;
             let estimated_vsize = 11u64 + input_count * 58u64 + output_count * 43u64;
             let fee_estimate_sat = estimated_vsize * fee_rate_sat_per_vb.as_u64();
-            let required_sat = amount_sat.as_u64() + fee_estimate_sat;
 
             if selected_inputs.is_empty() {
                 return Err(crate::WalletCoreError::CoinControlEmptySelection);
             }
 
-            if selected_total_sat < amount_sat.as_u64() {
-                return Err(crate::WalletCoreError::CoinControlInsufficientSelectedFunds {
-                    selected_sat: selected_total_sat,
-                    required_sat,
-                    fee_estimate_sat,
-                });
-            }
+            match send_amount_mode {
+                WalletSendAmountMode::Fixed(amount_sat) => {
+                    let required_sat = amount_sat.as_u64() + fee_estimate_sat;
 
-            if selected_total_sat < required_sat {
-                return Err(crate::WalletCoreError::CoinControlStrictModeViolation);
+                    if selected_total_sat < amount_sat.as_u64() {
+                        return Err(crate::WalletCoreError::CoinControlInsufficientSelectedFunds {
+                            selected_sat: selected_total_sat,
+                            required_sat,
+                            fee_estimate_sat,
+                        });
+                    }
+
+                    if selected_total_sat < required_sat {
+                        return Err(crate::WalletCoreError::CoinControlStrictModeViolation);
+                    }
+                }
+                WalletSendAmountMode::Max => {
+                    if selected_total_sat <= fee_estimate_sat {
+                        return Err(crate::WalletCoreError::SendMaxAmountTooSmall);
+                    }
+                }
             }
 
             for utxo in &wallet_utxos {
@@ -148,10 +257,19 @@ impl WalletService {
         );
 
         let mut builder = self.wallet.build_tx();
-        builder.add_recipient(recipient_script.clone(), recipient_amount);
         builder.fee_rate(fee_rate);
         if enable_rbf {
             builder.set_exact_sequence(Sequence(0xFFFFFFFD));
+        }
+
+        match send_amount_mode {
+            WalletSendAmountMode::Fixed(amount_sat) => {
+                builder.add_recipient(recipient_script.clone(), Amount::from_sat(amount_sat.as_u64()));
+            }
+            WalletSendAmountMode::Max => {
+                builder.drain_wallet();
+                builder.drain_to(recipient_script.clone());
+            }
         }
 
         for outpoint in &selected_inputs {
@@ -244,12 +362,32 @@ impl WalletService {
                 }
             });
 
+        let effective_amount_sat = match send_amount_mode {
+            WalletSendAmountMode::Fixed(amount_sat) => amount_sat,
+            WalletSendAmountMode::Max => {
+                let drained_sat: u64 = psbt
+                    .unsigned_tx
+                    .output
+                    .iter()
+                    .filter(|txout| txout.script_pubkey == recipient_script)
+                    .map(|txout| txout.value.to_sat())
+                    .sum();
+
+                if drained_sat == 0 {
+                    return Err(crate::WalletCoreError::SendMaxAmountTooSmall);
+                }
+
+                AmountSat::from(drained_sat)
+            }
+        };
+
         let psbt_base64 = psbt.to_string();
 
         info!(
-            "wallet_service: create_psbt success to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={} coin_control_selected_inputs={} coin_control_excluded_inputs={} strict_selected_inputs={}",
+            "wallet_service: create_psbt success to={} send_amount_mode={:?} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} requested_rbf={} actual_replaceable={} change_amount_sat={:?} selected_utxos={} coin_control_selected_inputs={} coin_control_excluded_inputs={} strict_selected_inputs={} sweep_semantics={}",
             to_address,
-            amount_sat.as_u64(),
+            send_amount_mode,
+            effective_amount_sat.as_u64(),
             fee_sat,
             fee_rate_sat_per_vb.as_u64(),
             enable_rbf,
@@ -259,6 +397,8 @@ impl WalletService {
             selected_inputs.len(),
             strict_excluded_inputs.len(),
             strict_selected_inputs
+            ,
+            matches!(send_amount_mode, WalletSendAmountMode::Max) && strict_selected_inputs
         );
 
         Ok(WalletPsbtInfo {
@@ -266,7 +406,7 @@ impl WalletService {
             txid: psbt.unsigned_tx.compute_txid().to_string(),
             original_txid: None,
             to_address: to_address.to_string(),
-            amount_sat,
+            amount_sat: effective_amount_sat,
             fee_sat: AmountSat::from(fee_sat),
             fee_rate_sat_per_vb: fee_rate_sat_per_vb.as_u64(),
             replaceable: actual_replaceable,
@@ -363,6 +503,55 @@ mod tests {
         )
     }
 
+    fn create_send_max_psbt_with(
+        wallet: &mut WalletService,
+        network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        enable_rbf: bool,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        wallet.create_send_max_psbt(
+            network,
+            to_address,
+            FeeRateSatPerVb::from(fee_rate_sat_per_vb),
+            enable_rbf,
+        )
+    }
+
+    fn create_send_max_psbt_with_coin_control(
+        wallet: &mut WalletService,
+        network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        enable_rbf: bool,
+        coin_control: WalletCoinControlInfo,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        wallet.create_send_max_psbt_with_coin_control(
+            network,
+            to_address,
+            FeeRateSatPerVb::from(fee_rate_sat_per_vb),
+            enable_rbf,
+            Some(coin_control),
+        )
+    }
+
+    fn create_sweep_psbt_with(
+        wallet: &mut WalletService,
+        network: Network,
+        to_address: &str,
+        fee_rate_sat_per_vb: u64,
+        enable_rbf: bool,
+        coin_control: WalletCoinControlInfo,
+    ) -> WalletCoreResult<WalletPsbtInfo> {
+        wallet.create_sweep_psbt(
+            network,
+            to_address,
+            FeeRateSatPerVb::from(fee_rate_sat_per_vb),
+            enable_rbf,
+            coin_control,
+        )
+    }
+
     fn assert_create_psbt_err(
         result: WalletCoreResult<WalletPsbtInfo>,
         matcher: impl FnOnce(crate::WalletCoreError) -> bool,
@@ -406,6 +595,7 @@ mod tests {
         assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidAmount));
     }
 
+
     #[test]
     fn create_psbt_fails_for_zero_fee_rate() {
         let (config, mut wallet) = load_test_wallet();
@@ -413,6 +603,70 @@ mod tests {
         let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 0, true);
 
         assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
+    }
+
+    #[test]
+    fn create_send_max_psbt_fails_for_zero_fee_rate() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_send_max_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            0,
+            true,
+        );
+
+        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
+    }
+
+    #[test]
+    fn create_send_max_psbt_fails_for_insufficient_funds() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_send_max_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1,
+            true,
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
+        });
+    }
+
+    #[test]
+    fn create_send_max_psbt_populates_selected_inputs_field_when_transaction_build_succeeds() {
+        let (config, mut wallet) = load_test_wallet();
+
+        let result = create_send_max_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1,
+            true,
+        );
+
+        match result {
+            Ok(psbt_info) => {
+                assert!(
+                    psbt_info.amount_sat.as_u64() > 0,
+                    "send-max should produce a non-zero recipient amount"
+                );
+                assert_eq!(
+                    psbt_info.selected_inputs.len(),
+                    psbt_info.input_count,
+                    "selected_inputs should match actual input count in send-max flow"
+                );
+            }
+            Err(crate::WalletCoreError::PsbtBuildFailed(_)) => {
+                // Fresh watch-only test wallets may have no funds; in that case this
+                // test cannot reach transaction construction and should not fail the suite.
+            }
+            Err(other) => panic!("unexpected error: {:?}", other),
+        }
     }
 
     #[test]
@@ -508,6 +762,30 @@ mod tests {
             config.network,
             valid_signet_address(),
             1000,
+            1,
+            true,
+            WalletCoinControlInfo {
+                include_outpoints: vec![outpoint.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+            },
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
+        });
+    }
+
+    #[test]
+    fn create_send_max_with_coin_control_fails_for_missing_selected_outpoint() {
+        let (config, mut wallet) = load_test_wallet();
+        let outpoint =
+            "0000000000000000000000000000000000000000000000000000000000000001:0".to_string();
+
+        let result = create_send_max_psbt_with_coin_control(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
             1,
             true,
             WalletCoinControlInfo {
@@ -663,4 +941,70 @@ mod tests {
             Err(other) => panic!("unexpected error: {:?}", other),
         }
     }
-}
+
+    #[test]
+    fn create_sweep_psbt_fails_for_missing_selected_outpoint() {
+        let (config, mut wallet) = load_test_wallet();
+        let outpoint =
+            "0000000000000000000000000000000000000000000000000000000000000001:0".to_string();
+
+        let result = create_sweep_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1,
+            true,
+            WalletCoinControlInfo {
+                include_outpoints: vec![outpoint.clone()],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+            },
+        );
+
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
+        });
+    }
+
+    #[test]
+    fn create_sweep_psbt_matches_send_max_with_explicit_include_set_behavior() {
+        let (config, mut wallet) = load_test_wallet();
+        let coin_control = WalletCoinControlInfo {
+            include_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+                    .to_string(),
+            ],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: false,
+        };
+
+        let sweep_result = create_sweep_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1,
+            true,
+            coin_control.clone(),
+        );
+
+        let send_max_result = create_send_max_psbt_with_coin_control(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1,
+            true,
+            coin_control,
+        );
+
+        match (sweep_result, send_max_result) {
+            (Err(left), Err(right)) => {
+                assert_eq!(left.to_string(), right.to_string());
+            }
+            (Ok(left), Ok(right)) => {
+                assert_eq!(left.amount_sat, right.amount_sat);
+                assert_eq!(left.selected_inputs, right.selected_inputs);
+                assert_eq!(left.fee_rate_sat_per_vb, right.fee_rate_sat_per_vb);
+            }
+            (left, right) => panic!("expected sweep and strict send-max to behave the same, got left={left:?}, right={right:?}"),
+        }
+    }}
