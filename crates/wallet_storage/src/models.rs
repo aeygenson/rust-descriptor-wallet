@@ -25,7 +25,9 @@ impl WalletRecord {
         serde_json::from_str(&self.sync_backend)
     }
 
-    pub fn parse_broadcast_backend(&self) -> Result<Option<BroadcastBackendFile>, serde_json::Error> {
+    pub fn parse_broadcast_backend(
+        &self,
+    ) -> Result<Option<BroadcastBackendFile>, serde_json::Error> {
         match &self.broadcast_backend {
             Some(b) => Ok(Some(serde_json::from_str(b)?)),
             None => Ok(None),
@@ -52,7 +54,9 @@ pub enum SyncBackendFile {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum BroadcastBackendFile {
-    Esplora { url: String },
+    Esplora {
+        url: String,
+    },
     Rpc {
         url: String,
         rpc_user: String,
@@ -78,9 +82,7 @@ pub struct ImportWalletFile {
 }
 
 impl ImportWalletFile {
-    pub fn serialize_backends(
-        &self,
-    ) -> Result<(String, Option<String>), serde_json::Error> {
+    pub fn serialize_backends(&self) -> Result<(String, Option<String>), serde_json::Error> {
         let sync = serde_json::to_string(&self.backend.sync)?;
         let broadcast = match &self.backend.broadcast {
             Some(b) => Some(serde_json::to_string(b)?),

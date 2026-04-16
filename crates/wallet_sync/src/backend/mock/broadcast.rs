@@ -1,5 +1,3 @@
-
-
 use crate::broadcast::TxBroadcaster;
 use crate::{WalletSyncError, WalletSyncResult};
 use std::sync::Arc;
@@ -44,7 +42,10 @@ impl FailingBroadcaster {
     /// Construct a broadcaster that fails with a mempool conflict error.
     pub fn mempool_conflict(message: impl Into<String>) -> Self {
         let message = message.into();
-        debug!("creating failing broadcaster (mempool conflict): {}", message);
+        debug!(
+            "creating failing broadcaster (mempool conflict): {}",
+            message
+        );
         Self {
             make_error: Arc::new(move || {
                 WalletSyncError::BroadcastMempoolConflict(message.clone())
@@ -88,7 +89,10 @@ mod tests {
     fn failing_broadcaster_returns_transport_error() {
         let broadcaster = FailingBroadcaster::transport("network down");
         let result = broadcaster.broadcast_tx_hex("deadbeef");
-        assert!(matches!(result, Err(WalletSyncError::BroadcastTransport(_))));
+        assert!(matches!(
+            result,
+            Err(WalletSyncError::BroadcastTransport(_))
+        ));
     }
 
     #[test]

@@ -1,9 +1,6 @@
 use crate::model::{
-    TxBroadcastResultDto,
-    WalletCoinControlDto,
-    WalletCpfpPsbtDto,
-    WalletPsbtDto,
-    WalletSignedPsbtDto,
+    TxBroadcastResultDto, WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto,
+    WalletPsbtDto, WalletSignedPsbtDto,
 };
 use crate::WalletApiResult;
 
@@ -14,9 +11,9 @@ use wallet_sync::{WalletSyncError, WalletSyncService};
 
 use super::wallet::load_wallet_config;
 
-use tracing::{debug, info};
-use tokio::task;
 use tokio::runtime::Handle;
+use tokio::task;
+use tracing::{debug, info};
 
 fn log_publish_error(name: &str, error: &WalletSyncError) {
     match error {
@@ -56,17 +53,10 @@ fn log_publish_error(name: &str, error: &WalletSyncError) {
             );
         }
         WalletSyncError::PsbtNotFinalized => {
-            tracing::error!(
-                "api psbt: publish not_finalized name={}",
-                name,
-            );
+            tracing::error!("api psbt: publish not_finalized name={}", name,);
         }
         _ => {
-            tracing::error!(
-                "api psbt: publish failed name={} error={}",
-                name,
-                error
-            );
+            tracing::error!("api psbt: publish failed name={} error={}", name, error);
         }
     }
 }
@@ -83,10 +73,7 @@ pub async fn create(
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
         "api psbt: create start name={} to={} amount_sat={} fee_rate_sat_per_vb={}",
-        name,
-        to_address,
-        amount_sat,
-        fee_rate_sat_per_vb
+        name, to_address, amount_sat, fee_rate_sat_per_vb
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -229,9 +216,7 @@ pub async fn create_send_max(
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
         "api psbt: create_send_max start name={} to={} fee_rate_sat_per_vb={}",
-        name,
-        to_address,
-        fee_rate_sat_per_vb
+        name, to_address, fee_rate_sat_per_vb
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -423,6 +408,74 @@ pub async fn create_sweep(
     Ok(psbt.into())
 }
 
+/// Create an unsigned PSBT for a wallet-internal consolidation flow.
+///
+/// Consolidation spends multiple wallet UTXOs into a smaller number of
+/// wallet-owned outputs, usually one internal output, to reduce fragmentation.
+pub async fn create_consolidation(
+    storage: &WalletStorage,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    consolidation: WalletConsolidationDto,
+) -> WalletApiResult<WalletPsbtDto> {
+    debug!(
+        "api psbt: create_consolidation start name={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?}",
+        name,
+        fee_rate_sat_per_vb,
+        consolidation.include_outpoints.len(),
+        consolidation.exclude_outpoints.len(),
+        consolidation.confirmed_only,
+        consolidation.max_input_count,
+        consolidation.min_input_count,
+        consolidation.min_utxo_value_sat,
+        consolidation.max_utxo_value_sat,
+        consolidation.max_fee_pct_of_input_value,
+        consolidation.strategy,
+    );
+
+    let config = load_wallet_config(storage, name).await?;
+    let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
+
+    let consolidation = wallet_core::model::WalletConsolidationInfo::from(consolidation);
+    let name_for_error = name.to_string();
+
+    let psbt = task::block_in_place(|| {
+        let mut wallet = WalletService::load_or_create(&config)?;
+
+        wallet
+            .create_consolidation_psbt(fee_rate_sat_per_vb, true, Some(consolidation))
+            .map_err(|e| {
+                tracing::error!(
+                    "api psbt: create_consolidation failed name={} fee_rate_sat_per_vb={} error={}",
+                    name_for_error,
+                    fee_rate_sat_per_vb.as_u64(),
+                    e
+                );
+                e
+            })
+    })?;
+
+    info!(
+        "api psbt: create_consolidation success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        name,
+        psbt.txid,
+        psbt.to_address,
+        psbt.amount_sat,
+        psbt.fee_sat,
+        psbt.fee_rate_sat_per_vb,
+        psbt.replaceable,
+        psbt.selected_utxo_count,
+        psbt.selected_inputs.len(),
+        psbt.input_count,
+        psbt.output_count,
+        psbt.recipient_count,
+        psbt.estimated_vsize,
+        psbt.psbt_base64.len()
+    );
+
+    Ok(psbt.into())
+}
+
 pub async fn sign(
     storage: &WalletStorage,
     name: &str,
@@ -438,11 +491,7 @@ pub async fn sign(
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet.sign_psbt(&psbt_base64).map_err(|e| {
-            tracing::error!(
-                "api psbt: sign failed name={} error={}",
-                name_for_error,
-                e
-            );
+            tracing::error!("api psbt: sign failed name={} error={}", name_for_error, e);
             e
         })
     })?;
@@ -492,9 +541,7 @@ pub async fn publish(
 
     info!(
         "api psbt: publish success name={} txid={} replaceable={:?}",
-        name,
-        published.txid,
-        published.replaceable,
+        name, published.txid, published.replaceable,
     );
 
     Ok(published)
@@ -518,14 +565,41 @@ pub async fn sweep(
         coin_control.confirmed_only,
     );
 
-    let created = create_sweep(
-        storage,
+    let created =
+        create_sweep(storage, name, to_address, fee_rate_sat_per_vb, coin_control).await?;
+
+    let signed = sign(storage, name, &created.psbt_base64).await?;
+
+    if !signed.finalized {
+        return Err(crate::WalletApiError::SendNotFinalized);
+    }
+
+    publish(storage, name, &signed.psbt_base64).await
+}
+
+/// Create, sign, and publish a wallet-internal consolidation transaction.
+pub async fn consolidate(
+    storage: &WalletStorage,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    consolidation: WalletConsolidationDto,
+) -> WalletApiResult<TxBroadcastResultDto> {
+    debug!(
+        "api psbt: consolidate start name={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?}",
         name,
-        to_address,
         fee_rate_sat_per_vb,
-        coin_control,
-    )
-    .await?;
+        consolidation.include_outpoints.len(),
+        consolidation.exclude_outpoints.len(),
+        consolidation.confirmed_only,
+        consolidation.max_input_count,
+        consolidation.min_input_count,
+        consolidation.min_utxo_value_sat,
+        consolidation.max_utxo_value_sat,
+        consolidation.max_fee_pct_of_input_value,
+        consolidation.strategy,
+    );
+
+    let created = create_consolidation(storage, name, fee_rate_sat_per_vb, consolidation).await?;
 
     let signed = sign(storage, name, &created.psbt_base64).await?;
 
@@ -548,9 +622,7 @@ pub async fn bump_fee_psbt(
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
         "api psbt: bump_fee_psbt start name={} txid={} fee_rate_sat_per_vb={}",
-        name,
-        txid,
-        fee_rate_sat_per_vb
+        name, txid, fee_rate_sat_per_vb
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -672,9 +744,7 @@ pub async fn bump_fee(
 ) -> WalletApiResult<TxBroadcastResultDto> {
     debug!(
         "api psbt: bump_fee start name={} txid={} fee_rate_sat_per_vb={}",
-        name,
-        txid,
-        fee_rate_sat_per_vb
+        name, txid, fee_rate_sat_per_vb
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -687,16 +757,18 @@ pub async fn bump_fee(
         let mut wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
-        let bumped = wallet.bump_fee_psbt(&txid, fee_rate_sat_per_vb).map_err(|e| {
-            tracing::error!(
+        let bumped = wallet
+            .bump_fee_psbt(&txid, fee_rate_sat_per_vb)
+            .map_err(|e| {
+                tracing::error!(
                 "api psbt: bump_fee build failed name={} txid={} fee_rate_sat_per_vb={} error={}",
                 name_for_error,
                 txid,
                 fee_rate_sat_per_vb.as_u64(),
                 e
             );
-            e
-        })?;
+                e
+            })?;
 
         let signed = wallet.sign_psbt(&bumped.psbt_base64).map_err(|e| {
             tracing::error!(
@@ -725,10 +797,7 @@ pub async fn bump_fee(
 
     info!(
         "api psbt: bump_fee success name={} original_txid={} replacement_txid={} replaceable={:?}",
-        name,
-        txid,
-        published.txid,
-        published.replaceable,
+        name, txid, published.txid, published.replaceable,
     );
 
     Ok(published)
@@ -745,10 +814,7 @@ pub async fn cpfp(
 ) -> WalletApiResult<TxBroadcastResultDto> {
     debug!(
         "api psbt: cpfp start name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={}",
-        name,
-        parent_txid,
-        selected_outpoint,
-        fee_rate_sat_per_vb
+        name, parent_txid, selected_outpoint, fee_rate_sat_per_vb
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -843,12 +909,10 @@ mod tests {
     fn wallet_coin_control_dto_can_be_constructed_for_psbt_create_calls() {
         let dto = WalletCoinControlDto {
             include_outpoints: vec![
-                "0000000000000000000000000000000000000000000000000000000000000001:0"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
             ],
             exclude_outpoints: vec![
-                "0000000000000000000000000000000000000000000000000000000000000002:1"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000002:1".to_string(),
             ],
             confirmed_only: true,
         };
@@ -872,10 +936,8 @@ mod tests {
             change_amount_sat: Some(9_000),
             selected_utxo_count: 2,
             selected_inputs: vec![
-                "0000000000000000000000000000000000000000000000000000000000000001:0"
-                    .to_string(),
-                "0000000000000000000000000000000000000000000000000000000000000002:1"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000002:1".to_string(),
             ],
             input_count: 2,
             output_count: 2,
@@ -903,8 +965,7 @@ mod tests {
             change_amount_sat: None,
             selected_utxo_count: 1,
             selected_inputs: vec![
-                "0000000000000000000000000000000000000000000000000000000000000003:0"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000003:0".to_string(),
             ],
             input_count: 1,
             output_count: 1,
@@ -918,5 +979,38 @@ mod tests {
         assert_eq!(dto.selected_inputs.len(), 1);
         assert!(dto.change_amount_sat.is_none());
         assert!(dto.replaceable);
+    }
+
+    #[test]
+    fn wallet_consolidation_dto_can_be_constructed_for_consolidation_calls() {
+        let dto = WalletConsolidationDto {
+            include_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000002:1".to_string(),
+            ],
+            exclude_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000003:0".to_string(),
+            ],
+            confirmed_only: true,
+            max_input_count: Some(8),
+            min_input_count: Some(2),
+            min_utxo_value_sat: Some(1_000),
+            max_utxo_value_sat: Some(100_000),
+            max_fee_pct_of_input_value: Some(5),
+            strategy: Some(crate::model::WalletConsolidationStrategyDto::SmallestFirst),
+        };
+
+        assert_eq!(dto.include_outpoints.len(), 2);
+        assert_eq!(dto.exclude_outpoints.len(), 1);
+        assert!(dto.confirmed_only);
+        assert_eq!(dto.max_input_count, Some(8));
+        assert_eq!(dto.min_input_count, Some(2));
+        assert_eq!(dto.min_utxo_value_sat, Some(1_000));
+        assert_eq!(dto.max_utxo_value_sat, Some(100_000));
+        assert_eq!(dto.max_fee_pct_of_input_value, Some(5));
+        assert!(matches!(
+            dto.strategy,
+            Some(crate::model::WalletConsolidationStrategyDto::SmallestFirst)
+        ));
     }
 }

@@ -50,10 +50,7 @@ impl From<bdk_chain::local_chain::CannotConnectError> for WalletSyncError {
 impl WalletSyncError {
     /// Whether the error is retryable at the transport/backend level.
     pub fn is_retryable(&self) -> bool {
-        matches!(
-            self,
-            WalletSyncError::BroadcastTransport(_)
-        )
+        matches!(self, WalletSyncError::BroadcastTransport(_))
     }
 
     /// Map sync-layer errors back into core-layer errors when required by callers.

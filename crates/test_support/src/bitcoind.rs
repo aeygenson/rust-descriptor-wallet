@@ -1,5 +1,3 @@
-
-
 use std::env;
 use std::thread::sleep;
 use std::time::{Duration, Instant};

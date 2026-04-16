@@ -3,8 +3,8 @@ use tracing::{debug, info};
 use bdk_wallet::bitcoin::{Amount, OutPoint, Txid};
 use bdk_wallet::KeychainKind;
 
-use crate::error::WalletCoreError;
 use super::psbt_common::parse_outpoint;
+use crate::error::WalletCoreError;
 use crate::model::{WalletCpfpBuildPlan, WalletCpfpPsbtInfo};
 use crate::{WalletCoreResult, WalletService};
 
@@ -38,7 +38,9 @@ impl WalletService {
             })?;
 
         if fee_sat >= input_value_sat {
-            return Err(WalletCoreError::CpfpInsufficientValue(selected_outpoint.to_string()));
+            return Err(WalletCoreError::CpfpInsufficientValue(
+                selected_outpoint.to_string(),
+            ));
         }
 
         let child_output_value_sat = input_value_sat - fee_sat;
@@ -79,10 +81,12 @@ impl WalletService {
         );
         builder.fee_absolute(Amount::from_sat(build_plan.fee_sat.0));
 
-        let psbt = builder.finish().map_err(|e| WalletCoreError::CpfpBuildFailed {
-            parent_txid: parent_txid.to_string(),
-            reason: e.to_string(),
-        })?;
+        let psbt = builder
+            .finish()
+            .map_err(|e| WalletCoreError::CpfpBuildFailed {
+                parent_txid: parent_txid.to_string(),
+                reason: e.to_string(),
+            })?;
 
         let child_txid = psbt.unsigned_tx.compute_txid().to_string();
         let psbt_base64 = psbt.to_string();
@@ -109,7 +113,9 @@ impl WalletService {
         }
 
         if selected_outpoint.is_empty() {
-            return Err(WalletCoreError::CpfpNoCandidateUtxo(parent_txid.to_string()));
+            return Err(WalletCoreError::CpfpNoCandidateUtxo(
+                parent_txid.to_string(),
+            ));
         }
 
         if fee_rate == 0 {
@@ -133,12 +139,8 @@ impl WalletService {
         let input_value_sat = selected.value.0;
 
         // --- Step 3: Build child transaction plan ---
-        let build_plan = Self::build_cpfp_plan(
-            parent_txid,
-            selected_outpoint,
-            input_value_sat,
-            fee_rate,
-        )?;
+        let build_plan =
+            Self::build_cpfp_plan(parent_txid, selected_outpoint, input_value_sat, fee_rate)?;
 
         debug!(
             outpoint = %build_plan.input_outpoint,
@@ -151,8 +153,7 @@ impl WalletService {
 
         // --- Step 4: Create PSBT ---
         debug!("creating PSBT from child transaction plan");
-        let (psbt_base64, child_txid) =
-            self.build_cpfp_psbt_from_plan(parent_txid, &build_plan)?;
+        let (psbt_base64, child_txid) = self.build_cpfp_psbt_from_plan(parent_txid, &build_plan)?;
 
         // --- Step 5: Return result ---
         Ok(WalletCpfpPsbtInfo {
@@ -176,10 +177,9 @@ mod tests {
 
     #[test]
     fn parse_outpoint_succeeds_for_valid_outpoint() {
-        let (txid, vout) = parse_outpoint(
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
-        )
-        .expect("valid outpoint should parse");
+        let (txid, vout) =
+            parse_outpoint("b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1")
+                .expect("valid outpoint should parse");
 
         assert_eq!(
             txid,

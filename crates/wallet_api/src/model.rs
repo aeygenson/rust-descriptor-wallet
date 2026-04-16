@@ -1,11 +1,7 @@
 use serde::{Deserialize, Serialize};
 use wallet_core::model::{
-    WalletPsbtInfo,
-    WalletSignedPsbtInfo,
-    WalletTxInfo,
-    WalletUtxoInfo,
-    WalletCpfpPsbtInfo,
-    WalletCoinControlInfo,
+    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletPsbtInfo,
+    WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
 };
 
 /// Lightweight wallet summary for listing and UI
@@ -103,6 +99,79 @@ impl From<WalletCoinControlDto> for WalletCoinControlInfo {
             include_outpoints: value.include_outpoints,
             exclude_outpoints: value.exclude_outpoints,
             confirmed_only: value.confirmed_only,
+        }
+    }
+}
+
+/// DTO strategy used when automatically selecting UTXOs for consolidation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WalletConsolidationStrategyDto {
+    SmallestFirst,
+    LargestFirst,
+    OldestFirst,
+}
+
+impl From<WalletConsolidationStrategyDto> for wallet_core::model::WalletConsolidationStrategy {
+    fn from(value: WalletConsolidationStrategyDto) -> Self {
+        match value {
+            WalletConsolidationStrategyDto::SmallestFirst => {
+                wallet_core::model::WalletConsolidationStrategy::SmallestFirst
+            }
+            WalletConsolidationStrategyDto::LargestFirst => {
+                wallet_core::model::WalletConsolidationStrategy::LargestFirst
+            }
+            WalletConsolidationStrategyDto::OldestFirst => {
+                wallet_core::model::WalletConsolidationStrategy::OldestFirst
+            }
+        }
+    }
+}
+
+impl std::str::FromStr for WalletConsolidationStrategyDto {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "smallest-first" => Ok(Self::SmallestFirst),
+            "largest-first" => Ok(Self::LargestFirst),
+            "oldest-first" => Ok(Self::OldestFirst),
+            other => Err(format!(
+                "invalid consolidation strategy '{}'; expected one of: smallest-first, largest-first, oldest-first",
+                other
+            )),
+        }
+    }
+}
+
+/// Consolidation options for wallet-internal UTXO consolidation flows
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WalletConsolidationDto {
+    pub include_outpoints: Vec<String>,
+    pub exclude_outpoints: Vec<String>,
+    pub confirmed_only: bool,
+    pub max_input_count: Option<usize>,
+
+    pub min_input_count: Option<usize>,
+    pub min_utxo_value_sat: Option<u64>,
+    pub max_utxo_value_sat: Option<u64>,
+    pub max_fee_pct_of_input_value: Option<u8>,
+    pub strategy: Option<WalletConsolidationStrategyDto>,
+}
+
+// Conversion into core model
+impl From<WalletConsolidationDto> for WalletConsolidationInfo {
+    fn from(value: WalletConsolidationDto) -> Self {
+        Self {
+            include_outpoints: value.include_outpoints,
+            exclude_outpoints: value.exclude_outpoints,
+            confirmed_only: value.confirmed_only,
+            max_input_count: value.max_input_count,
+            min_input_count: value.min_input_count,
+            min_utxo_value_sat: value.min_utxo_value_sat,
+            max_utxo_value_sat: value.max_utxo_value_sat,
+            max_fee_pct_of_input_value: value.max_fee_pct_of_input_value,
+            strategy: value.strategy.map(Into::into),
         }
     }
 }
@@ -244,7 +313,9 @@ pub enum SyncBackendDto {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum BroadcastBackendDto {
-    Esplora { url: String },
+    Esplora {
+        url: String,
+    },
     Rpc {
         url: String,
         rpc_user: String,

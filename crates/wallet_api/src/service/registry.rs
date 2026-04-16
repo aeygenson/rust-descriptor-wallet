@@ -1,4 +1,4 @@
-use crate::{ WalletApiResult};
+use crate::WalletApiResult;
 use wallet_storage::WalletStorage;
 
 use crate::model::{WalletDetailsDto, WalletSummaryDto};
@@ -18,43 +18,34 @@ pub async fn list_wallets(storage: &WalletStorage) -> WalletApiResult<Vec<Wallet
 }
 
 /// Import wallet from JSON file
-pub async fn import_wallet(
-    storage: &WalletStorage,
-    file_path: &str,
-) -> WalletApiResult<()> {
+pub async fn import_wallet(storage: &WalletStorage, file_path: &str) -> WalletApiResult<()> {
     storage.import_wallet_from_file(file_path).await?;
     Ok(())
 }
 
 /// Delete wallet by name
-pub async fn delete_wallet(
-    storage: &WalletStorage,
-    name: &str,
-) -> WalletApiResult<()> {
+pub async fn delete_wallet(storage: &WalletStorage, name: &str) -> WalletApiResult<()> {
     storage.delete_wallet(name).await?;
     Ok(())
 }
 
 /// Get wallet details
-pub async fn get_wallet(
-    storage: &WalletStorage,
-    name: &str,
-) -> WalletApiResult<WalletDetailsDto> {
+pub async fn get_wallet(storage: &WalletStorage, name: &str) -> WalletApiResult<WalletDetailsDto> {
     let wallet = storage.get_wallet_by_name(name).await?;
 
-    let sync_backend = wallet
-        .parse_sync_backend()
-        .map_err(|e| crate::WalletApiError::InvalidInput(format!(
+    let sync_backend = wallet.parse_sync_backend().map_err(|e| {
+        crate::WalletApiError::InvalidInput(format!(
             "invalid sync backend for wallet '{}': {}",
             name, e
-        )))?;
+        ))
+    })?;
 
-    let broadcast_backend = wallet
-        .parse_broadcast_backend()
-        .map_err(|e| crate::WalletApiError::InvalidInput(format!(
+    let broadcast_backend = wallet.parse_broadcast_backend().map_err(|e| {
+        crate::WalletApiError::InvalidInput(format!(
             "invalid broadcast backend for wallet '{}': {}",
             name, e
-        )))?;
+        ))
+    })?;
 
     Ok(WalletDetailsDto {
         name: wallet.name,

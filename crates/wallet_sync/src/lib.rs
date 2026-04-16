@@ -1,8 +1,8 @@
 pub mod error;
 mod service;
 
-pub mod broadcast;
 pub mod backend;
+pub mod broadcast;
 pub mod model;
 
 pub use error::WalletSyncError;

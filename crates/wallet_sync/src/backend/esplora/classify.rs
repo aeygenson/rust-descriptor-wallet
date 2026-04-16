@@ -11,11 +11,12 @@ pub(super) fn classify_esplora_rejection(
 ) -> WalletSyncError {
     let normalized = body.to_ascii_lowercase();
 
-    debug!("classifying esplora rejection: status = {}, body = {}", status, body);
+    debug!(
+        "classifying esplora rejection: status = {}, body = {}",
+        status, body
+    );
 
-    if normalized.contains("txn-mempool-conflict")
-        || normalized.contains("mempool conflict")
-    {
+    if normalized.contains("txn-mempool-conflict") || normalized.contains("mempool conflict") {
         warn!("classified as mempool conflict: {}", body);
         return WalletSyncError::BroadcastMempoolConflict(body.to_string());
     }
@@ -46,7 +47,10 @@ pub(super) fn classify_esplora_rejection(
         return WalletSyncError::BroadcastInsufficientFee(body.to_string());
     }
 
-    warn!("classified as unknown esplora failure: status = {}, body = {}", status, body);
+    warn!(
+        "classified as unknown esplora failure: status = {}, body = {}",
+        status, body
+    );
     WalletSyncError::BroadcastFailed(format!(
         "esplora rejected transaction: status={} body={}",
         status, body

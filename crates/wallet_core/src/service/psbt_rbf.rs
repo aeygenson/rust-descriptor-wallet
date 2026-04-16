@@ -1,14 +1,15 @@
-use super::{psbt_common::{is_rbf_enabled, parse_txid}, *};
+use super::{
+    psbt_common::{is_rbf_enabled, parse_txid},
+    *,
+};
 
 use bdk_wallet::{
     bitcoin::{FeeRate, Sequence, Txid},
     Wallet,
 };
 
-use crate::{WalletCoreResult,
-    error::WalletCoreError,
-    model::WalletPsbtInfo,
-    types::FeeRateSatPerVb,
+use crate::{
+    error::WalletCoreError, model::WalletPsbtInfo, types::FeeRateSatPerVb, WalletCoreResult,
 };
 
 /// Canonical opt-in RBF sequence used by the wallet when creating replaceable
@@ -33,13 +34,16 @@ impl WalletService {
     ) -> WalletCoreResult<WalletPsbtInfo> {
         let txid = parse_txid(txid)?;
 
-        let tx_node = self.wallet
+        let tx_node = self
+            .wallet
             .transactions()
             .find(|canonical_tx| canonical_tx.tx_node.txid == txid)
             .ok_or(WalletCoreError::TransactionNotFound(txid.to_string()))?;
 
         if tx_node.chain_position.is_confirmed() {
-            return Err(WalletCoreError::TransactionAlreadyConfirmed(txid.to_string()));
+            return Err(WalletCoreError::TransactionAlreadyConfirmed(
+                txid.to_string(),
+            ));
         }
 
         let original_tx = &tx_node.tx_node.tx;
@@ -62,12 +66,12 @@ impl WalletService {
             });
         }
 
-        let mut builder = self.wallet
-            .build_fee_bump(txid)
-            .map_err(|source| WalletCoreError::FeeBumpBuildFailed {
+        let mut builder = self.wallet.build_fee_bump(txid).map_err(|source| {
+            WalletCoreError::FeeBumpBuildFailed {
                 txid: txid.to_string(),
                 reason: source.to_string(),
-            })?;
+            }
+        })?;
 
         // Preserve explicit opt-in RBF semantics on the replacement transaction.
         builder.set_exact_sequence(RBF_SEQUENCE);
@@ -81,9 +85,11 @@ impl WalletService {
             })?;
 
         let original_txid = txid.to_string();
-        let mut info = WalletPsbtInfo::from_psbt_minimal(psbt).map_err(|source| WalletCoreError::PsbtConversionFailed {
-            txid: original_txid.clone(),
-            reason: source.to_string(),
+        let mut info = WalletPsbtInfo::from_psbt_minimal(psbt).map_err(|source| {
+            WalletCoreError::PsbtConversionFailed {
+                txid: original_txid.clone(),
+                reason: source.to_string(),
+            }
         })?;
         info.original_txid = Some(original_txid);
         Ok(info)
@@ -120,7 +126,9 @@ fn estimate_original_fee_rate_sat_per_vb(
 
     let vbytes = tx_node.tx_node.tx.vsize() as f32;
     if vbytes <= 0.0 {
-        return Err(WalletCoreError::TransactionVsizeUnavailable(txid.to_string()));
+        return Err(WalletCoreError::TransactionVsizeUnavailable(
+            txid.to_string(),
+        ));
     }
 
     let sat_per_vb = (fee.to_sat() as f32 / vbytes).ceil() as u64;
@@ -134,7 +142,9 @@ fn estimate_original_fee_rate_sat_per_vb(
 mod tests {
     use super::*;
     use crate::types::FeeRateSatPerVb;
-    use bdk_wallet::bitcoin::{absolute, transaction, Amount, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Witness};
+    use bdk_wallet::bitcoin::{
+        absolute, transaction, Amount, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Witness,
+    };
 
     fn build_tx_with_sequence(sequence: Sequence) -> Transaction {
         Transaction {

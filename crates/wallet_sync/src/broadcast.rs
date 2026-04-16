@@ -19,8 +19,8 @@ pub trait TxBroadcaster {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::esplora::broadcast::EsploraBroadcaster;
     use crate::backend::core_rpc::broadcast::CoreRpcBroadcaster;
+    use crate::backend::esplora::broadcast::EsploraBroadcaster;
     use crate::backend::mock::broadcast::{FailingBroadcaster, NoopBroadcaster};
     use crate::WalletSyncError;
     use std::io::{Read, Write};
@@ -120,11 +120,7 @@ mod tests {
             stream.flush().expect("flush response");
         });
 
-        let broadcaster = CoreRpcBroadcaster::new(
-            format!("http://{}", addr),
-            "bitcoin",
-            "bitcoin",
-        );
+        let broadcaster = CoreRpcBroadcaster::new(format!("http://{}", addr), "bitcoin", "bitcoin");
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
         assert!(result.is_ok());

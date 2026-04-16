@@ -6,9 +6,10 @@ use anyhow::Result;
 pub fn parse_regtest_address(
     s: &str,
 ) -> Result<bitcoin::Address<bitcoin::address::NetworkChecked>> {
-    Ok(s
-        .parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()?
-        .require_network(bitcoin::Network::Regtest)?)
+    Ok(
+        s.parse::<bitcoin::Address<bitcoin::address::NetworkUnchecked>>()?
+            .require_network(bitcoin::Network::Regtest)?,
+    )
 }
 
 /// Parse a transaction id from its string form.
@@ -32,4 +33,3 @@ pub fn decode_psbt_inputs(psbt_base64: &str) -> Result<Vec<String>> {
         .map(|input| input.previous_output.to_string())
         .collect())
 }
-

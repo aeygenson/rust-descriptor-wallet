@@ -107,9 +107,7 @@ pub enum WalletApiError {
 impl From<WalletSyncError> for WalletApiError {
     fn from(e: WalletSyncError) -> Self {
         match e {
-            WalletSyncError::BroadcastTransport(s) => {
-                WalletApiError::BroadcastTransport(s)
-            }
+            WalletSyncError::BroadcastTransport(s) => WalletApiError::BroadcastTransport(s),
             WalletSyncError::BroadcastFailed(s) => {
                 let normalized = s.to_ascii_lowercase();
 
@@ -125,21 +123,13 @@ impl From<WalletSyncError> for WalletApiError {
             WalletSyncError::BroadcastAlreadyConfirmed(s) => {
                 WalletApiError::BroadcastAlreadyConfirmed(s)
             }
-            WalletSyncError::BroadcastMissingInputs(s) => {
-                WalletApiError::BroadcastMissingInputs(s)
-            }
+            WalletSyncError::BroadcastMissingInputs(s) => WalletApiError::BroadcastMissingInputs(s),
             WalletSyncError::BroadcastInsufficientFee(s) => {
                 WalletApiError::BroadcastInsufficientFee(s)
             }
-            WalletSyncError::PsbtNotFinalized => {
-                WalletApiError::PsbtNotFinalized
-            }
-            WalletSyncError::InvalidBackend(s) => {
-                WalletApiError::InvalidBackend(s)
-            }
-            WalletSyncError::BackendUnavailable(s) => {
-                WalletApiError::BackendUnavailable(s)
-            }
+            WalletSyncError::PsbtNotFinalized => WalletApiError::PsbtNotFinalized,
+            WalletSyncError::InvalidBackend(s) => WalletApiError::InvalidBackend(s),
+            WalletSyncError::BackendUnavailable(s) => WalletApiError::BackendUnavailable(s),
             WalletSyncError::Core(core) => WalletApiError::from(core),
             other => WalletApiError::Sync(other.to_string()),
         }
@@ -226,6 +216,42 @@ impl From<WalletCoreError> for WalletApiError {
                     "coin control insufficient funds: selected={} required={} fee_estimate={}",
                     selected_sat, required_sat, fee_estimate_sat
                 ))
+            }
+            WalletCoreError::ConsolidationTooFewInputs => {
+                WalletApiError::InvalidInput(
+                    "consolidation error: requires at least two eligible UTXOs after applying the current selection and filters".to_string(),
+                )
+            }
+            WalletCoreError::ConsolidationAmountTooSmall => {
+                WalletApiError::InvalidInput(
+                    "consolidation error: selected inputs do not leave a usable consolidation amount after fees".to_string(),
+                )
+            }
+            WalletCoreError::ConsolidationMinInputNotMet { required, actual } => {
+                WalletApiError::InvalidInput(format!(
+                    "consolidation error: minimum input count not met after applying selection and filters: required={} actual={}",
+                    required, actual
+                ))
+            }
+            WalletCoreError::ConsolidationValueFilterMismatch => {
+                WalletApiError::InvalidInput(
+                    "consolidation error: one or more selected inputs do not satisfy the configured value filters".to_string(),
+                )
+            }
+            WalletCoreError::ConsolidationFeeTooHigh {
+                fee_sat,
+                total_input_sat,
+                max_pct,
+            } => {
+                WalletApiError::InvalidInput(format!(
+                    "consolidation error: estimated fee exceeds the configured limit: fee={} total_inputs={} max_pct={}",
+                    fee_sat, total_input_sat, max_pct
+                ))
+            }
+            WalletCoreError::ConsolidationNoEligibleUtxos => {
+                WalletApiError::InvalidInput(
+                    "consolidation error: no eligible UTXOs remain after applying the current filters and strategy".to_string(),
+                )
             }
             other => WalletApiError::Core(other),
         }

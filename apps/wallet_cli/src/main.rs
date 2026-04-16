@@ -1,12 +1,12 @@
 pub mod cli;
 pub mod commands;
 
-use anyhow::Result;
-use clap::Parser;
-use wallet_api::WalletApi;
 use crate::cli::Cli;
 use crate::commands::handle_command;
+use anyhow::Result;
+use clap::Parser;
 use tracing_subscriber::EnvFilter;
+use wallet_api::WalletApi;
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -15,8 +15,8 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
     let api = WalletApi::new().await?;
-    
+
     handle_command(&api, cli.command).await?;
-    
+
     Ok(())
 }

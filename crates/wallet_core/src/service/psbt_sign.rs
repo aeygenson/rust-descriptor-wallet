@@ -52,9 +52,7 @@ impl WalletService {
         }
 
         // New signing API (no SignOptions). Returns whether the PSBT is finalized.
-        let finalized = self
-            .wallet
-            .sign(&mut psbt, Default::default())?;
+        let finalized = self.wallet.sign(&mut psbt, Default::default())?;
 
         for (idx, input) in psbt.inputs.iter().enumerate() {
             debug!(
@@ -108,10 +106,10 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::Network;
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
+    use bitcoin::Network;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -136,10 +134,7 @@ mod tests {
             .as_nanos();
         let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
-        std::env::temp_dir().join(format!(
-            "{}_{}_{}_{}.wallet.db",
-            name, pid, nanos, counter
-        ))
+        std::env::temp_dir().join(format!("{}_{}_{}_{}.wallet.db", name, pid, nanos, counter))
     }
 
     fn signing_config() -> WalletConfig {

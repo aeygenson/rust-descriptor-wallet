@@ -1,9 +1,12 @@
 use crate::{WalletStorageError, WalletStorageResult};
 use dirs::home_dir;
-use sqlx::{sqlite::{SqliteConnectOptions, SqlitePoolOptions}, SqlitePool};
-use std::str::FromStr;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    SqlitePool,
+};
 use std::fs::File;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 pub fn default_app_path() -> WalletStorageResult<PathBuf> {
     let home = home_dir().ok_or(WalletStorageError::HomeDirNotFound)?;

@@ -1,7 +1,7 @@
-use std::path::Path;
 use anyhow::Result;
-use wallet_api::WalletApi;
+use std::path::Path;
 use wallet_api::model::{WalletDetailsDto, WalletSummaryDto};
+use wallet_api::WalletApi;
 
 pub async fn list_wallets(api: &WalletApi) -> Result<()> {
     let wallets: Vec<WalletSummaryDto> = api.list_wallets().await?;

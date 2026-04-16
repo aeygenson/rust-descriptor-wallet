@@ -1,13 +1,16 @@
-use wallet_core::{config::{BroadcastBackendConfig, SyncBackendConfig}, WalletConfig, WalletService};
+use wallet_core::{
+    config::{BroadcastBackendConfig, SyncBackendConfig},
+    WalletConfig, WalletService,
+};
 
 use crate::backend::{
     core_rpc::broadcast::CoreRpcBroadcaster,
-    esplora::{broadcast::EsploraBroadcaster, sync::sync_wallet_esplora},
     electrum::sync::sync_wallet_electrum,
+    esplora::{broadcast::EsploraBroadcaster, sync::sync_wallet_esplora},
     mock::broadcast::NoopBroadcaster,
 };
-use crate::model::{BackendProfile, BroadcastBackendKind, SyncBackendKind};
 use crate::broadcast::TxBroadcaster;
+use crate::model::{BackendProfile, BroadcastBackendKind, SyncBackendKind};
 use crate::WalletSyncResult;
 use tracing::{debug, info, warn};
 
@@ -62,11 +65,7 @@ impl WalletSyncService {
         BackendProfile::new(sync, broadcast)
     }
 
-    pub fn broadcast_tx_hex(
-        &self,
-        config: &WalletConfig,
-        tx_hex: &str,
-    ) -> WalletSyncResult<()> {
+    pub fn broadcast_tx_hex(&self, config: &WalletConfig, tx_hex: &str) -> WalletSyncResult<()> {
         let profile = self.backend_profile(config);
         info!(
             broadcast = ?profile.broadcast_label(),

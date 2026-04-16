@@ -1,13 +1,9 @@
-use wallet_core::{
-    config::SyncBackendConfig,
-    WalletConfig, WalletService,
-};
+use wallet_core::{config::SyncBackendConfig, WalletConfig, WalletService};
 
-#[cfg(feature = "electrum")]
-use tracing::{debug, info};
 #[cfg(not(feature = "electrum"))]
 use tracing::warn;
-
+#[cfg(feature = "electrum")]
+use tracing::{debug, info};
 
 use crate::{WalletSyncError, WalletSyncResult};
 
@@ -46,8 +42,8 @@ pub(crate) async fn sync_wallet_electrum(
     const BATCH_SIZE: usize = 50;
     const FETCH_PREV_TXOUTS: bool = false;
 
-    let client = Client::new(url)
-        .map_err(|e| WalletSyncError::BackendUnavailable(e.to_string()))?;
+    let client =
+        Client::new(url).map_err(|e| WalletSyncError::BackendUnavailable(e.to_string()))?;
     debug!("electrum client created");
     let bdk_client = BdkElectrumClient::new(client);
 
@@ -78,7 +74,10 @@ pub(crate) async fn sync_wallet_electrum(
     config: &WalletConfig,
 ) -> WalletSyncResult<()> {
     let url = electrum_url_from_config(config)?;
-    warn!("electrum backend requested but feature is disabled: {}", url);
+    warn!(
+        "electrum backend requested but feature is disabled: {}",
+        url
+    );
     Err(WalletSyncError::BackendUnavailable(format!(
         "electrum backend is configured for '{}' but wallet_sync was built without the 'electrum' feature",
         url
@@ -90,9 +89,7 @@ mod tests {
     use super::*;
     use bitcoin::Network;
     use std::path::PathBuf;
-    use wallet_core::config::{
-        BroadcastBackendConfig, WalletBackendConfig, WalletDescriptors,
-    };
+    use wallet_core::config::{BroadcastBackendConfig, WalletBackendConfig, WalletDescriptors};
 
     fn electrum_config() -> WalletConfig {
         WalletConfig {
@@ -154,10 +151,13 @@ mod tests {
     #[tokio::test]
     async fn fallback_returns_backend_unavailable_for_electrum_config() {
         let config = electrum_config();
-        let mut wallet = wallet_core::WalletService::load_or_create(&config)
-            .expect("test wallet should load");
+        let mut wallet =
+            wallet_core::WalletService::load_or_create(&config).expect("test wallet should load");
 
         let result = sync_wallet_electrum(&mut wallet, &config).await;
-        assert!(matches!(result, Err(WalletSyncError::BackendUnavailable(_))));
+        assert!(matches!(
+            result,
+            Err(WalletSyncError::BackendUnavailable(_))
+        ));
     }
 }

@@ -15,7 +15,9 @@ pub enum SyncBackendConfig {
 
 #[derive(Debug, Clone)]
 pub enum BroadcastBackendConfig {
-    Esplora { url: String },
+    Esplora {
+        url: String,
+    },
     Rpc {
         url: String,
         rpc_user: String,

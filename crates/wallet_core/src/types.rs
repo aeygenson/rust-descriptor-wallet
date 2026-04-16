@@ -133,7 +133,6 @@ pub enum WalletKeychain {
     Internal,
 }
 
-
 impl WalletKeychain {
     pub fn as_str(self) -> &'static str {
         match self {
@@ -151,8 +150,6 @@ pub enum TxDirection {
     #[default]
     SelfTransfer,
 }
-
-
 
 impl TxDirection {
     pub fn as_str(self) -> &'static str {

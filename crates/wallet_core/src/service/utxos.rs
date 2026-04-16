@@ -83,10 +83,10 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::Network;
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
+    use bitcoin::Network;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -158,7 +158,10 @@ mod tests {
             }
             // value uses AmountSat, so non-negativity is enforced by type
             assert!(
-                matches!(u.keychain, WalletKeychain::External | WalletKeychain::Internal),
+                matches!(
+                    u.keychain,
+                    WalletKeychain::External | WalletKeychain::Internal
+                ),
                 "unexpected keychain"
             );
         }

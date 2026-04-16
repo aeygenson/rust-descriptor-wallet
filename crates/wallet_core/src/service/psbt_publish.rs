@@ -1,7 +1,7 @@
 use bitcoin::consensus::encode::serialize_hex;
 use tracing::{debug, info};
 
-use crate::model::{WalletFinalizedTxInfo};
+use crate::model::WalletFinalizedTxInfo;
 use crate::service::psbt_common::{extract_finalized_tx, parse_psbt};
 use crate::WalletCoreResult;
 
@@ -68,10 +68,7 @@ mod tests {
         let psbt = parse_psbt(UNSIGNED_TEST_PSBT).unwrap();
         let result = extract_finalized_tx(&psbt);
 
-        assert!(matches!(
-            result,
-            Err(WalletCoreError::PsbtNotFinalized)
-        ));
+        assert!(matches!(result, Err(WalletCoreError::PsbtNotFinalized)));
     }
 
     #[test]
@@ -124,8 +121,7 @@ mod tests {
             psbt_base64: FINALIZED_TEST_PSBT.to_string(),
             modified: true,
             finalized: true,
-            txid: "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
-                .to_string(),
+            txid: "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d".to_string(),
         };
 
         assert!(matches!(

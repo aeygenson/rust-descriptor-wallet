@@ -1,8 +1,8 @@
-pub mod error;
 pub mod config;
 pub mod core;
-pub mod service;
+pub mod error;
 pub mod model;
+pub mod service;
 pub mod types;
 
 pub use config::WalletConfig;

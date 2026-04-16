@@ -1,5 +1,3 @@
-
-
 /// Shared backend-facing models for the `wallet_sync` crate.
 ///
 /// These are intentionally small, backend-agnostic data structures used by the

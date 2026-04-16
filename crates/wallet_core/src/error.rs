@@ -90,10 +90,7 @@ pub enum WalletCoreError {
     CpfpInsufficientValue(String),
 
     #[error("cpfp transaction build failed for parent {parent_txid}: {reason}")]
-    CpfpBuildFailed {
-        parent_txid: String,
-        reason: String,
-    },
+    CpfpBuildFailed { parent_txid: String, reason: String },
 
     #[error("coin control outpoint not found in wallet: {0}")]
     CoinControlOutpointNotFound(String),
@@ -126,12 +123,36 @@ pub enum WalletCoreError {
     #[error("send-max/sweep amount is too small after fees")]
     SendMaxAmountTooSmall,
 
+    #[error("consolidation requires at least two eligible UTXOs")]
+    ConsolidationTooFewInputs,
+
+    #[error("consolidation amount is too small after fees")]
+    ConsolidationAmountTooSmall,
+
+    #[error(
+        "consolidation does not meet minimum input count: required={required}, actual={actual}"
+    )]
+    ConsolidationMinInputNotMet { required: usize, actual: usize },
+
+    #[error("consolidation input value outside allowed range")]
+    ConsolidationValueFilterMismatch,
+
+    #[error("consolidation fee exceeds allowed percentage: fee={fee_sat}, total_inputs={total_input_sat}, max_pct={max_pct}")]
+    ConsolidationFeeTooHigh {
+        fee_sat: u64,
+        total_input_sat: u64,
+        max_pct: u8,
+    },
+
+    #[error("consolidation produced no eligible UTXOs after applying filters")]
+    ConsolidationNoEligibleUtxos,
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
 
     #[error("invalid psbt: {0}")]
     InvalidPsbt(String),
-    
+
     #[allow(deprecated)]
     #[error(transparent)]
     SignPsbtFailed(#[from] bdk_wallet::signer::SignerError),

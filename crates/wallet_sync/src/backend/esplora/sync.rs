@@ -1,8 +1,5 @@
 use bdk_esplora::{esplora_client::Builder, EsploraExt};
-use wallet_core::{
-    config::SyncBackendConfig,
-    WalletConfig, WalletService,
-};
+use wallet_core::{config::SyncBackendConfig, WalletConfig, WalletService};
 
 use crate::{WalletSyncError, WalletSyncResult};
 
@@ -26,27 +23,30 @@ pub(crate) async fn sync_wallet_esplora(
             )));
         }
     };
-    
+
     info!("starting esplora sync");
     debug!("esplora_url = {}", url);
-    
+
     const PARALLEL_REQUESTS: usize = 5;
     const STOP_GAP: usize = 25;
-    
+
     debug!("creating esplora client");
     let client = Builder::new(url).build_blocking();
     let request = wallet.wallet_mut().start_full_scan().build();
-    debug!("starting full scan: parallel = {}, stop_gap = {}", PARALLEL_REQUESTS, STOP_GAP);
+    debug!(
+        "starting full scan: parallel = {}, stop_gap = {}",
+        PARALLEL_REQUESTS, STOP_GAP
+    );
     let update = client
         .full_scan(request, PARALLEL_REQUESTS, STOP_GAP)
         .map_err(|e| {
             warn!("esplora full_scan failed: {}", e);
             WalletSyncError::SyncFailed(e.to_string())
         })?;
-    
+
     wallet.wallet_mut().apply_update(update)?;
     info!("esplora sync completed successfully");
     wallet.persist()?;
-    
+
     Ok(())
 }

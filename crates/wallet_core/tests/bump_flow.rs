@@ -1,5 +1,3 @@
-
-
 use wallet_core::types::FeeRateSatPerVb;
 
 #[test]

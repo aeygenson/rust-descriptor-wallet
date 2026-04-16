@@ -1,3 +1,8 @@
+fn parse_consolidation_strategy(
+    s: &str,
+) -> Result<wallet_api::model::WalletConsolidationStrategyDto, String> {
+    s.parse()
+}
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -208,6 +213,98 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+    },
+    /// Create a wallet-internal consolidation PSBT.
+    CreateConsolidationPsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+
+        #[arg(long = "max-input-count")]
+        /// Optional cap on how many inputs may be included in the consolidation.
+        max_input_count: Option<usize>,
+
+        #[arg(long = "min-input-count")]
+        /// Optional minimum number of inputs required for consolidation.
+        min_input_count: Option<usize>,
+
+        #[arg(long = "min-utxo-value-sat")]
+        /// Optional lower bound for eligible UTXO values in satoshis.
+        min_utxo_value_sat: Option<u64>,
+
+        #[arg(long = "max-utxo-value-sat")]
+        /// Optional upper bound for eligible UTXO values in satoshis.
+        max_utxo_value_sat: Option<u64>,
+
+        #[arg(long = "max-fee-pct")]
+        /// Optional cap on fee as a percentage of total selected input value.
+        max_fee_pct_of_input_value: Option<u8>,
+
+        #[arg(long = "strategy", value_parser = parse_consolidation_strategy)]
+        /// Optional automatic candidate-selection strategy.
+        strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+    },
+    /// Create, sign, and broadcast a wallet-internal consolidation transaction.
+    ConsolidatePsbt {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long = "fee-rate")]
+        /// Fee rate in sat/vB.
+        fee_rate: u64,
+
+        #[arg(long = "include")]
+        /// Explicit outpoints to include (txid:vout). Can be repeated.
+        include: Vec<String>,
+
+        #[arg(long = "exclude")]
+        /// Explicit outpoints to exclude (txid:vout). Can be repeated.
+        exclude: Vec<String>,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
+
+        #[arg(long = "max-input-count")]
+        /// Optional cap on how many inputs may be included in the consolidation.
+        max_input_count: Option<usize>,
+
+        #[arg(long = "min-input-count")]
+        /// Optional minimum number of inputs required for consolidation.
+        min_input_count: Option<usize>,
+
+        #[arg(long = "min-utxo-value-sat")]
+        /// Optional lower bound for eligible UTXO values in satoshis.
+        min_utxo_value_sat: Option<u64>,
+
+        #[arg(long = "max-utxo-value-sat")]
+        /// Optional upper bound for eligible UTXO values in satoshis.
+        max_utxo_value_sat: Option<u64>,
+
+        #[arg(long = "max-fee-pct")]
+        /// Optional cap on fee as a percentage of total selected input value.
+        max_fee_pct_of_input_value: Option<u8>,
+
+        #[arg(long = "strategy", value_parser = parse_consolidation_strategy)]
+        /// Optional automatic candidate-selection strategy.
+        strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
     },
     /// Sign an existing PSBT.
     SignPsbt {

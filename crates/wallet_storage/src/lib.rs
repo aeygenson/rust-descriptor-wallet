@@ -71,9 +71,5 @@ impl WalletStorage {
 
 pub use db::{default_app_path, default_db_path, default_wallet_db_path};
 pub use repository::{
-    create_wallet,
-    delete_wallet,
-    get_wallet_by_name,
-    import_wallet_from_file,
-    list_wallets,
+    create_wallet, delete_wallet, get_wallet_by_name, import_wallet_from_file, list_wallets,
 };

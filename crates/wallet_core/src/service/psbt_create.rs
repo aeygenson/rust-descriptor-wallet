@@ -2,15 +2,15 @@ use std::str::FromStr;
 
 use std::collections::HashSet;
 
-use bitcoin::{Address, Amount, Network, Sequence};
-use bitcoin::FeeRate;
 use bdk_wallet::KeychainKind;
+use bitcoin::FeeRate;
+use bitcoin::{Address, Amount, Network, Sequence};
 use tracing::{debug, info};
 
+use super::*;
 use crate::model::{WalletCoinControlInfo, WalletPsbtInfo, WalletSendAmountMode};
 use crate::types::{AmountSat, FeeRateSatPerVb};
 use crate::WalletCoreResult;
-use super::*;
 
 impl WalletService {
     /// Create an unsigned PSBT for a send flow.
@@ -162,7 +162,8 @@ impl WalletService {
         // normally reject invalid values. Tests can intentionally construct
         // zero-valued wrappers directly, and the core method should still
         // return precise domain errors.
-        if matches!(send_amount_mode, WalletSendAmountMode::Fixed(amount_sat) if amount_sat.as_u64() == 0) {
+        if matches!(send_amount_mode, WalletSendAmountMode::Fixed(amount_sat) if amount_sat.as_u64() == 0)
+        {
             return Err(crate::WalletCoreError::InvalidAmount);
         }
 
@@ -188,7 +189,9 @@ impl WalletService {
         };
 
         let excluded_inputs = match coin_control.as_ref() {
-            Some(cc) if !cc.exclude_outpoints.is_empty() => self.resolve_coin_control_exclusions(cc)?,
+            Some(cc) if !cc.exclude_outpoints.is_empty() => {
+                self.resolve_coin_control_exclusions(cc)?
+            }
             _ => Vec::new(),
         };
 
@@ -222,11 +225,13 @@ impl WalletService {
                     let required_sat = amount_sat.as_u64() + fee_estimate_sat;
 
                     if selected_total_sat < amount_sat.as_u64() {
-                        return Err(crate::WalletCoreError::CoinControlInsufficientSelectedFunds {
-                            selected_sat: selected_total_sat,
-                            required_sat,
-                            fee_estimate_sat,
-                        });
+                        return Err(
+                            crate::WalletCoreError::CoinControlInsufficientSelectedFunds {
+                                selected_sat: selected_total_sat,
+                                required_sat,
+                                fee_estimate_sat,
+                            },
+                        );
                     }
 
                     if selected_total_sat < required_sat {
@@ -264,7 +269,10 @@ impl WalletService {
 
         match send_amount_mode {
             WalletSendAmountMode::Fixed(amount_sat) => {
-                builder.add_recipient(recipient_script.clone(), Amount::from_sat(amount_sat.as_u64()));
+                builder.add_recipient(
+                    recipient_script.clone(),
+                    Amount::from_sat(amount_sat.as_u64()),
+                );
             }
             WalletSendAmountMode::Max => {
                 builder.drain_wallet();
@@ -314,7 +322,12 @@ impl WalletService {
         let total_input_sat: u64 = psbt
             .inputs
             .iter()
-            .filter_map(|input| input.witness_utxo.as_ref().map(|txout| txout.value.to_sat()))
+            .filter_map(|input| {
+                input
+                    .witness_utxo
+                    .as_ref()
+                    .map(|txout| txout.value.to_sat())
+            })
             .sum();
 
         let total_output_sat: u64 = psbt
@@ -424,19 +437,19 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::Network;
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
+    use crate::types::{AmountSat, FeeRateSatPerVb};
+    use crate::WalletConfig;
+    use bitcoin::absolute::LockTime;
+    use bitcoin::psbt::Psbt;
+    use bitcoin::transaction::Version;
+    use bitcoin::Network;
+    use bitcoin::{OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid, Witness};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
-    use crate::WalletConfig;
-    use crate::types::{AmountSat, FeeRateSatPerVb};
-    use bitcoin::absolute::LockTime;
-    use bitcoin::{OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Txid, Witness};
-    use bitcoin::transaction::Version;
-    use bitcoin::psbt::Psbt;
 
     static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -590,47 +603,56 @@ mod tests {
     fn create_psbt_fails_for_zero_amount() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 0, 1, true);
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            0,
+            1,
+            true,
+        );
 
-        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidAmount));
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::InvalidAmount)
+        });
     }
-
 
     #[test]
     fn create_psbt_fails_for_zero_fee_rate() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 0, true);
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            0,
+            true,
+        );
 
-        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::InvalidFeeRate)
+        });
     }
 
     #[test]
     fn create_send_max_psbt_fails_for_zero_fee_rate() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_send_max_psbt_with(
-            &mut wallet,
-            config.network,
-            valid_signet_address(),
-            0,
-            true,
-        );
+        let result =
+            create_send_max_psbt_with(&mut wallet, config.network, valid_signet_address(), 0, true);
 
-        assert_create_psbt_err(result, |err| matches!(err, crate::WalletCoreError::InvalidFeeRate));
+        assert_create_psbt_err(result, |err| {
+            matches!(err, crate::WalletCoreError::InvalidFeeRate)
+        });
     }
 
     #[test]
     fn create_send_max_psbt_fails_for_insufficient_funds() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_send_max_psbt_with(
-            &mut wallet,
-            config.network,
-            valid_signet_address(),
-            1,
-            true,
-        );
+        let result =
+            create_send_max_psbt_with(&mut wallet, config.network, valid_signet_address(), 1, true);
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
@@ -641,13 +663,8 @@ mod tests {
     fn create_send_max_psbt_populates_selected_inputs_field_when_transaction_build_succeeds() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_send_max_psbt_with(
-            &mut wallet,
-            config.network,
-            valid_signet_address(),
-            1,
-            true,
-        );
+        let result =
+            create_send_max_psbt_with(&mut wallet, config.network, valid_signet_address(), 1, true);
 
         match result {
             Ok(psbt_info) => {
@@ -673,7 +690,14 @@ mod tests {
     fn create_psbt_returns_invalid_destination_address_error() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, "invalid_address", 1000, 1, true);
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            "invalid_address",
+            1000,
+            1,
+            true,
+        );
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::InvalidDestinationAddress(_))
@@ -684,19 +708,32 @@ mod tests {
     fn create_psbt_returns_destination_network_mismatch_error() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_mainnet_address(), 1000, 1, true);
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_mainnet_address(),
+            1000,
+            1,
+            true,
+        );
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::DestinationNetworkMismatch(_))
         });
     }
 
-
     #[test]
     fn create_psbt_fails_for_insufficient_funds() {
         let (config, mut wallet) = load_test_wallet();
 
-        let result = create_psbt_with(&mut wallet, config.network, valid_signet_address(), 1000, 1, true);
+        let result = create_psbt_with(
+            &mut wallet,
+            config.network,
+            valid_signet_address(),
+            1000,
+            1,
+            true,
+        );
 
         assert_create_psbt_err(result, |err| {
             matches!(err, crate::WalletCoreError::PsbtBuildFailed(_))
@@ -746,9 +783,10 @@ mod tests {
             },
         );
 
-        assert_create_psbt_err(result, |err| {
-            matches!(err, crate::WalletCoreError::CoinControlConflict(conflict) if conflict == outpoint)
-        });
+        assert_create_psbt_err(
+            result,
+            |err| matches!(err, crate::WalletCoreError::CoinControlConflict(conflict) if conflict == outpoint),
+        );
     }
 
     #[test]
@@ -771,9 +809,10 @@ mod tests {
             },
         );
 
-        assert_create_psbt_err(result, |err| {
-            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
-        });
+        assert_create_psbt_err(
+            result,
+            |err| matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint),
+        );
     }
 
     #[test]
@@ -795,9 +834,10 @@ mod tests {
             },
         );
 
-        assert_create_psbt_err(result, |err| {
-            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
-        });
+        assert_create_psbt_err(
+            result,
+            |err| matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint),
+        );
     }
 
     #[test]
@@ -831,27 +871,31 @@ mod tests {
 
     #[test]
     fn from_psbt_minimal_preserves_selected_input_outpoints() {
-        let txid1: Txid =
-            "0000000000000000000000000000000000000000000000000000000000000001"
-                .parse()
-                .expect("valid txid");
-        let txid2: Txid =
-            "0000000000000000000000000000000000000000000000000000000000000002"
-                .parse()
-                .expect("valid txid");
+        let txid1: Txid = "0000000000000000000000000000000000000000000000000000000000000001"
+            .parse()
+            .expect("valid txid");
+        let txid2: Txid = "0000000000000000000000000000000000000000000000000000000000000002"
+            .parse()
+            .expect("valid txid");
 
         let unsigned_tx = Transaction {
             version: Version(2),
             lock_time: LockTime::ZERO,
             input: vec![
                 TxIn {
-                    previous_output: OutPoint { txid: txid1, vout: 0 },
+                    previous_output: OutPoint {
+                        txid: txid1,
+                        vout: 0,
+                    },
                     script_sig: ScriptBuf::new(),
                     sequence: Sequence(0xFFFFFFFD),
                     witness: Witness::default(),
                 },
                 TxIn {
-                    previous_output: OutPoint { txid: txid2, vout: 1 },
+                    previous_output: OutPoint {
+                        txid: txid2,
+                        vout: 1,
+                    },
                     script_sig: ScriptBuf::new(),
                     sequence: Sequence(0xFFFFFFFD),
                     witness: Witness::default(),
@@ -864,7 +908,8 @@ mod tests {
         };
 
         let psbt = Psbt::from_unsigned_tx(unsigned_tx).expect("psbt should build from unsigned tx");
-        let info = WalletPsbtInfo::from_psbt_minimal(psbt).expect("minimal PSBT conversion should succeed");
+        let info = WalletPsbtInfo::from_psbt_minimal(psbt)
+            .expect("minimal PSBT conversion should succeed");
 
         assert_eq!(info.selected_utxo_count, 2);
         assert_eq!(info.input_count, 2);
@@ -961,9 +1006,10 @@ mod tests {
             },
         );
 
-        assert_create_psbt_err(result, |err| {
-            matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint)
-        });
+        assert_create_psbt_err(
+            result,
+            |err| matches!(err, crate::WalletCoreError::CoinControlOutpointNotFound(missing) if missing == outpoint),
+        );
     }
 
     #[test]
@@ -971,8 +1017,7 @@ mod tests {
         let (config, mut wallet) = load_test_wallet();
         let coin_control = WalletCoinControlInfo {
             include_outpoints: vec![
-                "0000000000000000000000000000000000000000000000000000000000000001:0"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
             ],
             exclude_outpoints: Vec::new(),
             confirmed_only: false,
@@ -1007,4 +1052,5 @@ mod tests {
             }
             (left, right) => panic!("expected sweep and strict send-max to behave the same, got left={left:?}, right={right:?}"),
         }
-    }}
+    }
+}

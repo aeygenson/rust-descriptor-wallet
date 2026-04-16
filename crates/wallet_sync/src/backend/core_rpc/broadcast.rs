@@ -121,7 +121,10 @@ impl TxBroadcaster for CoreRpcBroadcaster {
                         status, body
                     ));
 
-                    warn!("http error during broadcast: status = {}, body = {}", status, body);
+                    warn!(
+                        "http error during broadcast: status = {}, body = {}",
+                        status, body
+                    );
 
                     if attempt < self.max_retries && Self::should_retry_status(status) {
                         last_error = Some(err);
@@ -304,7 +307,9 @@ mod tests {
                         body.len(),
                         body
                     );
-                    stream.write_all(response.as_bytes()).expect("write 503 response");
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write 503 response");
                 } else {
                     let body = json!({
                         "result": "deadbeef-txid",
@@ -317,14 +322,15 @@ mod tests {
                         body.len(),
                         body
                     );
-                    stream.write_all(response.as_bytes()).expect("write 200 response");
+                    stream
+                        .write_all(response.as_bytes())
+                        .expect("write 200 response");
                 }
                 stream.flush().expect("flush response");
             }
         });
 
-        let broadcaster =
-            CoreRpcBroadcaster::new(format!("http://{}", addr), "bitcoin", "bitcoin");
+        let broadcaster = CoreRpcBroadcaster::new(format!("http://{}", addr), "bitcoin", "bitcoin");
         let result = broadcaster.broadcast_tx_hex("deadbeef");
 
         assert!(result.is_ok(), "unexpected result: {:?}", result);

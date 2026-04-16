@@ -9,7 +9,9 @@ use crate::WalletCoreResult;
 pub struct WalletCore;
 
 impl WalletCore {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Returns true when a descriptor string appears to contain private key
     /// material and therefore should be able to produce a signing keymap.
@@ -50,11 +52,7 @@ impl WalletCore {
     }
 
     /// Convenience helper delegating to the model-layer status enum.
-    pub fn classify_psbt_signing(
-        &self,
-        modified: bool,
-        finalized: bool,
-    ) -> PsbtSigningStatus {
+    pub fn classify_psbt_signing(&self, modified: bool, finalized: bool) -> PsbtSigningStatus {
         match (modified, finalized) {
             (_, true) => PsbtSigningStatus::Finalized,
             (true, false) => PsbtSigningStatus::PartiallySigned,
@@ -89,11 +87,7 @@ mod tests {
     fn validate_signing_descriptors_rejects_watch_only_with_private() {
         let core = WalletCore::new();
 
-        let result = core.validate_signing_descriptors(
-            "wpkh(xprv...)",
-            "wpkh(xprv...)",
-            true,
-        );
+        let result = core.validate_signing_descriptors("wpkh(xprv...)", "wpkh(xprv...)", true);
 
         assert!(matches!(
             result,
@@ -105,11 +99,7 @@ mod tests {
     fn validate_signing_descriptors_rejects_signing_without_private() {
         let core = WalletCore::new();
 
-        let result = core.validate_signing_descriptors(
-            "wpkh(xpub...)",
-            "wpkh(xpub...)",
-            false,
-        );
+        let result = core.validate_signing_descriptors("wpkh(xpub...)", "wpkh(xpub...)", false);
 
         assert!(matches!(
             result,
@@ -121,11 +111,7 @@ mod tests {
     fn validate_signing_descriptors_accepts_valid_signing_wallet() {
         let core = WalletCore::new();
 
-        let result = core.validate_signing_descriptors(
-            "wpkh(xprv...)",
-            "wpkh(xprv...)",
-            false,
-        );
+        let result = core.validate_signing_descriptors("wpkh(xprv...)", "wpkh(xprv...)", false);
 
         assert!(result.is_ok());
     }

@@ -1,9 +1,7 @@
-
-
 use std::sync::Arc;
 
 use crate::api::WalletApi;
-use crate::{ WalletApiResult};
+use crate::WalletApiResult;
 
 use tracing::{debug, info};
 
@@ -25,9 +23,7 @@ pub async fn build_default_api() -> WalletApiResult<WalletApi> {
 
     // Run migrations once on startup
     debug!("running wallet storage migrations");
-    storage
-        .migrate()
-        .await?;
+    storage.migrate().await?;
     debug!("wallet storage migrations complete");
 
     // Sync service (network sync + broadcast backends)

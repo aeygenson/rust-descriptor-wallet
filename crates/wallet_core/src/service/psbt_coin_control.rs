@@ -1,10 +1,9 @@
 use bitcoin::OutPoint;
 use tracing::{debug, info};
 
-use super::psbt_common::parse_outpoint;
-use crate::error::WalletCoreError;
+use super::psbt_common::parse_unique_outpoints;
 use crate::model::WalletCoinControlInfo;
-use crate::{WalletCoreResult, WalletService};
+use crate::{WalletCoreError, WalletCoreResult, WalletService};
 
 impl WalletService {
     /// Resolve and validate explicitly included outpoints.
@@ -28,14 +27,12 @@ impl WalletService {
             return Ok(Vec::new());
         }
 
-        let included = self.parse_unique_outpoints(&coin_control.include_outpoints)?;
-        let excluded = self.parse_unique_outpoints(&coin_control.exclude_outpoints)?;
+        let included = parse_unique_outpoints(&coin_control.include_outpoints)?;
+        let excluded = parse_unique_outpoints(&coin_control.exclude_outpoints)?;
 
         for outpoint in &included {
             if excluded.contains(outpoint) {
-                return Err(WalletCoreError::CoinControlConflict(
-                    outpoint.to_string(),
-                ));
+                return Err(WalletCoreError::CoinControlConflict(outpoint.to_string()));
             }
         }
 
@@ -74,35 +71,7 @@ impl WalletService {
             return Ok(Vec::new());
         }
 
-        self.parse_unique_outpoints(&coin_control.exclude_outpoints)
-    }
-
-    fn parse_unique_outpoints(&self, raw: &[String]) -> WalletCoreResult<Vec<OutPoint>> {
-        let mut parsed = Vec::with_capacity(raw.len());
-
-        for item in raw {
-            let (txid, vout) = parse_outpoint(item).map_err(|e| {
-                WalletCoreError::CoinControlInvalidOutpoint(format!(
-                    "{} ({})",
-                    item, e
-                ))
-            })?;
-
-            let txid = txid.parse().map_err(|e| {
-                WalletCoreError::CoinControlInvalidOutpoint(format!(
-                    "{} ({})",
-                    item, e
-                ))
-            })?;
-
-            let outpoint = OutPoint { txid, vout };
-
-            if !parsed.contains(&outpoint) {
-                parsed.push(outpoint);
-            }
-        }
-
-        Ok(parsed)
+        parse_unique_outpoints(&coin_control.exclude_outpoints)
     }
 }
 
@@ -122,8 +91,7 @@ mod tests {
     fn non_empty_coin_control_is_reported_correctly() {
         let cc = WalletCoinControlInfo {
             include_outpoints: vec![
-                "0000000000000000000000000000000000000000000000000000000000000001:0"
-                    .to_string(),
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
             ],
             exclude_outpoints: Vec::new(),
             confirmed_only: false,

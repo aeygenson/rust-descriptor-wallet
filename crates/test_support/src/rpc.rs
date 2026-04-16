@@ -3,7 +3,9 @@ use bitcoin::{Address, Amount, Txid};
 use bitcoincore_rpc::{Client, RpcApi};
 use tracing::{debug, info};
 
-use crate::bitcoind::{ensure_miner_wallet_loaded, miner_wallet_client, rpc_client, BitcoindConfig};
+use crate::bitcoind::{
+    ensure_miner_wallet_loaded, miner_wallet_client, rpc_client, BitcoindConfig,
+};
 
 /// Create a base RPC client using the default regtest environment settings.
 pub fn client() -> Result<Client> {
@@ -101,16 +103,7 @@ pub fn fund_address(address: &Address, amount_btc: f64) -> Result<Txid> {
 
     info!(address = %checked, amount_btc, "funding regtest address");
     client
-        .send_to_address(
-            &checked,
-            amount,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
+        .send_to_address(&checked, amount, None, None, None, None, None, None)
         .with_context(|| format!("failed to fund address {}", checked))
 }
 

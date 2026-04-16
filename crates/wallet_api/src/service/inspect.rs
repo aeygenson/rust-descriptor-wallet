@@ -1,5 +1,3 @@
-
-
 use crate::model::{WalletTxDto, WalletUtxoDto};
 use crate::WalletApiResult;
 use tokio::task;
@@ -14,10 +12,7 @@ use tracing::{debug, info};
 /// Return wallet transaction history using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
-pub async fn txs(
-    storage: &WalletStorage,
-    name: &str,
-) -> WalletApiResult<Vec<WalletTxDto>> {
+pub async fn txs(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<WalletTxDto>> {
     debug!("api inspect: txs start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
@@ -25,11 +20,7 @@ pub async fn txs(
     let txs: Vec<WalletTxDto> = task::block_in_place(|| {
         let wallet = WalletService::load_or_create(&config)?;
 
-        let txs: Vec<WalletTxDto> = wallet
-            .transactions()
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        let txs: Vec<WalletTxDto> = wallet.transactions().into_iter().map(Into::into).collect();
 
         Ok::<_, crate::WalletApiError>(txs)
     })?;
@@ -42,10 +33,7 @@ pub async fn txs(
 /// Return wallet UTXOs using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
-pub async fn utxos(
-    storage: &WalletStorage,
-    name: &str,
-) -> WalletApiResult<Vec<WalletUtxoDto>> {
+pub async fn utxos(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<WalletUtxoDto>> {
     debug!("api inspect: utxos start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
@@ -53,16 +41,16 @@ pub async fn utxos(
     let utxos: Vec<WalletUtxoDto> = task::block_in_place(|| {
         let wallet = WalletService::load_or_create(&config)?;
 
-        let utxos: Vec<WalletUtxoDto> = wallet
-            .utxos()
-            .into_iter()
-            .map(Into::into)
-            .collect();
+        let utxos: Vec<WalletUtxoDto> = wallet.utxos().into_iter().map(Into::into).collect();
 
         Ok::<_, crate::WalletApiError>(utxos)
     })?;
 
-    info!("api inspect: utxos success name={} count={}", name, utxos.len());
+    info!(
+        "api inspect: utxos success name={} count={}",
+        name,
+        utxos.len()
+    );
 
     Ok(utxos)
 }

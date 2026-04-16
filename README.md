@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports real `send-max` and `sweep` flows, including strict coin control for exact-input spending and full regtest integration coverage.
+Current milestone: the project now supports wallet-internal UTXO consolidation, including manual selected-input consolidation, automatic candidate selection, and full regtest integration coverage.
 
 ## Vision
 
@@ -67,6 +67,8 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - confirmed-only coin-control selection for safer manual spending
 - send-max PSBT creation and one-shot send flow
 - sweep PSBT creation and one-shot sweep flow
+- wallet-internal consolidation PSBT creation and one-shot consolidation flow
+- consolidation candidate selection by explicit include/exclude sets, confirmation state, input count, UTXO value range, fee ceiling, and strategy
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
 - CPFP PSBT creation for unconfirmed parent transactions
@@ -75,7 +77,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 - regtest support scripts under `infra/regtest`
 - reusable `test_support` helpers for local node control, mining, funding, and mempool inspection
-- local integration tests covering receive, self-send/change, send-max, sweep, coin control, RBF replacement, and CPFP flows
+- local integration tests covering receive, self-send/change, send-max, sweep, consolidation, coin control, RBF replacement, and CPFP flows
 
 ### In Progress
 
@@ -110,6 +112,7 @@ The intended feature set includes:
 - one-shot send flow through create + sign + publish
 - send-max flow
 - sweep flow
+- wallet-internal UTXO consolidation flow
 - RBF fee bump flow
 - CPFP child-transaction flow
 - watch-only support
@@ -144,6 +147,14 @@ For wallet-drain flows, the code also supports send-max and sweep:
 2. use `send-max` to spend all allowed wallet value to a recipient after fees
 3. use `sweep` to drain an explicitly selected strict include set with no extra inputs added
 4. sign and publish through the same PSBT pipeline
+
+For wallet maintenance, the code also supports UTXO consolidation:
+
+1. inspect wallet UTXOs and choose manual or automatic candidate selection
+2. optionally include exact outpoints, exclude outpoints, require confirmed-only inputs, and set input-count or value filters
+3. select an ordering strategy such as `smallest-first`, `largest-first`, or `oldest-first`
+4. build a wallet-internal PSBT that spends multiple wallet UTXOs into one internal wallet output
+5. sign and publish through the same PSBT pipeline
 
 For replaceable transactions, the code also supports a fee-bump path:
 
@@ -204,6 +215,8 @@ cargo run -p wallet_cli -- create-psbt-with-coin-control --name regtest-local --
 cargo run -p wallet_cli -- create-send-max-psbt --name regtest-local --to bcrt1... --fee-rate 2
 cargo run -p wallet_cli -- create-send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
 cargo run -p wallet_cli -- sweep-psbt --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only
+cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first
+cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --include <txid:vout> --include <txid:vout> --confirmed-only
 cargo run -p wallet_cli -- sign-psbt --name regtest-local --psbt '<base64>'
 cargo run -p wallet_cli -- publish-psbt --name regtest-local --psbt '<base64>'
 cargo run -p wallet_cli -- bump-fee-psbt --name regtest-local --txid <txid> --fee-rate 5
@@ -214,6 +227,7 @@ cargo run -p wallet_cli -- send-psbt-with-coin-control --name regtest-local --to
 cargo run -p wallet_cli -- send-max-psbt --name regtest-local --to bcrt1... --fee-rate 2
 cargo run -p wallet_cli -- send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
 cargo run -p wallet_cli -- sweep --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only
+cargo run -p wallet_cli -- consolidate-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first
 ```
 
 Current note on coin control:
@@ -230,6 +244,14 @@ Current note on `send-max` and `sweep`:
 - `send-max` can be combined with coin control to drain only the allowed selected subset
 - `sweep` is the strict exact-selection form of send-max and is intended for explicitly chosen outpoints
 - strict sweep/send-max flows are expected to avoid wallet-added change when the selected set is drained entirely
+
+Current note on consolidation:
+
+- consolidation is wallet-internal maintenance, not an external payment
+- it spends multiple wallet UTXOs into one wallet-owned internal output
+- without explicit includes, automatic selection defaults to confirmed-only and `smallest-first`
+- `--include` can force exact outpoints, while `--exclude` prevents specific wallet outpoints from being selected
+- `--min-input-count`, `--max-input-count`, `--min-utxo-value-sat`, `--max-utxo-value-sat`, `--max-fee-pct`, and `--strategy` tune automatic consolidation
 
 Current note on `cpfp-psbt`:
 
@@ -261,6 +283,7 @@ What works at runtime now:
 - enforce strict exact-input selection when explicit include sets are provided
 - create send-max PSBTs that drain the full allowed spendable balance after fees
 - create sweep PSBTs that drain explicitly selected outpoints
+- create wallet-internal consolidation PSBTs from manual or automatically selected UTXO sets
 - sign a PSBT using wallet-owned private descriptor material
 - classify signing results as unchanged, partial, or finalized
 - validate and extract a finalized PSBT into a raw transaction
@@ -269,6 +292,7 @@ What works at runtime now:
 - run end-to-end sends with explicit coin control
 - run end-to-end send-max flows
 - run end-to-end sweep flows
+- run end-to-end wallet-internal consolidation flows
 - inspect fee rate and replaceability on wallet transactions
 - build replacement PSBTs for eligible RBF transactions
 - execute a full fee-bump flow through replacement build, sign, and publish
@@ -289,7 +313,7 @@ Storage location:
 - app database: `~/.rust-descriptor-wallet/app.db`
 - per-wallet db path pattern: `~/.rust-descriptor-wallet/<wallet-name>.wallet.db`
 
-The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, send-max, sweep, strict coin control, RBF fee bumping, and CPFP PSBT creation. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
+The CLI now covers wallet metadata management, read-oriented runtime operations, PSBT creation/signing/publish, one-shot send, send-max, sweep, wallet-internal consolidation, strict coin control, RBF fee bumping, and CPFP PSBT creation. The workspace now also has a cleaner backend boundary where `wallet_sync` owns chain integration across Esplora, Electrum, and Bitcoin Core RPC. The next major step is broadening policy and signing options rather than just proving the core transaction lifecycle.
 
 ## Why Descriptor Wallets
 
@@ -360,6 +384,7 @@ Current integration coverage in [crates/wallet_api/tests/regtest_flow.rs](crates
 - self-send with change output tracking
 - send-max PSBT creation and one-shot max-send flows
 - sweep PSBT creation and one-shot sweep flows
+- wallet-internal consolidation PSBT creation and one-shot consolidation flows
 - coin-control PSBT creation and send flows with explicit input validation and strict exact-selection enforcement
 - RBF fee bump with mempool replacement and confirmation checks
 - CPFP child transaction build, publish, and confirmation checks

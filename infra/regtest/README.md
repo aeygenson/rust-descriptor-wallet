@@ -9,6 +9,7 @@ This environment is used for:
 
 - integration testing
 - explicit coin control testing
+- wallet-internal UTXO consolidation testing
 - RBF (Replace-By-Fee) testing
 - CPFP (Child Pays For Parent)
 - controlled mempool behavior
@@ -139,6 +140,7 @@ You can now reliably test:
 - send transactions without immediate confirmation
 - send-max wallet drains
 - sweep flows over explicitly selected outpoints
+- wallet-internal consolidation flows
 - coin control with explicit include/exclude outpoints
 - strict coin control where included outpoints must fully fund the spend
 - RBF (bump-fee)
@@ -167,6 +169,7 @@ Current automated regtest coverage includes:
 - self-send flows with change output tracking
 - send-max PSBT creation and one-shot max-send flows
 - sweep PSBT creation and one-shot sweep flows
+- wallet-internal consolidation PSBT creation and one-shot consolidation flows
 - coin-control PSBT creation and send flows
 - RBF replacement and confirmation checks
 - CPFP child build, publish, and confirmation checks

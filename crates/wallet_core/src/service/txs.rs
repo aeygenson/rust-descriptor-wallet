@@ -1,9 +1,9 @@
 use bdk_chain::ChainPosition;
 use tracing::debug;
 
+use super::*;
 use crate::model::WalletTxInfo;
 use crate::types::{AmountSat, TxDirection};
-use super::*;
 impl WalletService {
     /// Return list of wallet transactions (basic view).
     ///
@@ -65,8 +65,7 @@ impl WalletService {
             let fee = if direction == TxDirection::Received {
                 None
             } else {
-                self
-                    .wallet
+                self.wallet
                     .calculate_fee(&tx.tx_node.tx)
                     .ok()
                     .map(|amount| AmountSat(amount.to_sat()))
@@ -109,14 +108,14 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::Network;
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
+    use crate::WalletConfig;
+    use bitcoin::Network;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
-    use crate::WalletConfig;
-    
+
     fn test_config() -> WalletConfig {
         WalletConfig {
             network: Network::Signet,

@@ -15,7 +15,10 @@ impl WalletService {
     /// 3. If not found → create new wallet
     /// 4. Persist initial state
     pub fn load_or_create(config: &WalletConfig) -> WalletCoreResult<Self> {
-        info!("wallet_service: load_or_create start path={}", config.db_path.display());
+        info!(
+            "wallet_service: load_or_create start path={}",
+            config.db_path.display()
+        );
         let (mut db, _changeset) =
             Store::<ChangeSet>::load_or_create(MAGIC_BYTES, &config.db_path)?;
 
@@ -40,8 +43,7 @@ impl WalletService {
                     config.db_path.display(),
                     e
                 ))
-            })?
-        {
+            })? {
             Some(wallet) => wallet,
             None => Wallet::create(external_descriptor, internal_descriptor)
                 .network(config.network)
@@ -70,7 +72,6 @@ impl WalletService {
         })
     }
 
-
     /// Attach explicit keymaps for private descriptors during wallet initialization.
     fn attach_signers_if_present(
         wallet: &mut Wallet,
@@ -82,8 +83,7 @@ impl WalletService {
 
         debug!(
             "wallet_service: attach_signers_if_present external_private={} internal_private={}",
-            external_private,
-            internal_private
+            external_private, internal_private
         );
 
         if config.is_watch_only {
@@ -140,9 +140,7 @@ impl WalletService {
             wallet.set_keymap(KeychainKind::Internal, internal_keymap);
         }
 
-        debug!(
-            "wallet_service: attach_signers_if_present explicit keymap attachment complete"
-        );
+        debug!("wallet_service: attach_signers_if_present explicit keymap attachment complete");
         Ok(())
     }
 
@@ -168,15 +166,21 @@ impl WalletService {
         Ok(self.wallet.balance().total().to_sat())
     }
 
-    pub fn wallet(&self) -> &Wallet { &self.wallet }
+    pub fn wallet(&self) -> &Wallet {
+        &self.wallet
+    }
 
     /// Whether this wallet is watch-only and cannot sign transactions.
-    pub fn is_watch_only(&self) -> bool { self.is_watch_only }
+    pub fn is_watch_only(&self) -> bool {
+        self.is_watch_only
+    }
 
     /// Mutable access to underlying BDK wallet.
     ///
     /// Used by sync layer to apply blockchain updates.
-    pub fn wallet_mut(&mut self) -> &mut Wallet { &mut self.wallet }
+    pub fn wallet_mut(&mut self) -> &mut Wallet {
+        &mut self.wallet
+    }
 
     /// Persist staged wallet changes to disk.
     pub fn persist(&mut self) -> WalletCoreResult<()> {
@@ -193,10 +197,10 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::Network;
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
+    use bitcoin::Network;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -250,10 +254,7 @@ mod tests {
         let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::Relaxed);
         let pid = std::process::id();
 
-        std::env::temp_dir().join(format!(
-            "{}_{}_{}_{}.db",
-            prefix, pid, nanos, counter
-        ))
+        std::env::temp_dir().join(format!("{}_{}_{}_{}.db", prefix, pid, nanos, counter))
     }
 
     #[test]
@@ -262,7 +263,10 @@ mod tests {
 
         let wallet = WalletService::load_or_create(&config);
 
-        assert!(wallet.is_ok(), "expected wallet to load or create successfully");
+        assert!(
+            wallet.is_ok(),
+            "expected wallet to load or create successfully"
+        );
     }
 
     #[test]
@@ -271,7 +275,10 @@ mod tests {
 
         let wallet = WalletService::load_or_create(&config);
 
-        assert!(wallet.is_ok(), "expected signing wallet to load or create successfully");
+        assert!(
+            wallet.is_ok(),
+            "expected signing wallet to load or create successfully"
+        );
     }
 
     #[test]
@@ -343,16 +350,15 @@ mod tests {
         };
 
         let second_address_after_reload = {
-            let mut reloaded = WalletService::load_or_create(&config)
-                .expect("wallet should reload successfully");
+            let mut reloaded =
+                WalletService::load_or_create(&config).expect("wallet should reload successfully");
             reloaded
                 .next_receive_address()
                 .expect("next receive address after reload should be created")
         };
 
         assert_ne!(
-            first_address,
-            second_address_after_reload,
+            first_address, second_address_after_reload,
             "reloaded wallet should continue from persisted derivation state"
         );
     }

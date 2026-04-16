@@ -1,10 +1,9 @@
-use bdk_wallet::bitcoin::{psbt::Psbt, Sequence};
-
 use crate::{
+    types::{AmountSat, TxDirection, WalletKeychain},
     WalletCoreResult,
-    types::{AmountSat, WalletKeychain, TxDirection},
 };
-
+use bdk_wallet::bitcoin::{psbt::Psbt, Sequence};
+use serde::{Deserialize, Serialize};
 
 /// Core wallet transaction model used inside wallet_core
 ///
@@ -78,6 +77,88 @@ impl WalletCoinControlInfo {
     ///
     /// This is the domain signal used by strict coin control and sweep-style
     /// flows, where only the selected inputs may be used.
+    pub fn has_explicit_include_set(&self) -> bool {
+        !self.include_outpoints.is_empty()
+    }
+}
+
+/// Strategy used when automatically selecting UTXOs for consolidation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WalletConsolidationStrategy {
+    /// Prefer smaller UTXOs first to reduce fragmentation and dust.
+    SmallestFirst,
+
+    /// Prefer larger UTXOs first to reduce input overhead quickly.
+    LargestFirst,
+
+    /// Prefer older/earlier wallet UTXOs first when ordering information is available.
+    ///
+    /// When precise age ordering is unavailable, implementations may fall back to
+    /// a stable deterministic order.
+    OldestFirst,
+}
+
+/// Core model describing consolidation options for transaction building.
+///
+/// Consolidation is a wallet-internal maintenance flow that spends multiple
+/// wallet UTXOs into a smaller number of wallet-owned outputs, usually one,
+/// in order to reduce fragmentation and future spending cost.
+///
+/// The model supports both:
+/// - strict/manual consolidation via an explicit include set
+/// - automatic consolidation via value filters and selection strategy
+///
+/// This is a domain model (not API DTO) and should not depend on wallet_api.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WalletConsolidationInfo {
+    /// Explicitly included outpoints (txid:vout) to be consolidated.
+    ///
+    /// When present, consolidation should be treated as strict/manual input
+    /// selection and only these inputs may be used.
+    pub include_outpoints: Vec<String>,
+
+    /// Explicitly excluded outpoints (txid:vout) that must not be used.
+    pub exclude_outpoints: Vec<String>,
+
+    /// If true, only confirmed UTXOs may be used.
+    pub confirmed_only: bool,
+
+    /// Optional cap on how many inputs may be included in the consolidation.
+    pub max_input_count: Option<usize>,
+
+    /// Optional minimum number of inputs required for consolidation.
+    pub min_input_count: Option<usize>,
+
+    /// Optional lower bound for eligible UTXO values in satoshis.
+    pub min_utxo_value_sat: Option<u64>,
+
+    /// Optional upper bound for eligible UTXO values in satoshis.
+    pub max_utxo_value_sat: Option<u64>,
+
+    /// Optional cap on fee as a percentage of total selected input value.
+    pub max_fee_pct_of_input_value: Option<u8>,
+
+    /// Optional automatic candidate-selection strategy.
+    pub strategy: Option<WalletConsolidationStrategy>,
+}
+
+impl WalletConsolidationInfo {
+    pub fn is_empty(&self) -> bool {
+        self.include_outpoints.is_empty()
+            && self.exclude_outpoints.is_empty()
+            && !self.confirmed_only
+            && self.max_input_count.is_none()
+            && self.min_input_count.is_none()
+            && self.min_utxo_value_sat.is_none()
+            && self.max_utxo_value_sat.is_none()
+            && self.max_fee_pct_of_input_value.is_none()
+            && self.strategy.is_none()
+    }
+
+    /// Returns true when an explicit include set is present.
+    ///
+    /// This is the domain signal for strict/manual consolidation, where only
+    /// the selected inputs may be used.
     pub fn has_explicit_include_set(&self) -> bool {
         !self.include_outpoints.is_empty()
     }
@@ -244,7 +325,6 @@ pub struct WalletSignedPsbtInfo {
     pub txid: String,
 }
 
-
 impl WalletSignedPsbtInfo {
     /// Classify signing result into a domain status.
     pub fn signing_status(&self) -> PsbtSigningStatus {
@@ -346,6 +426,8 @@ pub struct WalletCpfpPsbtInfo {
 ///   not automatically added when strict coin control is active.
 /// - Sweep flows are represented as `Max` mode combined with an explicit include
 ///   set in `WalletCoinControlInfo`.
+/// - Consolidation is not represented by `WalletSendAmountMode`; it is a
+///   separate wallet-maintenance strategy modeled by `WalletConsolidationInfo`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WalletSendAmountMode {
     /// Build a transaction for an explicit fixed amount.

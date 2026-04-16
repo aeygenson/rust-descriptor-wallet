@@ -67,9 +67,7 @@ pub async fn create_send_max_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: create_send_max_psbt start name={} to={} fee_rate={}",
-        name,
-        to,
-        fee_rate_sat_per_vb
+        name, to, fee_rate_sat_per_vb
     );
 
     let psbt = api
@@ -224,6 +222,81 @@ pub async fn create_sweep_psbt(
     Ok(())
 }
 
+pub async fn create_consolidation_psbt(
+    api: &WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    max_input_count: Option<usize>,
+    min_input_count: Option<usize>,
+    min_utxo_value_sat: Option<u64>,
+    max_utxo_value_sat: Option<u64>,
+    max_fee_pct_of_input_value: Option<u8>,
+    strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_consolidation_psbt start name={} fee_rate={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?}",
+        name,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only,
+        max_input_count,
+        min_input_count,
+        min_utxo_value_sat,
+        max_utxo_value_sat,
+        max_fee_pct_of_input_value,
+        strategy,
+    );
+
+    let psbt = api
+        .create_consolidation(
+            name,
+            fee_rate_sat_per_vb,
+            build_consolidation_dto(
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+                max_input_count,
+                min_input_count,
+                min_utxo_value_sat,
+                max_utxo_value_sat,
+                max_fee_pct_of_input_value,
+                strategy,
+            ),
+        )
+        .await?;
+
+    println!("Consolidation PSBT created:");
+    println!("txid={}", psbt.txid);
+    println!("to={}", psbt.to_address);
+    println!("amount={} sats", psbt.amount_sat);
+    println!("fee={} sats", psbt.fee_sat);
+    println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
+    println!("selected_utxos={}", psbt.selected_utxo_count);
+    if !psbt.selected_inputs.is_empty() {
+        println!("selected_inputs:");
+        for input in &psbt.selected_inputs {
+            println!("- {}", input);
+        }
+    }
+    println!("inputs={}", psbt.input_count);
+    println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
+    println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
+
+    println!("\npsbt_base64:\n{}", psbt.psbt_base64);
+
+    Ok(())
+}
+
 fn print_optional_rbf(replaceable: Option<bool>) {
     if let Some(rbf) = replaceable {
         println!("rbf={}", rbf);
@@ -234,6 +307,30 @@ fn print_broadcast_success(title: &str, txid: &str, replaceable: Option<bool>) {
     println!("{}", title);
     println!("txid={}", txid);
     print_optional_rbf(replaceable);
+}
+
+fn build_consolidation_dto(
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    max_input_count: Option<usize>,
+    min_input_count: Option<usize>,
+    min_utxo_value_sat: Option<u64>,
+    max_utxo_value_sat: Option<u64>,
+    max_fee_pct_of_input_value: Option<u8>,
+    strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+) -> wallet_api::model::WalletConsolidationDto {
+    wallet_api::model::WalletConsolidationDto {
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        max_input_count,
+        min_input_count,
+        min_utxo_value_sat,
+        max_utxo_value_sat,
+        max_fee_pct_of_input_value,
+        strategy,
+    }
 }
 
 pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
@@ -271,10 +368,7 @@ pub async fn status(api: &WalletApi, name: &str) -> Result<()> {
 
     info!(
         "cli runtime: status success name={} balance={} utxos={} last_block={}",
-        name,
-        status.balance,
-        status.utxo_count,
-        last_block
+        name, status.balance, status.utxo_count, last_block
     );
 
     println!("wallet={}", name);
@@ -294,7 +388,11 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
     if txs.is_empty() {
         println!("No transactions found.");
     } else {
-        info!("cli runtime: txs fetched count={} for wallet {}", txs.len(), name);
+        info!(
+            "cli runtime: txs fetched count={} for wallet {}",
+            txs.len(),
+            name
+        );
 
         for tx in txs {
             let fee = tx
@@ -340,7 +438,11 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
     if utxos.is_empty() {
         println!("No UTXOs found.");
     } else {
-        info!("cli runtime: utxos fetched count={} for wallet {}", utxos.len(), name);
+        info!(
+            "cli runtime: utxos fetched count={} for wallet {}",
+            utxos.len(),
+            name
+        );
 
         for utxo in utxos {
             let address = utxo.address.as_deref().unwrap_or("unknown");
@@ -352,12 +454,7 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
 
             println!(
                 "outpoint={} | value={} sats | addr={} | keychain={} | confirmed={} | height={}",
-                utxo.outpoint,
-                utxo.value,
-                address,
-                utxo.keychain,
-                utxo.confirmed,
-                height
+                utxo.outpoint, utxo.value, address, utxo.keychain, utxo.confirmed, height
             );
         }
     }
@@ -374,10 +471,7 @@ pub async fn create_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: create_psbt start name={} to={} amount={} fee_rate={}",
-        name,
-        to,
-        amount_sat,
-        fee_rate_sat_per_vb
+        name, to, amount_sat, fee_rate_sat_per_vb
     );
 
     let psbt = api
@@ -433,9 +527,7 @@ pub async fn bump_fee_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: bump_fee_psbt start name={} txid={} fee_rate={}",
-        name,
-        txid,
-        fee_rate_sat_per_vb
+        name, txid, fee_rate_sat_per_vb
     );
 
     let psbt = api.bump_fee_psbt(name, txid, fee_rate_sat_per_vb).await?;
@@ -491,10 +583,7 @@ pub async fn cpfp_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: cpfp_psbt start name={} parent_txid={} selected_outpoint={} fee_rate={}",
-        name,
-        parent_txid,
-        selected_outpoint,
-        fee_rate_sat_per_vb
+        name, parent_txid, selected_outpoint, fee_rate_sat_per_vb
     );
 
     let psbt = api
@@ -536,18 +625,14 @@ pub async fn bump_fee(
 ) -> Result<()> {
     debug!(
         "cli runtime: bump_fee start name={} txid={} fee_rate={}",
-        name,
-        txid,
-        fee_rate_sat_per_vb
+        name, txid, fee_rate_sat_per_vb
     );
 
     let published = api.bump_fee(name, txid, fee_rate_sat_per_vb).await?;
 
     info!(
         "cli runtime: bump_fee success name={} original_txid={} replacement_txid={}",
-        name,
-        txid,
-        published.txid
+        name, txid, published.txid
     );
 
     println!("Replacement transaction broadcasted successfully:");
@@ -567,10 +652,7 @@ pub async fn cpfp(
 ) -> Result<()> {
     debug!(
         "cli runtime: cpfp start name={} parent_txid={} selected_outpoint={} fee_rate={}",
-        name,
-        parent_txid,
-        selected_outpoint,
-        fee_rate_sat_per_vb
+        name, parent_txid, selected_outpoint, fee_rate_sat_per_vb
     );
 
     let published = api
@@ -579,9 +661,7 @@ pub async fn cpfp(
 
     info!(
         "cli runtime: cpfp success name={} parent_txid={} child_txid={}",
-        name,
-        parent_txid,
-        published.txid
+        name, parent_txid, published.txid
     );
 
     println!("CPFP transaction broadcasted successfully:");
@@ -600,10 +680,7 @@ pub async fn sign_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Result
 
     info!(
         "cli runtime: sign_psbt success name={} modified={} finalized={} txid={}",
-        name,
-        signed.modified,
-        signed.finalized,
-        signed.txid
+        name, signed.modified, signed.finalized, signed.txid
     );
 
     match signed.signing_status.as_str() {
@@ -627,8 +704,7 @@ pub async fn publish_psbt(api: &WalletApi, name: &str, psbt_base64: &str) -> Res
 
     info!(
         "cli runtime: publish_psbt success name={} txid={}",
-        name,
-        published.txid
+        name, published.txid
     );
 
     print_broadcast_success(
@@ -649,20 +725,16 @@ pub async fn send_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: send start name={} to={} amount={} fee_rate={}",
-        name,
-        to,
-        amount_sat,
-        fee_rate_sat_per_vb
+        name, to, amount_sat, fee_rate_sat_per_vb
     );
 
-    let published = api.send_psbt(name, to, amount_sat, fee_rate_sat_per_vb).await?;
+    let published = api
+        .send_psbt(name, to, amount_sat, fee_rate_sat_per_vb)
+        .await?;
 
     info!(
         "cli runtime: send success name={} to={} amount={} txid={}",
-        name,
-        to,
-        amount_sat,
-        published.txid
+        name, to, amount_sat, published.txid
     );
 
     println!("Transaction sent successfully:");
@@ -726,9 +798,7 @@ pub async fn send_max_psbt(
 ) -> Result<()> {
     debug!(
         "cli runtime: send_max_psbt start name={} to={} fee_rate={}",
-        name,
-        to,
-        fee_rate_sat_per_vb
+        name, to, fee_rate_sat_per_vb
     );
 
     let published = api.send_max_psbt(name, to, fee_rate_sat_per_vb).await?;
@@ -815,6 +885,60 @@ pub async fn sweep_psbt(
 
     println!("Sweep transaction sent successfully:");
     println!("to={}", to);
+    println!("txid={}", published.txid);
+    print_optional_rbf(published.replaceable);
+
+    Ok(())
+}
+
+pub async fn consolidate_psbt(
+    api: &WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    max_input_count: Option<usize>,
+    min_input_count: Option<usize>,
+    min_utxo_value_sat: Option<u64>,
+    max_utxo_value_sat: Option<u64>,
+    max_fee_pct_of_input_value: Option<u8>,
+    strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: consolidate_psbt start name={} fee_rate={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?}",
+        name,
+        fee_rate_sat_per_vb,
+        include_outpoints.len(),
+        exclude_outpoints.len(),
+        confirmed_only,
+        max_input_count,
+        min_input_count,
+        min_utxo_value_sat,
+        max_utxo_value_sat,
+        max_fee_pct_of_input_value,
+        strategy,
+    );
+
+    let published = api
+        .consolidate(
+            name,
+            fee_rate_sat_per_vb,
+            build_consolidation_dto(
+                include_outpoints,
+                exclude_outpoints,
+                confirmed_only,
+                max_input_count,
+                min_input_count,
+                min_utxo_value_sat,
+                max_utxo_value_sat,
+                max_fee_pct_of_input_value,
+                strategy,
+            ),
+        )
+        .await?;
+
+    println!("Consolidation transaction sent successfully:");
     println!("txid={}", published.txid);
     print_optional_rbf(published.replaceable);
 

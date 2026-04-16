@@ -1,7 +1,3 @@
-
-
-
-
 use bitcoin::Network;
 use tracing::{debug, info};
 
@@ -23,19 +19,16 @@ pub(crate) async fn load_wallet_config(
     let record = storage.get_wallet_by_name(name).await?;
     let network = parse_network(&record.network)?;
 
-    let sync_backend = record
-        .parse_sync_backend()
-        .map_err(|e| WalletApiError::InvalidInput(format!(
-            "invalid sync backend for wallet '{}': {}",
-            name, e
-        )))?;
+    let sync_backend = record.parse_sync_backend().map_err(|e| {
+        WalletApiError::InvalidInput(format!("invalid sync backend for wallet '{}': {}", name, e))
+    })?;
 
-    let broadcast_backend = record
-        .parse_broadcast_backend()
-        .map_err(|e| WalletApiError::InvalidInput(format!(
+    let broadcast_backend = record.parse_broadcast_backend().map_err(|e| {
+        WalletApiError::InvalidInput(format!(
             "invalid broadcast backend for wallet '{}': {}",
             name, e
-        )))?;
+        ))
+    })?;
 
     let sync_backend = match sync_backend {
         wallet_storage::models::SyncBackendFile::Esplora { url } => {
@@ -118,17 +111,17 @@ pub async fn balance(storage: &WalletStorage, name: &str) -> WalletApiResult<u64
     let config = load_wallet_config(storage, name).await?;
     let wallet = WalletService::load_or_create(&config)?;
     let balance = wallet.balance_sat()?;
-    info!("api wallet: balance success name={} balance={}", name, balance);
+    info!(
+        "api wallet: balance success name={} balance={}",
+        name, balance
+    );
     Ok(balance)
 }
 
 /// Return high-level wallet status using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
-pub async fn status(
-    storage: &WalletStorage,
-    name: &str,
-) -> WalletApiResult<WalletStatusDto> {
+pub async fn status(storage: &WalletStorage, name: &str) -> WalletApiResult<WalletStatusDto> {
     debug!("api wallet: status start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
@@ -141,10 +134,7 @@ pub async fn status(
 
     info!(
         "api wallet: status success name={} balance={} utxos={} last_block_height={:?}",
-        name,
-        balance,
-        utxo_count,
-        last_block_height
+        name, balance, utxo_count, last_block_height
     );
 
     Ok(WalletStatusDto {

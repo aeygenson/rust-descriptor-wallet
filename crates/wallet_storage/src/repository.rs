@@ -106,17 +106,14 @@ pub async fn delete_wallet(pool: &SqlitePool, name: &str) -> WalletStorageResult
     Ok(())
 }
 
-
-
 pub async fn import_wallet_from_file(
     pool: &SqlitePool,
     file_path: &str,
 ) -> WalletStorageResult<()> {
     let content = fs::read_to_string(file_path)?;
-    
-    let wallet: ImportWalletFile =
-        serde_json::from_str(&content)?;
-    
+
+    let wallet: ImportWalletFile = serde_json::from_str(&content)?;
+
     let (sync_backend_json, broadcast_backend_json) = wallet.serialize_backends()?;
 
     create_wallet(
@@ -129,7 +126,7 @@ pub async fn import_wallet_from_file(
         broadcast_backend_json.as_deref(),
         wallet.is_watch_only,
     )
-        .await?;
-    
+    .await?;
+
     Ok(())
 }

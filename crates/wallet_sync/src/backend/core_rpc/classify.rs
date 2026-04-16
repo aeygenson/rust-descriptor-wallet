@@ -1,5 +1,3 @@
-
-
 use crate::WalletSyncError;
 
 use tracing::{debug, warn};
@@ -13,7 +11,10 @@ use tracing::{debug, warn};
 pub(super) fn classify_rpc_rejection(code: i64, message: &str) -> WalletSyncError {
     let normalized = message.to_ascii_lowercase();
 
-    debug!("classifying rpc rejection: code = {}, message = {}", code, message);
+    debug!(
+        "classifying rpc rejection: code = {}, message = {}",
+        code, message
+    );
 
     if normalized.contains("txn-mempool-conflict")
         || normalized.contains("mempool conflict")
@@ -54,7 +55,10 @@ pub(super) fn classify_rpc_rejection(code: i64, message: &str) -> WalletSyncErro
         return WalletSyncError::BroadcastInsufficientFee(message.to_string());
     }
 
-    warn!("classified as unknown broadcast failure: code = {}, message = {}", code, message);
+    warn!(
+        "classified as unknown broadcast failure: code = {}, message = {}",
+        code, message
+    );
     WalletSyncError::BroadcastFailed(format!(
         "bitcoin core rejected transaction: code={} message={}",
         code, message

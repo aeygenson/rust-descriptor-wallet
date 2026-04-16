@@ -1,5 +1,5 @@
-pub mod wallet;
 pub mod runtime;
+pub mod wallet;
 
 use anyhow::Result;
 use wallet_api::WalletApi;
@@ -95,10 +95,18 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::PublishPsbt { name, psbt_base64 } => {
             runtime::publish_psbt(api, &name, &psbt_base64).await?;
         }
-        Commands::BumpFeePsbt { name, txid, fee_rate } => {
+        Commands::BumpFeePsbt {
+            name,
+            txid,
+            fee_rate,
+        } => {
             runtime::bump_fee_psbt(api, &name, &txid, fee_rate).await?;
         }
-        Commands::BumpFee { name, txid, fee_rate } => {
+        Commands::BumpFee {
+            name,
+            txid,
+            fee_rate,
+        } => {
             runtime::bump_fee(api, &name, &txid, fee_rate).await?;
         }
         Commands::SendPsbt {
@@ -160,14 +168,35 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             exclude,
             confirmed_only,
         } => {
-            runtime::create_sweep_psbt(
+            runtime::create_sweep_psbt(api, &name, &to, fee_rate, include, exclude, confirmed_only)
+                .await?;
+        }
+        Commands::CreateConsolidationPsbt {
+            name,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+            max_input_count,
+            min_input_count,
+            min_utxo_value_sat,
+            max_utxo_value_sat,
+            max_fee_pct_of_input_value,
+            strategy,
+        } => {
+            runtime::create_consolidation_psbt(
                 api,
                 &name,
-                &to,
                 fee_rate,
                 include,
                 exclude,
                 confirmed_only,
+                max_input_count,
+                min_input_count,
+                min_utxo_value_sat,
+                max_utxo_value_sat,
+                max_fee_pct_of_input_value,
+                strategy,
             )
             .await?;
         }
@@ -179,14 +208,35 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             exclude,
             confirmed_only,
         } => {
-            runtime::sweep_psbt(
+            runtime::sweep_psbt(api, &name, &to, fee_rate, include, exclude, confirmed_only)
+                .await?;
+        }
+        Commands::ConsolidatePsbt {
+            name,
+            fee_rate,
+            include,
+            exclude,
+            confirmed_only,
+            max_input_count,
+            min_input_count,
+            min_utxo_value_sat,
+            max_utxo_value_sat,
+            max_fee_pct_of_input_value,
+            strategy,
+        } => {
+            runtime::consolidate_psbt(
                 api,
                 &name,
-                &to,
                 fee_rate,
                 include,
                 exclude,
                 confirmed_only,
+                max_input_count,
+                min_input_count,
+                min_utxo_value_sat,
+                max_utxo_value_sat,
+                max_fee_pct_of_input_value,
+                strategy,
             )
             .await?;
         }

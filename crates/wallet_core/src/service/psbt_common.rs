@@ -9,15 +9,14 @@ use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a PSBT from its encoded string representation.
 pub fn parse_psbt(psbt_base64: &str) -> WalletCoreResult<Psbt> {
-    Psbt::from_str(psbt_base64)
-        .map_err(|e| WalletCoreError::InvalidPsbt(e.to_string()))
+    Psbt::from_str(psbt_base64).map_err(|e| WalletCoreError::InvalidPsbt(e.to_string()))
 }
 
 /// Check if PSBT is finalized (ready for broadcast)
 pub fn is_psbt_finalized(psbt: &Psbt) -> bool {
-    psbt.inputs.iter().all(|input| {
-        input.final_script_sig.is_some() || input.final_script_witness.is_some()
-    })
+    psbt.inputs
+        .iter()
+        .all(|input| input.final_script_sig.is_some() || input.final_script_witness.is_some())
 }
 
 /// Extract finalized transaction from PSBT
@@ -27,10 +26,7 @@ pub fn extract_finalized_tx(psbt: &Psbt) -> WalletCoreResult<Transaction> {
     }
 
     psbt.clone().extract_tx().map_err(|e| {
-        WalletCoreError::ExtractTxFailed(format!(
-            "failed to extract tx from PSBT: {}",
-            e
-        ))
+        WalletCoreError::ExtractTxFailed(format!("failed to extract tx from PSBT: {}", e))
     })
 }
 
@@ -43,8 +39,7 @@ pub fn is_rbf_enabled(tx: &Transaction) -> bool {
 
 /// Parse a txid from string.
 pub fn parse_txid(txid: &str) -> WalletCoreResult<Txid> {
-    Txid::from_str(txid)
-        .map_err(|_| WalletCoreError::InvalidTxid(txid.to_string()))
+    Txid::from_str(txid).map_err(|_| WalletCoreError::InvalidTxid(txid.to_string()))
 }
 
 #[cfg(test)]
@@ -111,10 +106,7 @@ mod tests {
         let psbt = parse_psbt(UNSIGNED_TEST_PSBT).unwrap();
         let result = extract_finalized_tx(&psbt);
 
-        assert!(matches!(
-            result,
-            Err(WalletCoreError::PsbtNotFinalized)
-        ));
+        assert!(matches!(result, Err(WalletCoreError::PsbtNotFinalized)));
     }
 
     #[test]
@@ -131,10 +123,8 @@ mod tests {
 
     #[test]
     fn parse_txid_works_for_valid_txid() {
-        let txid = parse_txid(
-            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d",
-        )
-        .unwrap();
+        let txid =
+            parse_txid("d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d").unwrap();
 
         assert_eq!(
             txid.to_string(),
@@ -155,9 +145,34 @@ pub fn parse_outpoint(outpoint: &str) -> WalletCoreResult<(&str, u32)> {
         .split_once(':')
         .ok_or_else(|| WalletCoreError::InvalidTxid(outpoint.to_string()))?;
 
-    let vout = vout.parse::<u32>().map_err(|_| {
-        WalletCoreError::InvalidTxid(outpoint.to_string())
-    })?;
+    let vout = vout
+        .parse::<u32>()
+        .map_err(|_| WalletCoreError::InvalidTxid(outpoint.to_string()))?;
 
     Ok((txid, vout))
+}
+
+/// Parse and deduplicate a list of outpoint strings into `bitcoin::OutPoint`s.
+pub fn parse_unique_outpoints(outpoints: &[String]) -> WalletCoreResult<Vec<bitcoin::OutPoint>> {
+    use std::collections::HashSet;
+
+    let mut seen = HashSet::new();
+    let mut result = Vec::with_capacity(outpoints.len());
+
+    for item in outpoints {
+        let (txid_str, vout) = parse_outpoint(item)?;
+        let txid = parse_txid(txid_str)?;
+        let outpoint = bitcoin::OutPoint { txid, vout };
+
+        if !seen.insert(outpoint) {
+            return Err(WalletCoreError::CoinControlConflict(format!(
+                "duplicate outpoint {} in input set",
+                item
+            )));
+        }
+
+        result.push(outpoint);
+    }
+
+    Ok(result)
 }

@@ -1,20 +1,13 @@
 use std::sync::Arc;
 
 use crate::factory::build_default_api;
-use crate::service::{wallet, inspect, psbt, registry};
+use crate::service::{inspect, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
-    WalletCpfpPsbtDto,
-    WalletCoinControlDto,
-    WalletDetailsDto,
-    WalletPsbtDto,
-    TxBroadcastResultDto,
-    WalletSignedPsbtDto,
-    WalletStatusDto,
-    WalletSummaryDto,
-    WalletTxDto,
-    WalletUtxoDto,
+    TxBroadcastResultDto, WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto,
+    WalletDetailsDto, WalletPsbtDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
+    WalletTxDto, WalletUtxoDto,
 };
 
 use wallet_core::WalletCore;
@@ -38,7 +31,11 @@ impl WalletApi {
         storage: WalletStorage,
         sync: WalletSyncService,
     ) -> Self {
-        Self { core, storage, sync }
+        Self {
+            core,
+            storage,
+            sync,
+        }
     }
 
     pub async fn status(&self, name: &str) -> WalletApiResult<WalletStatusDto> {
@@ -160,6 +157,44 @@ impl WalletApi {
         .await
     }
 
+    pub async fn create_consolidation_psbt(
+        &self,
+        name: &str,
+        fee_rate_sat_per_vb: u64,
+        consolidation: WalletConsolidationDto,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        psbt::create_consolidation(&self.storage, name, fee_rate_sat_per_vb, consolidation).await
+    }
+
+    pub async fn create_consolidation(
+        &self,
+        name: &str,
+        fee_rate_sat_per_vb: u64,
+        consolidation: WalletConsolidationDto,
+    ) -> WalletApiResult<WalletPsbtDto> {
+        self.create_consolidation_psbt(name, fee_rate_sat_per_vb, consolidation)
+            .await
+    }
+
+    pub async fn consolidate_psbt(
+        &self,
+        name: &str,
+        fee_rate_sat_per_vb: u64,
+        consolidation: WalletConsolidationDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        psbt::consolidate(&self.storage, name, fee_rate_sat_per_vb, consolidation).await
+    }
+
+    pub async fn consolidate(
+        &self,
+        name: &str,
+        fee_rate_sat_per_vb: u64,
+        consolidation: WalletConsolidationDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        self.consolidate_psbt(name, fee_rate_sat_per_vb, consolidation)
+            .await
+    }
+
     pub async fn sweep_psbt(
         &self,
         name: &str,
@@ -175,6 +210,16 @@ impl WalletApi {
             coin_control,
         )
         .await
+    }
+
+    pub async fn send_consolidation_psbt(
+        &self,
+        name: &str,
+        fee_rate_sat_per_vb: u64,
+        consolidation: WalletConsolidationDto,
+    ) -> WalletApiResult<TxBroadcastResultDto> {
+        self.consolidate_psbt(name, fee_rate_sat_per_vb, consolidation)
+            .await
     }
 
     pub async fn send_psbt_with_coin_control(
@@ -255,13 +300,8 @@ impl WalletApi {
         fee_rate_sat_per_vb: u64,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        self.sweep_psbt(
-            name,
-            to_address,
-            fee_rate_sat_per_vb,
-            coin_control,
-        )
-        .await
+        self.sweep_psbt(name, to_address, fee_rate_sat_per_vb, coin_control)
+            .await
     }
 
     pub async fn sign_psbt(
@@ -343,9 +383,7 @@ impl WalletApi {
             .create_psbt(name, to_address, amount_sat, fee_rate_sat_per_vb)
             .await?;
 
-        let signed = self
-            .sign_psbt(name, &created.psbt_base64)
-            .await?;
+        let signed = self.sign_psbt(name, &created.psbt_base64).await?;
 
         if !signed.finalized {
             return Err(crate::WalletApiError::SendNotFinalized);

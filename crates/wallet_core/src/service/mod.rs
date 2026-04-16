@@ -1,13 +1,14 @@
-mod utxos;
-mod txs;
-mod psbt_create;
 mod lifecycle;
-pub mod psbt_sign;
-pub mod psbt_publish;
-pub mod psbt_common;
-pub mod psbt_rbf;
-pub mod psbt_cpfp;
 pub mod psbt_coin_control;
+pub mod psbt_common;
+pub mod psbt_consolidation;
+pub mod psbt_cpfp;
+mod psbt_create;
+pub mod psbt_publish;
+pub mod psbt_rbf;
+pub mod psbt_sign;
+mod txs;
+mod utxos;
 
 use bdk_file_store::Store;
 use bdk_wallet::{ChangeSet, PersistedWallet, Wallet};
