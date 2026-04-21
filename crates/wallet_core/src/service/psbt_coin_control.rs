@@ -1,7 +1,7 @@
 use bitcoin::OutPoint;
 use tracing::{debug, info};
 
-use super::psbt_common::parse_unique_outpoints;
+use super::common_outpoint::{ensure_no_outpoint_overlap, parse_unique_outpoints};
 use crate::model::WalletCoinControlInfo;
 use crate::{WalletCoreError, WalletCoreResult, WalletService};
 
@@ -19,6 +19,7 @@ impl WalletService {
             include_count = coin_control.include_outpoints.len(),
             exclude_count = coin_control.exclude_outpoints.len(),
             confirmed_only = coin_control.confirmed_only,
+            selection_mode = ?coin_control.selection_mode,
             "resolving coin control inputs"
         );
 
@@ -29,12 +30,7 @@ impl WalletService {
 
         let included = parse_unique_outpoints(&coin_control.include_outpoints)?;
         let excluded = parse_unique_outpoints(&coin_control.exclude_outpoints)?;
-
-        for outpoint in &included {
-            if excluded.contains(outpoint) {
-                return Err(WalletCoreError::CoinControlConflict(outpoint.to_string()));
-            }
-        }
+        ensure_no_outpoint_overlap(&included, &excluded)?;
 
         let wallet_utxos: Vec<_> = self.wallet.list_unspent().collect();
 
@@ -85,6 +81,7 @@ mod tests {
         assert!(cc.include_outpoints.is_empty());
         assert!(cc.exclude_outpoints.is_empty());
         assert!(!cc.confirmed_only);
+        assert!(cc.selection_mode.is_none());
     }
 
     #[test]
@@ -95,8 +92,10 @@ mod tests {
             ],
             exclude_outpoints: Vec::new(),
             confirmed_only: false,
+            selection_mode: None,
         };
 
         assert!(!cc.include_outpoints.is_empty());
+        assert!(cc.selection_mode.is_none());
     }
 }

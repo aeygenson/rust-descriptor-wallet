@@ -1,14 +1,20 @@
 use std::collections::HashSet;
 
 use bdk_wallet::KeychainKind;
-use bitcoin::{FeeRate, Sequence};
+use bitcoin::FeeRate;
 use tracing::{debug, info};
 
 use crate::model::{WalletConsolidationInfo, WalletConsolidationStrategy, WalletPsbtInfo};
 use crate::types::FeeRateSatPerVb;
 use crate::{WalletCoreError, WalletCoreResult};
 
-use super::{psbt_common::parse_unique_outpoints, WalletService};
+use super::{
+    common_outpoint::parse_optional_unique_outpoints,
+    common_selection::{effective_selection_mode, is_strict_manual_selection},
+    common_tx::RBF_SEQUENCE,
+    psbt_coin_selector::{select_inputs, SelectionConfig},
+    WalletService,
+};
 
 impl WalletService {
     /// Create an unsigned PSBT for a wallet-internal consolidation flow.
@@ -23,10 +29,11 @@ impl WalletService {
         consolidation: Option<WalletConsolidationInfo>,
     ) -> WalletCoreResult<WalletPsbtInfo> {
         debug!(
-            "wallet_service: create_consolidation_psbt start fee_rate_sat_per_vb={} enable_rbf={} has_consolidation={} ",
+            "wallet_service: create_consolidation_psbt start fee_rate_sat_per_vb={} enable_rbf={} has_consolidation={} selection_mode={:?}",
             fee_rate_sat_per_vb.as_u64(),
             enable_rbf,
             consolidation.is_some(),
+            consolidation.as_ref().and_then(|c| c.selection_mode),
         );
 
         if fee_rate_sat_per_vb.as_u64() == 0 {
@@ -44,11 +51,27 @@ impl WalletService {
             ..WalletConsolidationInfo::default()
         });
 
-        let selected_inputs = if effective_cfg.has_explicit_include_set() {
-            self.resolve_consolidation_selected_inputs(&effective_cfg, &wallet_utxos)?
-        } else {
-            self.select_consolidation_candidates(&effective_cfg, &wallet_utxos)?
+        let parsed_include = parse_optional_unique_outpoints(&effective_cfg.include_outpoints)?;
+        let parsed_exclude = parse_optional_unique_outpoints(&effective_cfg.exclude_outpoints)?;
+
+        let selection_mode = effective_selection_mode(
+            &effective_cfg.include_outpoints,
+            effective_cfg.selection_mode,
+        );
+
+        let selection_cfg = SelectionConfig {
+            include: parsed_include,
+            exclude: parsed_exclude,
+            confirmed_only: effective_cfg.confirmed_only,
+            max_input_count: effective_cfg.max_input_count,
+            min_input_count: effective_cfg.min_input_count,
+            min_value: effective_cfg.min_utxo_value_sat,
+            max_value: effective_cfg.max_utxo_value_sat,
+            strategy: effective_cfg.strategy,
+            mode: selection_mode,
         };
+
+        let selected_inputs = select_inputs(&wallet_utxos, &selection_cfg)?;
 
         if selected_inputs.len() < 2 {
             return Err(WalletCoreError::ConsolidationTooFewInputs);
@@ -101,11 +124,12 @@ impl WalletService {
         );
 
         debug!(
-            "wallet_service: create_consolidation_psbt selected_inputs={} excluded_inputs={} selected_total_sat={} estimated_fee_sat={}",
+            "wallet_service: create_consolidation_psbt selected_inputs={} excluded_inputs={} selected_total_sat={} estimated_fee_sat={} selection_mode={:?}",
             selected_inputs.len(),
             excluded_inputs.len(),
             selected_total_sat,
             fee_estimate_sat,
+            effective_cfg.selection_mode,
         );
 
         let mut builder = self.wallet.build_tx();
@@ -113,7 +137,7 @@ impl WalletService {
         builder.drain_to(change_script.clone());
 
         if enable_rbf {
-            builder.set_exact_sequence(Sequence(0xFFFFFFFD));
+            builder.set_exact_sequence(RBF_SEQUENCE);
         }
 
         for outpoint in &selected_inputs {
@@ -177,7 +201,7 @@ impl WalletService {
         let psbt_base64 = psbt.to_string();
 
         info!(
-            "wallet_service: create_consolidation_psbt success amount_sat={} fee_sat={} fee_rate_sat_per_vb={} actual_replaceable={} selected_utxos={} outputs={} min_input_count={:?} max_input_count={:?} strategy={:?}",
+            "wallet_service: create_consolidation_psbt success amount_sat={} fee_sat={} fee_rate_sat_per_vb={} actual_replaceable={} selected_utxos={} outputs={} min_input_count={:?} max_input_count={:?} strategy={:?} selection_mode={:?}",
             output_amount_sat,
             fee_sat,
             fee_rate_sat_per_vb.as_u64(),
@@ -187,6 +211,7 @@ impl WalletService {
             effective_cfg.min_input_count,
             effective_cfg.max_input_count,
             effective_cfg.strategy,
+            effective_cfg.selection_mode,
         );
 
         Ok(WalletPsbtInfo {
@@ -208,130 +233,6 @@ impl WalletService {
         })
     }
 
-    fn resolve_consolidation_selected_inputs(
-        &self,
-        cfg: &WalletConsolidationInfo,
-        wallet_utxos: &[bdk_wallet::LocalOutput],
-    ) -> WalletCoreResult<Vec<bitcoin::OutPoint>> {
-        let parsed = parse_unique_outpoints(&cfg.include_outpoints)?;
-        let wallet_map: HashSet<_> = wallet_utxos.iter().map(|u| u.outpoint).collect();
-
-        for outpoint in &parsed {
-            if !wallet_map.contains(outpoint) {
-                return Err(WalletCoreError::CoinControlOutpointNotFound(
-                    outpoint.to_string(),
-                ));
-            }
-
-            let utxo = wallet_utxos
-                .iter()
-                .find(|u| u.outpoint == *outpoint)
-                .expect("checked above");
-
-            if let Some(min_value_sat) = cfg.min_utxo_value_sat {
-                if utxo.txout.value.to_sat() < min_value_sat {
-                    return Err(WalletCoreError::ConsolidationValueFilterMismatch);
-                }
-            }
-
-            if let Some(max_value_sat) = cfg.max_utxo_value_sat {
-                if utxo.txout.value.to_sat() > max_value_sat {
-                    return Err(WalletCoreError::ConsolidationValueFilterMismatch);
-                }
-            }
-
-            if cfg.confirmed_only && !utxo.chain_position.is_confirmed() {
-                return Err(WalletCoreError::CoinControlOutpointNotConfirmed(
-                    outpoint.to_string(),
-                ));
-            }
-
-            if cfg
-                .exclude_outpoints
-                .iter()
-                .any(|item| item == &outpoint.to_string())
-            {
-                return Err(WalletCoreError::CoinControlConflict(format!(
-                    "outpoint {} appears in both include and exclude sets",
-                    outpoint
-                )));
-            }
-        }
-
-        if let Some(max_input_count) = cfg.max_input_count {
-            if parsed.len() > max_input_count {
-                return Err(WalletCoreError::CoinControlConflict(format!(
-                    "selected {} inputs exceeds consolidation max_input_count {}",
-                    parsed.len(),
-                    max_input_count
-                )));
-            }
-        }
-
-        Ok(parsed)
-    }
-
-    fn select_consolidation_candidates(
-        &self,
-        cfg: &WalletConsolidationInfo,
-        wallet_utxos: &[bdk_wallet::LocalOutput],
-    ) -> WalletCoreResult<Vec<bitcoin::OutPoint>> {
-        let excluded: HashSet<_> = cfg.exclude_outpoints.iter().cloned().collect();
-
-        let mut eligible: Vec<_> = wallet_utxos
-            .iter()
-            .filter(|u| !excluded.contains(&u.outpoint.to_string()))
-            .filter(|u| !cfg.confirmed_only || u.chain_position.is_confirmed())
-            .filter(|u| {
-                cfg.min_utxo_value_sat
-                    .map(|min| u.txout.value.to_sat() >= min)
-                    .unwrap_or(true)
-            })
-            .filter(|u| {
-                cfg.max_utxo_value_sat
-                    .map(|max| u.txout.value.to_sat() <= max)
-                    .unwrap_or(true)
-            })
-            .collect();
-
-        if eligible.is_empty() {
-            return Err(WalletCoreError::ConsolidationNoEligibleUtxos);
-        }
-
-        match cfg
-            .strategy
-            .unwrap_or(WalletConsolidationStrategy::SmallestFirst)
-        {
-            WalletConsolidationStrategy::SmallestFirst => {
-                eligible.sort_by(|a, b| {
-                    a.txout
-                        .value
-                        .to_sat()
-                        .cmp(&b.txout.value.to_sat())
-                        .then_with(|| a.outpoint.to_string().cmp(&b.outpoint.to_string()))
-                });
-            }
-            WalletConsolidationStrategy::LargestFirst => {
-                eligible.sort_by(|a, b| {
-                    b.txout
-                        .value
-                        .to_sat()
-                        .cmp(&a.txout.value.to_sat())
-                        .then_with(|| a.outpoint.to_string().cmp(&b.outpoint.to_string()))
-                });
-            }
-            WalletConsolidationStrategy::OldestFirst => {
-                eligible.sort_by(|a, b| a.outpoint.to_string().cmp(&b.outpoint.to_string()));
-            }
-        }
-
-        if let Some(max_input_count) = cfg.max_input_count {
-            eligible.truncate(max_input_count);
-        }
-
-        Ok(eligible.into_iter().map(|u| u.outpoint).collect())
-    }
-
     fn resolve_consolidation_exclusions(
         &self,
         cfg: Option<&WalletConsolidationInfo>,
@@ -342,7 +243,9 @@ impl WalletService {
         let explicit_excludes: HashSet<String> = cfg
             .map(|c| c.exclude_outpoints.iter().cloned().collect())
             .unwrap_or_default();
-        let strict_mode = cfg.map(|c| c.has_explicit_include_set()).unwrap_or(false);
+        let strict_mode = cfg
+            .map(|c| is_strict_manual_selection(&c.include_outpoints, c.selection_mode))
+            .unwrap_or(false);
 
         for utxo in wallet_utxos {
             let outpoint = utxo.outpoint;
@@ -359,5 +262,101 @@ impl WalletService {
         }
 
         exclusions
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::model::{WalletConsolidationInfo, WalletInputSelectionMode};
+    use crate::service::test_support::test_support::{
+        consolidation_cfg_with_mode, load_test_wallet, strict_manual_consolidation_cfg,
+    };
+
+    #[test]
+    fn consolidation_info_is_empty_when_all_controls_are_default() {
+        let info = WalletConsolidationInfo::default();
+        assert!(info.is_empty());
+    }
+
+    #[test]
+    fn consolidation_info_is_not_empty_when_selection_mode_is_set() {
+        let info = consolidation_cfg_with_mode(WalletInputSelectionMode::AutomaticOnly);
+        assert!(!info.is_empty());
+    }
+
+    #[test]
+    fn resolve_consolidation_exclusions_only_uses_explicit_excludes_in_non_strict_mode() {
+        let (_config, service) = load_test_wallet();
+        let wallet_utxos: Vec<_> = service.wallet.list_unspent().collect();
+        let selected_set: std::collections::HashSet<_> = std::collections::HashSet::new();
+
+        let cfg = WalletConsolidationInfo {
+            include_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
+            ],
+            exclude_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000002:0".to_string(),
+            ],
+            confirmed_only: false,
+            max_input_count: None,
+            min_input_count: None,
+            min_utxo_value_sat: None,
+            max_utxo_value_sat: None,
+            max_fee_pct_of_input_value: None,
+            strategy: None,
+            selection_mode: Some(WalletInputSelectionMode::ManualWithAutoCompletion),
+        };
+
+        let exclusions =
+            service.resolve_consolidation_exclusions(Some(&cfg), &wallet_utxos, &selected_set);
+
+        assert!(exclusions.len() <= wallet_utxos.len());
+    }
+
+    #[test]
+    fn resolve_consolidation_exclusions_adds_non_selected_utxos_in_strict_mode() {
+        let (_config, service) = load_test_wallet();
+        let wallet_utxos: Vec<_> = service.wallet.list_unspent().collect();
+
+        let selected_set: std::collections::HashSet<_> =
+            wallet_utxos.iter().take(1).map(|u| u.outpoint).collect();
+
+        let exclusions = service.resolve_consolidation_exclusions(
+            Some(&strict_manual_consolidation_cfg()),
+            &wallet_utxos,
+            &selected_set,
+        );
+
+        assert_eq!(
+            exclusions.len(),
+            wallet_utxos.len().saturating_sub(selected_set.len())
+        );
+    }
+
+    #[test]
+    fn resolve_consolidation_exclusions_respects_explicit_excludes_even_when_selected() {
+        let (_config, service) = load_test_wallet();
+        let wallet_utxos: Vec<_> = service.wallet.list_unspent().collect();
+
+        if let Some(first) = wallet_utxos.first() {
+            let selected_set: std::collections::HashSet<_> = [first.outpoint].into_iter().collect();
+            let cfg = WalletConsolidationInfo {
+                include_outpoints: vec![first.outpoint.to_string()],
+                exclude_outpoints: vec![first.outpoint.to_string()],
+                confirmed_only: false,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: Some(WalletInputSelectionMode::ManualWithAutoCompletion),
+            };
+
+            let exclusions =
+                service.resolve_consolidation_exclusions(Some(&cfg), &wallet_utxos, &selected_set);
+
+            assert!(exclusions.contains(&first.outpoint));
+        }
     }
 }

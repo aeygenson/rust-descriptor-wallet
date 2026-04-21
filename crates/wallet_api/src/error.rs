@@ -82,8 +82,20 @@ pub enum WalletApiError {
     #[error("psbt build failed: {0}")]
     PsbtBuildFailed(String),
 
+    #[error("fee calculation failed: {0}")]
+    FeeCalculationFailedWithReason(String),
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
+
+    #[error("invalid psbt encoding: {0}")]
+    InvalidPsbtEncoding(String),
+
+    #[error("invalid psbt structure: {0}")]
+    InvalidPsbtStructure(String),
+
+    #[error("invalid psbt semantic state: {0}")]
+    InvalidPsbtSemantic(String),
 
     #[error("invalid psbt: {0}")]
     InvalidPsbt(String),
@@ -171,7 +183,19 @@ impl From<WalletCoreError> for WalletApiError {
                 WalletApiError::DestinationNetworkMismatch(s)
             }
             WalletCoreError::PsbtBuildFailed(s) => WalletApiError::PsbtBuildFailed(s),
+            WalletCoreError::FeeCalculationFailedWithReason(reason) => {
+                WalletApiError::FeeCalculationFailedWithReason(reason)
+            }
             WalletCoreError::FeeCalculationFailed => WalletApiError::FeeCalculationFailed,
+            WalletCoreError::InvalidPsbtEncoding(reason) => {
+                WalletApiError::InvalidPsbtEncoding(reason)
+            }
+            WalletCoreError::InvalidPsbtStructure(reason) => {
+                WalletApiError::InvalidPsbtStructure(reason)
+            }
+            WalletCoreError::InvalidPsbtSemantic(reason) => {
+                WalletApiError::InvalidPsbtSemantic(reason)
+            }
             WalletCoreError::InvalidPsbt(e) => {
                 WalletApiError::InvalidPsbt(e.to_string())
             }

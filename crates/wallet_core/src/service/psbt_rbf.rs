@@ -1,21 +1,16 @@
 use super::{
-    psbt_common::{is_rbf_enabled, parse_txid},
+    common_outpoint::parse_txid,
+    common_tx::{
+        estimate_original_fee_rate_sat_per_vb, is_rbf_enabled, is_strict_fee_bump, RBF_SEQUENCE,
+    },
     *,
 };
 
-use bdk_wallet::{
-    bitcoin::{FeeRate, Sequence, Txid},
-    Wallet,
-};
+use bdk_wallet::bitcoin::FeeRate;
 
 use crate::{
     error::WalletCoreError, model::WalletPsbtInfo, types::FeeRateSatPerVb, WalletCoreResult,
 };
-
-/// Canonical opt-in RBF sequence used by the wallet when creating replaceable
-/// transactions. Keeping the same value here ensures bump transactions remain
-/// explicitly replaceable as well.
-const RBF_SEQUENCE: Sequence = Sequence(0xFFFFFFFD);
 
 impl WalletService {
     /// Build a replacement PSBT for an existing unconfirmed, RBF-enabled
@@ -58,7 +53,7 @@ impl WalletService {
         let original_sat_per_vb = FeeRateSatPerVb::from(original_fee_rate);
         let requested_sat_per_vb = new_fee_rate_sat_per_vb;
 
-        if !is_strict_fee_bump(original_sat_per_vb, requested_sat_per_vb) {
+        if !is_strict_fee_bump(original_sat_per_vb.as_u64(), requested_sat_per_vb.as_u64()) {
             return Err(WalletCoreError::FeeRateTooLowForBump {
                 txid: txid.to_string(),
                 original_sat_per_vb,
@@ -96,54 +91,13 @@ impl WalletService {
     }
 }
 
-fn is_strict_fee_bump(
-    original_sat_per_vb: FeeRateSatPerVb,
-    requested_sat_per_vb: FeeRateSatPerVb,
-) -> bool {
-    requested_sat_per_vb.as_u64() > original_sat_per_vb.as_u64()
-}
-
-/// Estimate the original fee rate from the wallet graph.
-///
-/// This implementation uses wallet-derived fee/vsize data when available.
-/// If your existing code already has a canonical "tx summary/details" path,
-/// prefer routing through that instead so all fee calculations stay consistent.
-fn estimate_original_fee_rate_sat_per_vb(
-    wallet: &Wallet,
-    txid: &Txid,
-) -> WalletCoreResult<FeeRate> {
-    let tx_node = wallet
-        .transactions()
-        .find(|canonical_tx| canonical_tx.tx_node.txid == *txid)
-        .ok_or(WalletCoreError::TransactionNotFound(txid.to_string()))?;
-
-    let fee = wallet
-        .calculate_fee(&tx_node.tx_node.tx)
-        .map_err(|source| WalletCoreError::TransactionFeeUnavailable {
-            txid: txid.to_string(),
-            reason: source.to_string(),
-        })?;
-
-    let vbytes = tx_node.tx_node.tx.vsize() as f32;
-    if vbytes <= 0.0 {
-        return Err(WalletCoreError::TransactionVsizeUnavailable(
-            txid.to_string(),
-        ));
-    }
-
-    let sat_per_vb = (fee.to_sat() as f32 / vbytes).ceil() as u64;
-    FeeRate::from_sat_per_vb(sat_per_vb).ok_or(WalletCoreError::TransactionFeeUnavailable {
-        txid: txid.to_string(),
-        reason: format!("invalid derived fee rate: {sat_per_vb} sat/vB"),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::types::FeeRateSatPerVb;
     use bdk_wallet::bitcoin::{
-        absolute, transaction, Amount, OutPoint, ScriptBuf, Transaction, TxIn, TxOut, Witness,
+        absolute, transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
+        Witness,
     };
 
     fn build_tx_with_sequence(sequence: Sequence) -> Transaction {
@@ -180,7 +134,10 @@ mod tests {
         let original = FeeRateSatPerVb::from(2);
         let requested = FeeRateSatPerVb::from(5);
 
-        assert!(is_strict_fee_bump(original, requested));
+        assert!(super::is_strict_fee_bump(
+            original.as_u64(),
+            requested.as_u64()
+        ));
     }
 
     #[test]
@@ -188,7 +145,10 @@ mod tests {
         let original = FeeRateSatPerVb::from(5);
         let requested = FeeRateSatPerVb::from(5);
 
-        assert!(!is_strict_fee_bump(original, requested));
+        assert!(!super::is_strict_fee_bump(
+            original.as_u64(),
+            requested.as_u64()
+        ));
     }
 
     #[test]
@@ -196,7 +156,10 @@ mod tests {
         let original = FeeRateSatPerVb::from(5);
         let requested = FeeRateSatPerVb::from(2);
 
-        assert!(!is_strict_fee_bump(original, requested));
+        assert!(!super::is_strict_fee_bump(
+            original.as_u64(),
+            requested.as_u64()
+        ));
     }
 }
 

@@ -15,6 +15,21 @@ use tokio::runtime::Handle;
 use tokio::task;
 use tracing::{debug, info};
 
+async fn spawn_wallet_blocking<T, E>(
+    f: impl FnOnce() -> Result<T, E> + Send + 'static,
+) -> WalletApiResult<T>
+where
+    T: Send + 'static,
+    E: Into<crate::WalletApiError> + Send + 'static,
+{
+    task::spawn_blocking(f)
+        .await
+        .map_err(|e| {
+            crate::WalletApiError::InvalidInput(format!("blocking wallet task failed: {e}"))
+        })?
+        .map_err(Into::into)
+}
+
 fn log_publish_error(name: &str, error: &WalletSyncError) {
     match error {
         WalletSyncError::BroadcastTransport(msg) => {
@@ -83,7 +98,7 @@ pub async fn create(
     let to_address = to_address.to_string();
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -105,7 +120,8 @@ pub async fn create(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -141,7 +157,7 @@ pub async fn create_with_coin_control(
     coin_control: WalletCoinControlDto,
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
-        "api psbt: create_with_coin_control start name={} to={} amount_sat={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        "api psbt: create_with_coin_control start name={} to={} amount_sat={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} selection_mode={:?}",
         name,
         to_address,
         amount_sat,
@@ -149,6 +165,7 @@ pub async fn create_with_coin_control(
         coin_control.include_outpoints.len(),
         coin_control.exclude_outpoints.len(),
         coin_control.confirmed_only,
+        coin_control.selection_mode,
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -159,7 +176,7 @@ pub async fn create_with_coin_control(
     let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -182,7 +199,8 @@ pub async fn create_with_coin_control(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -225,7 +243,7 @@ pub async fn create_send_max(
     let to_address = to_address.to_string();
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -245,7 +263,8 @@ pub async fn create_send_max(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create_send_max success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -277,13 +296,14 @@ pub async fn create_send_max_with_coin_control(
     coin_control: WalletCoinControlDto,
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
-        "api psbt: create_send_max_with_coin_control start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        "api psbt: create_send_max_with_coin_control start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} selection_mode={:?}",
         name,
         to_address,
         fee_rate_sat_per_vb,
         coin_control.include_outpoints.len(),
         coin_control.exclude_outpoints.len(),
         coin_control.confirmed_only,
+        coin_control.selection_mode,
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -293,7 +313,7 @@ pub async fn create_send_max_with_coin_control(
     let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -314,7 +334,8 @@ pub async fn create_send_max_with_coin_control(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create_send_max_with_coin_control success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -348,13 +369,14 @@ pub async fn create_sweep(
     coin_control: WalletCoinControlDto,
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
-        "api psbt: create_sweep start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={}",
+        "api psbt: create_sweep start name={} to={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} selection_mode={:?}",
         name,
         to_address,
         fee_rate_sat_per_vb,
         coin_control.include_outpoints.len(),
         coin_control.exclude_outpoints.len(),
         coin_control.confirmed_only,
+        coin_control.selection_mode,
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -364,7 +386,7 @@ pub async fn create_sweep(
     let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -385,7 +407,8 @@ pub async fn create_sweep(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create_sweep success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -419,7 +442,7 @@ pub async fn create_consolidation(
     consolidation: WalletConsolidationDto,
 ) -> WalletApiResult<WalletPsbtDto> {
     debug!(
-        "api psbt: create_consolidation start name={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?}",
+        "api psbt: create_consolidation start name={} fee_rate_sat_per_vb={} include_outpoints={} exclude_outpoints={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?} selection_mode={:?}",
         name,
         fee_rate_sat_per_vb,
         consolidation.include_outpoints.len(),
@@ -431,6 +454,7 @@ pub async fn create_consolidation(
         consolidation.max_utxo_value_sat,
         consolidation.max_fee_pct_of_input_value,
         consolidation.strategy,
+        consolidation.selection_mode,
     );
 
     let config = load_wallet_config(storage, name).await?;
@@ -439,7 +463,7 @@ pub async fn create_consolidation(
     let consolidation = wallet_core::model::WalletConsolidationInfo::from(consolidation);
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -453,7 +477,8 @@ pub async fn create_consolidation(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: create_consolidation success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
@@ -487,14 +512,15 @@ pub async fn sign(
     let psbt_base64 = psbt_base64.to_string();
     let name_for_error = name.to_string();
 
-    let signed = task::block_in_place(|| {
+    let signed = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet.sign_psbt(&psbt_base64).map_err(|e| {
             tracing::error!("api psbt: sign failed name={} error={}", name_for_error, e);
             e
         })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: sign status={} name={} modified={} finalized={} txid={} psbt_len={}",
@@ -520,7 +546,7 @@ pub async fn publish(
     let psbt_base64 = psbt_base64.to_string();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
+    let published = spawn_wallet_blocking(move || -> WalletApiResult<TxBroadcastResultDto> {
         let wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
@@ -537,7 +563,8 @@ pub async fn publish(
             txid: finalized.txid,
             replaceable: Some(finalized.replaceable),
         })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: publish success name={} txid={} replaceable={:?}",
@@ -629,9 +656,10 @@ pub async fn bump_fee_psbt(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let txid = txid.to_string();
+    let txid_for_log = txid.clone();
     let name_for_error = name.to_string();
 
-    let psbt = task::block_in_place(|| {
+    let psbt = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
         wallet
@@ -646,12 +674,13 @@ pub async fn bump_fee_psbt(
                 );
                 e
             })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: bump_fee_psbt success name={} original_txid={} replacement_txid={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
-        txid,
+        txid_for_log,
         psbt.txid,
         psbt.fee_sat,
         psbt.fee_rate_sat_per_vb,
@@ -695,10 +724,12 @@ pub async fn cpfp_psbt(
     let selected_outpoint = selected_outpoint.to_string();
     let name_for_error = name.to_string();
 
-    let cpfp = task::block_in_place(|| {
+    let handle = Handle::current();
+
+    let cpfp = spawn_wallet_blocking(move || {
         let mut wallet = WalletService::load_or_create(&config)?;
 
-        Handle::current().block_on(async {
+        handle.block_on(async {
             wallet
                 .create_cpfp_psbt(&parent_txid, &selected_outpoint, fee_rate_sat_per_vb.as_u64())
                 .await
@@ -714,7 +745,8 @@ pub async fn cpfp_psbt(
                     e
                 })
         })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: cpfp_psbt success name={} parent_txid={} child_txid={} selected_outpoint={} input_value_sat={} child_output_value_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} estimated_vsize={} psbt_len={}",
@@ -751,9 +783,10 @@ pub async fn bump_fee(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let txid = txid.to_string();
+    let txid_for_log = txid.clone();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
+    let published = spawn_wallet_blocking(move || -> WalletApiResult<TxBroadcastResultDto> {
         let mut wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
@@ -793,11 +826,12 @@ pub async fn bump_fee(
             txid: finalized.txid,
             replaceable: Some(finalized.replaceable),
         })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: bump_fee success name={} original_txid={} replacement_txid={} replaceable={:?}",
-        name, txid, published.txid, published.replaceable,
+        name, txid_for_log, published.txid, published.replaceable,
     );
 
     Ok(published)
@@ -822,13 +856,18 @@ pub async fn cpfp(
 
     let parent_txid = parent_txid.to_string();
     let selected_outpoint = selected_outpoint.to_string();
+    let parent_txid_for_log = parent_txid.clone();
+    let selected_outpoint_for_log = selected_outpoint.clone();
+    let fee_rate_sat_per_vb_for_log = fee_rate_sat_per_vb.as_u64();
     let name_for_error = name.to_string();
 
-    let published = task::block_in_place(|| -> WalletApiResult<TxBroadcastResultDto> {
+    let handle = Handle::current();
+
+    let published = spawn_wallet_blocking(move || -> WalletApiResult<TxBroadcastResultDto> {
         let mut wallet = WalletService::load_or_create(&config)?;
         let sync_service = WalletSyncService::new();
 
-        let cpfp_psbt = Handle::current()
+        let cpfp_psbt = handle
             .block_on(async {
                 wallet
                     .create_cpfp_psbt(&parent_txid, &selected_outpoint, fee_rate_sat_per_vb.as_u64())
@@ -869,15 +908,16 @@ pub async fn cpfp(
             txid: finalized.txid,
             replaceable: Some(finalized.replaceable),
         })
-    })?;
+    })
+    .await?;
 
     info!(
         "api psbt: cpfp success name={} parent_txid={} selected_outpoint={} child_txid={} fee_rate_sat_per_vb={} replaceable={:?}",
         name,
-        parent_txid,
-        selected_outpoint,
+        parent_txid_for_log,
+        selected_outpoint_for_log,
         published.txid,
-        fee_rate_sat_per_vb.as_u64(),
+        fee_rate_sat_per_vb_for_log,
         published.replaceable,
     );
 
@@ -915,11 +955,16 @@ mod tests {
                 "0000000000000000000000000000000000000000000000000000000000000002:1".to_string(),
             ],
             confirmed_only: true,
+            selection_mode: Some(crate::model::WalletInputSelectionModeDto::StrictManual),
         };
 
         assert_eq!(dto.include_outpoints.len(), 1);
         assert_eq!(dto.exclude_outpoints.len(), 1);
         assert!(dto.confirmed_only);
+        assert!(matches!(
+            dto.selection_mode,
+            Some(crate::model::WalletInputSelectionModeDto::StrictManual)
+        ));
     }
 
     #[test]
@@ -998,6 +1043,7 @@ mod tests {
             max_utxo_value_sat: Some(100_000),
             max_fee_pct_of_input_value: Some(5),
             strategy: Some(crate::model::WalletConsolidationStrategyDto::SmallestFirst),
+            selection_mode: Some(crate::model::WalletInputSelectionModeDto::AutomaticOnly),
         };
 
         assert_eq!(dto.include_outpoints.len(), 2);
@@ -1011,6 +1057,10 @@ mod tests {
         assert!(matches!(
             dto.strategy,
             Some(crate::model::WalletConsolidationStrategyDto::SmallestFirst)
+        ));
+        assert!(matches!(
+            dto.selection_mode,
+            Some(crate::model::WalletInputSelectionModeDto::AutomaticOnly)
         ));
     }
 }

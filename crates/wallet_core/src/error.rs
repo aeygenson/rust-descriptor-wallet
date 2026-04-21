@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum WalletCoreError {
-    #[error("invalid state: {0}")]
+    #[error("invariant violation: {0}")]
     InvalidState(String),
 
     #[error("not implemented: {0}")]
@@ -113,6 +113,9 @@ pub enum WalletCoreError {
     #[error("coin control strict mode violation: selected inputs do not fully fund the transaction and automatic additional inputs are not allowed")]
     CoinControlStrictModeViolation,
 
+    #[error("input selection failed: {0}")]
+    SelectionFailed(String),
+
     #[error("coin control insufficient selected funds: selected={selected_sat}, required={required_sat}, fee_estimate={fee_estimate_sat}")]
     CoinControlInsufficientSelectedFunds {
         selected_sat: u64,
@@ -147,8 +150,20 @@ pub enum WalletCoreError {
     #[error("consolidation produced no eligible UTXOs after applying filters")]
     ConsolidationNoEligibleUtxos,
 
+    #[error("fee calculation failed: {0}")]
+    FeeCalculationFailedWithReason(String),
+
     #[error("fee calculation failed")]
     FeeCalculationFailed,
+
+    #[error("invalid psbt encoding: {0}")]
+    InvalidPsbtEncoding(String),
+
+    #[error("invalid psbt structure: {0}")]
+    InvalidPsbtStructure(String),
+
+    #[error("invalid psbt semantic state: {0}")]
+    InvalidPsbtSemantic(String),
 
     #[error("invalid psbt: {0}")]
     InvalidPsbt(String),
@@ -169,6 +184,28 @@ pub enum WalletCoreError {
 
 impl From<PsbtParseError> for WalletCoreError {
     fn from(e: PsbtParseError) -> Self {
-        WalletCoreError::InvalidPsbt(e.to_string())
+        WalletCoreError::InvalidPsbtEncoding(e.to_string())
+    }
+}
+
+impl WalletCoreError {
+    /// Build a fee-calculation error with contextual detail.
+    pub fn fee_calculation_failed(reason: impl Into<String>) -> Self {
+        Self::FeeCalculationFailedWithReason(reason.into())
+    }
+
+    /// Build an invalid-PSBT encoding error.
+    pub fn invalid_psbt_encoding(reason: impl Into<String>) -> Self {
+        Self::InvalidPsbtEncoding(reason.into())
+    }
+
+    /// Build an invalid-PSBT structure error.
+    pub fn invalid_psbt_structure(reason: impl Into<String>) -> Self {
+        Self::InvalidPsbtStructure(reason.into())
+    }
+
+    /// Build an invalid-PSBT semantic-state error.
+    pub fn invalid_psbt_semantic(reason: impl Into<String>) -> Self {
+        Self::InvalidPsbtSemantic(reason.into())
     }
 }

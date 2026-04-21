@@ -67,7 +67,27 @@ This will:
 
 - start `bitcoind` in regtest mode
 - wait for RPC readiness
+- create or load the local `miner` wallet
+- mine the initial 101 blocks when the chain is empty
 - start `electrs`
+- wait for the Electrum port to listen
+
+The script is intentionally idempotent: if `bitcoind` or `electrs` already owns the configured ports for this regtest profile, startup reuses the running services instead of starting duplicates.
+
+Binary discovery uses `PATH` by default. Override these variables when needed:
+
+```bash
+BITCOIND_BIN=/path/to/bitcoind \
+BITCOIN_CLI_BIN=/path/to/bitcoin-cli \
+ELECTRS_BIN=/path/to/electrs \
+./start.sh
+```
+
+Electrs output is written to:
+
+```text
+infra/regtest/electrs/electrs.log
+```
 
 ---
 
@@ -101,6 +121,8 @@ This will:
 ```bash
 ./stop.sh
 ```
+
+This stops electrs first, frees the Electrum and monitoring ports if needed, then stops the regtest `bitcoind` instance for this datadir. The default Electrum port is `60401`.
 
 ---
 
@@ -171,5 +193,14 @@ Current automated regtest coverage includes:
 - sweep PSBT creation and one-shot sweep flows
 - wallet-internal consolidation PSBT creation and one-shot consolidation flows
 - coin-control PSBT creation and send flows
+- strict manual, manual-with-auto-completion, and automatic-only input selection behavior
 - RBF replacement and confirmation checks
 - CPFP child build, publish, and confirmation checks
+
+Run the full API regtest suite serially:
+
+```bash
+cargo test -p wallet_api --test regtest_flow -- --nocapture --test-threads=1
+```
+
+The test file uses current-thread Tokio tests plus `serial_test`, which keeps RustRover and Cargo runs aligned with the shared local regtest services.

@@ -1,6 +1,9 @@
 use bdk_chain::ChainPosition;
 use tracing::debug;
 
+use super::common_tx::{
+    classify_tx_direction, fee_rate_sat_per_vb_from_fee_and_vsize, is_rbf_enabled,
+};
 use super::*;
 use crate::model::WalletTxInfo;
 use crate::types::{AmountSat, TxDirection};
@@ -49,18 +52,7 @@ impl WalletService {
             let received_sat = received.to_sat();
             let net_value = received_sat as i64 - sent_sat as i64;
 
-            let has_wallet_inputs = sent_sat > 0;
-            let has_wallet_outputs = received_sat > 0;
-
-            let direction = if !has_wallet_inputs && has_wallet_outputs {
-                TxDirection::Received
-            } else if has_wallet_inputs && net_value < 0 {
-                TxDirection::Sent
-            } else if has_wallet_inputs && has_wallet_outputs {
-                TxDirection::SelfTransfer
-            } else {
-                TxDirection::Sent
-            };
+            let direction = classify_tx_direction(sent_sat, received_sat, net_value);
 
             let fee = if direction == TxDirection::Received {
                 None
@@ -72,15 +64,13 @@ impl WalletService {
             };
 
             let fee_rate_sat_per_vb = fee.as_ref().map(|fee_sat| {
-                let vsize = tx.tx_node.tx.vsize() as u64;
-                if vsize == 0 {
-                    0
-                } else {
-                    fee_sat.as_u64().div_ceil(vsize)
-                }
+                fee_rate_sat_per_vb_from_fee_and_vsize(
+                    fee_sat.as_u64(),
+                    tx.tx_node.tx.vsize() as u64,
+                )
             });
 
-            let replaceable = tx.tx_node.tx.is_explicitly_rbf();
+            let replaceable = is_rbf_enabled(&tx.tx_node.tx);
 
             // Determine confirmation status and height from chain position
             let (confirmed, confirmation_height) = match tx.chain_position {
@@ -108,46 +98,11 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
-    };
-    use crate::WalletConfig;
-    use bitcoin::Network;
-    use std::path::PathBuf;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    fn test_config() -> WalletConfig {
-        WalletConfig {
-            network: Network::Signet,
-            descriptors: WalletDescriptors {
-                external: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-                internal: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
-            },
-            backend: WalletBackendConfig {
-                sync: SyncBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                },
-                broadcast: Some(BroadcastBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                }),
-            },
-            db_path: unique_test_db_path("wallet_core_txs"),
-            is_watch_only: true,
-        }
-    }
-
-    fn unique_test_db_path(prefix: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX_EPOCH")
-            .as_nanos();
-
-        std::env::temp_dir().join(format!("{}_{}_{}.db", prefix, std::process::id(), nanos))
-    }
+    use crate::service::test_support::test_support::test_config_with_db_prefix;
 
     #[test]
     fn transactions_empty_for_fresh_wallet() {
-        let config = test_config();
+        let config = test_config_with_db_prefix("wallet_core_txs");
         let wallet = WalletService::load_or_create(&config)
             .expect("wallet should load or create successfully");
 
@@ -158,7 +113,7 @@ mod tests {
 
     #[test]
     fn transactions_have_consistent_fields() {
-        let config = test_config();
+        let config = test_config_with_db_prefix("wallet_core_txs");
         let wallet = WalletService::load_or_create(&config)
             .expect("wallet should load or create successfully");
 

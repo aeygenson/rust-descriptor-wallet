@@ -39,18 +39,18 @@
 
   <rect class="card" x="380" y="170" rx="28" ry="28" width="300" height="130" />
   <text x="530" y="232" text-anchor="middle" class="label">wallet_api</text>
-  <text x="530" y="260" text-anchor="middle" class="subtle">commands and orchestration</text>
+  <text x="530" y="260" text-anchor="middle" class="subtle">send, RBF, CPFP orchestration</text>
 
   <rect class="card" x="870" y="170" rx="28" ry="28" width="360" height="130" />
   <text x="1050" y="232" text-anchor="middle" class="label">wallet_core (BDK)</text>
-  <text x="1050" y="260" text-anchor="middle" class="subtle">wallet logic and PSBT flow</text>
+  <text x="1050" y="260" text-anchor="middle" class="subtle">selection, signing, PSBT flow</text>
 
   <ellipse class="card" cx="1445" cy="235" rx="120" ry="56" />
   <text x="1445" y="242" text-anchor="middle" class="label">Blockchain</text>
 
   <rect class="card" x="290" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="440" y="682" text-anchor="middle" class="label">wallet_sync</text>
-  <text x="440" y="710" text-anchor="middle" class="subtle">Esplora, Electrum, Core RPC</text>
+  <text x="440" y="710" text-anchor="middle" class="subtle">sync and broadcast backends</text>
 
   <rect class="card" x="790" y="620" rx="28" ry="28" width="300" height="130" />
   <text x="940" y="682" text-anchor="middle" class="label">wallet_storage</text>

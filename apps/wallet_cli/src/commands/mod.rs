@@ -54,6 +54,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
             runtime::create_psbt_with_coin_control(
                 api,
@@ -64,6 +65,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 include,
                 exclude,
                 confirmed_only,
+                selection_mode,
             )
             .await?;
         }
@@ -77,6 +79,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
             runtime::create_send_max_psbt_with_coin_control(
                 api,
@@ -86,6 +89,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 include,
                 exclude,
                 confirmed_only,
+                selection_mode,
             )
             .await?;
         }
@@ -125,6 +129,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
             runtime::send_psbt_with_coin_control(
                 api,
@@ -135,6 +140,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 include,
                 exclude,
                 confirmed_only,
+                selection_mode,
             )
             .await?;
         }
@@ -148,6 +154,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
             runtime::send_max_psbt_with_coin_control(
                 api,
@@ -157,6 +164,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 include,
                 exclude,
                 confirmed_only,
+                selection_mode,
             )
             .await?;
         }
@@ -167,9 +175,19 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
-            runtime::create_sweep_psbt(api, &name, &to, fee_rate, include, exclude, confirmed_only)
-                .await?;
+            runtime::create_sweep_psbt(
+                api,
+                &name,
+                &to,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+                selection_mode,
+            )
+            .await?;
         }
         Commands::CreateConsolidationPsbt {
             name,
@@ -183,6 +201,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             max_utxo_value_sat,
             max_fee_pct_of_input_value,
             strategy,
+            selection_mode,
         } => {
             runtime::create_consolidation_psbt(
                 api,
@@ -197,6 +216,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 max_utxo_value_sat,
                 max_fee_pct_of_input_value,
                 strategy,
+                selection_mode,
             )
             .await?;
         }
@@ -207,9 +227,19 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             include,
             exclude,
             confirmed_only,
+            selection_mode,
         } => {
-            runtime::sweep_psbt(api, &name, &to, fee_rate, include, exclude, confirmed_only)
-                .await?;
+            runtime::sweep_psbt(
+                api,
+                &name,
+                &to,
+                fee_rate,
+                include,
+                exclude,
+                confirmed_only,
+                selection_mode,
+            )
+            .await?;
         }
         Commands::ConsolidatePsbt {
             name,
@@ -223,6 +253,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             max_utxo_value_sat,
             max_fee_pct_of_input_value,
             strategy,
+            selection_mode,
         } => {
             runtime::consolidate_psbt(
                 api,
@@ -237,6 +268,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
                 max_utxo_value_sat,
                 max_fee_pct_of_input_value,
                 strategy,
+                selection_mode,
             )
             .await?;
         }

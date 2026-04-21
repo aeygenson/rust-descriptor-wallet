@@ -9,6 +9,21 @@ use super::wallet::load_wallet_config;
 
 use tracing::{debug, info};
 
+async fn spawn_wallet_blocking<T, E>(
+    f: impl FnOnce() -> Result<T, E> + Send + 'static,
+) -> WalletApiResult<T>
+where
+    T: Send + 'static,
+    E: Into<crate::WalletApiError> + Send + 'static,
+{
+    task::spawn_blocking(f)
+        .await
+        .map_err(|e| {
+            crate::WalletApiError::InvalidInput(format!("blocking wallet task failed: {e}"))
+        })?
+        .map_err(Into::into)
+}
+
 /// Return wallet transaction history using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
@@ -17,13 +32,14 @@ pub async fn txs(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<Wal
 
     let config = load_wallet_config(storage, name).await?;
 
-    let txs: Vec<WalletTxDto> = task::block_in_place(|| {
+    let txs: Vec<WalletTxDto> = spawn_wallet_blocking(move || {
         let wallet = WalletService::load_or_create(&config)?;
 
         let txs: Vec<WalletTxDto> = wallet.transactions().into_iter().map(Into::into).collect();
 
         Ok::<_, crate::WalletApiError>(txs)
-    })?;
+    })
+    .await?;
 
     info!("api inspect: txs success name={} count={}", name, txs.len());
 
@@ -38,13 +54,14 @@ pub async fn utxos(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<W
 
     let config = load_wallet_config(storage, name).await?;
 
-    let utxos: Vec<WalletUtxoDto> = task::block_in_place(|| {
+    let utxos: Vec<WalletUtxoDto> = spawn_wallet_blocking(move || {
         let wallet = WalletService::load_or_create(&config)?;
 
         let utxos: Vec<WalletUtxoDto> = wallet.utxos().into_iter().map(Into::into).collect();
 
         Ok::<_, crate::WalletApiError>(utxos)
-    })?;
+    })
+    .await?;
 
     info!(
         "api inspect: utxos success name={} count={}",

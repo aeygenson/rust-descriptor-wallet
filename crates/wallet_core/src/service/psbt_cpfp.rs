@@ -1,9 +1,9 @@
 use tracing::{debug, info};
 
-use bdk_wallet::bitcoin::{Amount, OutPoint, Txid};
+use bdk_wallet::bitcoin::Amount;
 use bdk_wallet::KeychainKind;
 
-use super::psbt_common::parse_outpoint;
+use super::common_outpoint::parse_bitcoin_outpoint;
 use crate::error::WalletCoreError;
 use crate::model::{WalletCpfpBuildPlan, WalletCpfpPsbtInfo};
 use crate::{WalletCoreResult, WalletService};
@@ -27,7 +27,7 @@ impl WalletService {
         input_value_sat: u64,
         fee_rate_sat_per_vb: u64,
     ) -> WalletCoreResult<WalletCpfpBuildPlan> {
-        let _ = parse_outpoint(selected_outpoint)?;
+        let _ = parse_bitcoin_outpoint(selected_outpoint)?;
 
         let estimated_vsize = Self::estimate_cpfp_vsize();
         let fee_sat = fee_rate_sat_per_vb
@@ -59,11 +59,7 @@ impl WalletService {
         parent_txid: &str,
         build_plan: &WalletCpfpBuildPlan,
     ) -> WalletCoreResult<(String, String)> {
-        let (txid_str, vout) = parse_outpoint(&build_plan.input_outpoint)?;
-        let txid = txid_str
-            .parse::<Txid>()
-            .map_err(|_| WalletCoreError::InvalidTxid(txid_str.to_string()))?;
-        let outpoint = OutPoint::new(txid, vout);
+        let outpoint = parse_bitcoin_outpoint(&build_plan.input_outpoint)?;
 
         let internal_addr = self.wallet.peek_address(KeychainKind::Internal, 0);
 
@@ -174,36 +170,6 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn parse_outpoint_succeeds_for_valid_outpoint() {
-        let (txid, vout) =
-            parse_outpoint("b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1")
-                .expect("valid outpoint should parse");
-
-        assert_eq!(
-            txid,
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee"
-        );
-        assert_eq!(vout, 1);
-    }
-
-    #[test]
-    fn parse_outpoint_fails_for_missing_separator() {
-        let err = parse_outpoint("not_an_outpoint").expect_err("missing ':' should fail");
-
-        assert!(matches!(err, WalletCoreError::InvalidTxid(_)));
-    }
-
-    #[test]
-    fn parse_outpoint_fails_for_invalid_vout() {
-        let err = parse_outpoint(
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:not_a_number",
-        )
-        .expect_err("invalid vout should fail");
-
-        assert!(matches!(err, WalletCoreError::InvalidTxid(_)));
-    }
 
     #[test]
     fn build_cpfp_plan_calculates_fee_and_output() {

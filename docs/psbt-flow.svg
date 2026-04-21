@@ -48,7 +48,7 @@
   <rect class="accent" x="380" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="505" y="246" text-anchor="middle" class="small">SELECT</text>
   <text x="505" y="278" text-anchor="middle" class="label">Coin Selection</text>
-  <text x="505" y="306" text-anchor="middle" class="subtle">policy or strict manual coin control</text>
+  <text x="505" y="306" text-anchor="middle" class="subtle">strict, auto-complete, or automatic</text>
 
   <rect class="card" x="680" y="190" rx="28" ry="28" width="250" height="130" />
   <text x="805" y="246" text-anchor="middle" class="small">CREATE</text>
@@ -106,7 +106,7 @@
   <rect class="card" x="1280" y="560" rx="28" ry="28" width="250" height="130" />
   <text x="1405" y="616" text-anchor="middle" class="small">PUBLISH</text>
   <text x="1405" y="648" text-anchor="middle" class="label">wallet_sync</text>
-  <text x="1405" y="676" text-anchor="middle" class="subtle">Esplora publish of replacement</text>
+  <text x="1405" y="676" text-anchor="middle" class="subtle">publish replacement backend</text>
 
   <rect class="card" x="640" y="710" rx="28" ry="28" width="320" height="90" />
   <text x="800" y="762" text-anchor="middle" class="label">wallet_api</text>

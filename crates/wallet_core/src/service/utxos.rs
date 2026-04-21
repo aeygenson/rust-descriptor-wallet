@@ -1,3 +1,4 @@
+use super::common_outpoint::outpoint_txid;
 use super::*;
 use bdk_chain::ChainPosition;
 use bdk_wallet::KeychainKind;
@@ -58,16 +59,11 @@ impl WalletService {
         result
     }
 
-    /// Return the transaction id portion of an outpoint string (`txid:vout`).
-    pub fn outpoint_txid(outpoint: &str) -> &str {
-        outpoint.split(':').next().unwrap_or("")
-    }
-
     /// Return all wallet UTXOs belonging to the given parent transaction id.
     pub fn utxos_for_txid(&self, txid: &str) -> Vec<WalletUtxoInfo> {
         self.utxos()
             .into_iter()
-            .filter(|u| Self::outpoint_txid(&u.outpoint) == txid)
+            .filter(|u| outpoint_txid(&u.outpoint) == txid)
             .collect()
     }
 
@@ -83,58 +79,12 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
-    };
-    use bitcoin::Network;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-
+    use crate::service::test_support::test_support::test_config_with_db_prefix;
     use crate::types::WalletKeychain;
-    use crate::WalletConfig;
-
-    static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    fn test_config() -> WalletConfig {
-        WalletConfig {
-            network: Network::Signet,
-            descriptors: WalletDescriptors {
-                external: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-                internal: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
-            },
-            backend: WalletBackendConfig {
-                sync: SyncBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                },
-                broadcast: Some(BroadcastBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                }),
-            },
-            db_path: unique_test_db_path("wallet_core_utxos"),
-            is_watch_only: true,
-        }
-    }
-
-    fn unique_test_db_path(prefix: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX_EPOCH")
-            .as_nanos();
-        let seq = TEST_DB_COUNTER.fetch_add(1, Ordering::Relaxed);
-
-        std::env::temp_dir().join(format!(
-            "{}_{}_{}_{}.db",
-            prefix,
-            std::process::id(),
-            nanos,
-            seq
-        ))
-    }
 
     #[test]
     fn utxos_empty_for_fresh_wallet() {
-        let config = test_config();
+        let config = test_config_with_db_prefix("wallet_core_utxos");
         let wallet = WalletService::load_or_create(&config)
             .expect("wallet should load or create successfully");
 
@@ -145,7 +95,7 @@ mod tests {
 
     #[test]
     fn utxos_have_consistent_fields() {
-        let config = test_config();
+        let config = test_config_with_db_prefix("wallet_core_utxos");
         let wallet = WalletService::load_or_create(&config)
             .expect("wallet should load or create successfully");
 
@@ -165,22 +115,5 @@ mod tests {
                 "unexpected keychain"
             );
         }
-    }
-
-    #[test]
-    fn outpoint_txid_extracts_txid_prefix() {
-        let txid = WalletService::outpoint_txid(
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
-        );
-        assert_eq!(
-            txid,
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee"
-        );
-    }
-
-    #[test]
-    fn outpoint_txid_returns_whole_string_when_separator_missing() {
-        let txid = WalletService::outpoint_txid("not_an_outpoint");
-        assert_eq!(txid, "not_an_outpoint");
     }
 }

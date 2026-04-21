@@ -121,6 +121,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a send-max PSBT without signing or broadcasting it.
     CreateSendMaxPsbt {
@@ -161,6 +165,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a sweep PSBT using explicit coin control.
     SweepPsbt {
@@ -187,6 +195,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a sweep transaction using explicit coin control.
     Sweep {
@@ -213,6 +225,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a wallet-internal consolidation PSBT.
     CreateConsolidationPsbt {
@@ -259,6 +275,10 @@ pub enum Commands {
         #[arg(long = "strategy", value_parser = parse_consolidation_strategy)]
         /// Optional automatic candidate-selection strategy.
         strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a wallet-internal consolidation transaction.
     ConsolidatePsbt {
@@ -305,6 +325,10 @@ pub enum Commands {
         #[arg(long = "strategy", value_parser = parse_consolidation_strategy)]
         /// Optional automatic candidate-selection strategy.
         strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Sign an existing PSBT.
     SignPsbt {
@@ -401,6 +425,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a send-max transaction in one step.
     SendMaxPsbt {
@@ -441,6 +469,10 @@ pub enum Commands {
         #[arg(long = "confirmed-only", default_value_t = false)]
         /// Only allow confirmed UTXOs.
         confirmed_only: bool,
+
+        #[arg(long = "selection-mode")]
+        /// Input selection mode (strict-manual | manual-with-auto-completion | automatic-only)
+        selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a CPFP (Child-Pays-For-Parent) PSBT to accelerate a stuck transaction.
     CpfpPsbt {

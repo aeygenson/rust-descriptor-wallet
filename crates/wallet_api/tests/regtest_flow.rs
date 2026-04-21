@@ -9,7 +9,7 @@ mod regtest_suite {
     use test_support::{mempool_contains, RegtestEnv};
     use wallet_api::factory::build_default_api;
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
         // 1. Start regtest environment
@@ -50,7 +50,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_self_send_creates_change() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -134,7 +134,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_bump_fee_replaces_unconfirmed_transaction() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -279,7 +279,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -379,7 +379,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -452,7 +452,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -586,7 +586,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -648,7 +648,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -682,7 +682,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_uses_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -708,6 +708,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -722,7 +723,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -752,6 +753,7 @@ mod regtest_suite {
                     include_outpoints: requested.clone(),
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -770,7 +772,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_excludes_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -796,6 +798,7 @@ mod regtest_suite {
                     include_outpoints: Vec::new(),
                     exclude_outpoints: vec![excluded.clone()],
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -815,7 +818,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_rejects_unconfirmed_selected_utxo_when_confirmed_only(
     ) -> anyhow::Result<()> {
@@ -852,6 +855,7 @@ mod regtest_suite {
                     include_outpoints: vec![selected.outpoint.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -867,7 +871,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -893,6 +897,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -925,7 +930,7 @@ mod regtest_suite {
 
         Ok(())
     }
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_rejects_invalid_outpoint() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -948,6 +953,7 @@ mod regtest_suite {
                     include_outpoints: vec!["invalid_outpoint".to_string()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: false,
+                    selection_mode: None,
                 },
             )
             .await
@@ -958,7 +964,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_rejects_conflicting_rules() -> anyhow::Result<()>
     {
@@ -983,6 +989,7 @@ mod regtest_suite {
                     include_outpoints: vec![outpoint.clone()],
                     exclude_outpoints: vec![outpoint.clone()],
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -993,7 +1000,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_psbt_with_coin_control_rejects_insufficient_selected_inputs(
     ) -> anyhow::Result<()> {
@@ -1017,6 +1024,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1032,7 +1040,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_send_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1062,6 +1070,7 @@ mod regtest_suite {
                     include_outpoints: requested.clone(),
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1097,7 +1106,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_send_max_psbt_builds_after_sync() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1138,7 +1147,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_send_max_psbt_with_coin_control_uses_requested_utxo(
     ) -> anyhow::Result<()> {
@@ -1164,6 +1173,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1186,7 +1196,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1211,6 +1221,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1250,7 +1261,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_send_max_psbt_with_coin_control_rejects_insufficient_after_fees(
     ) -> anyhow::Result<()> {
@@ -1276,6 +1287,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1293,7 +1305,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos(
     ) -> anyhow::Result<()> {
@@ -1323,6 +1335,7 @@ mod regtest_suite {
                     include_outpoints: requested.clone(),
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1363,7 +1376,7 @@ mod regtest_suite {
 
         Ok(())
     }
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_uses_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1388,6 +1401,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1415,7 +1429,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_rejects_missing_selected_outpoint() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1439,6 +1453,7 @@ mod regtest_suite {
                     ],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: false,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1454,7 +1469,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_rejects_conflicting_rules() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1476,6 +1491,7 @@ mod regtest_suite {
                     include_outpoints: vec![outpoint.clone()],
                     exclude_outpoints: vec![outpoint.clone()],
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1491,7 +1507,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_rejects_unconfirmed_selected_utxo_when_confirmed_only(
     ) -> anyhow::Result<()> {
@@ -1527,6 +1543,7 @@ mod regtest_suite {
                     include_outpoints: vec![selected.outpoint.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1542,7 +1559,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_rejects_insufficient_after_fees() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1567,6 +1584,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1584,7 +1602,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_sweep_psbt_sweeps_requested_utxo() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1601,7 +1619,7 @@ mod regtest_suite {
 
         let destination = api.address(wallet_name).await?;
         let published = api
-            .sweep_psbt(
+            .sweep_and_broadcast(
                 wallet_name,
                 &destination,
                 1,
@@ -1609,6 +1627,7 @@ mod regtest_suite {
                     include_outpoints: vec![requested.0.clone()],
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1645,7 +1664,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_sweep_psbt_uses_all_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1674,6 +1693,7 @@ mod regtest_suite {
                     include_outpoints: requested.clone(),
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1700,7 +1720,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_sweep_psbt_sweeps_all_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1721,7 +1741,7 @@ mod regtest_suite {
 
         let destination = api.address(wallet_name).await?;
         let published = api
-            .sweep_psbt(
+            .sweep_and_broadcast(
                 wallet_name,
                 &destination,
                 1,
@@ -1729,6 +1749,7 @@ mod regtest_suite {
                     include_outpoints: requested.clone(),
                     exclude_outpoints: Vec::new(),
                     confirmed_only: true,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1770,7 +1791,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_builds_after_sync() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1796,6 +1817,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1831,7 +1853,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_uses_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1864,6 +1886,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -1886,7 +1909,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_missing_selected_outpoint(
     ) -> anyhow::Result<()> {
@@ -1917,6 +1940,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1934,7 +1958,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_conflicting_rules() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -1961,6 +1985,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -1976,7 +2001,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_unconfirmed_selected_utxos_when_confirmed_only(
     ) -> anyhow::Result<()> {
@@ -2024,6 +2049,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -2041,7 +2067,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_too_few_inputs() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -2067,6 +2093,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -2082,7 +2109,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_insufficient_after_fees() -> anyhow::Result<()>
     {
@@ -2117,6 +2144,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -2132,7 +2160,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_consolidate_psbt_spends_requested_utxos_and_creates_internal_output(
     ) -> anyhow::Result<()> {
@@ -2153,7 +2181,7 @@ mod regtest_suite {
             .collect();
 
         let published = api
-            .consolidate_psbt(
+            .consolidate_and_broadcast(
                 wallet_name,
                 1,
                 wallet_api::model::WalletConsolidationDto {
@@ -2166,6 +2194,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2213,7 +2242,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_min_input_count_not_met() -> anyhow::Result<()>
     {
@@ -2240,6 +2269,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -2249,7 +2279,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_applies_min_utxo_value_filter() -> anyhow::Result<()>
     {
@@ -2275,6 +2305,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2283,7 +2314,109 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
+    #[serial]
+    async fn wallet_create_consolidation_psbt_recipient_count_and_change_consistency(
+    ) -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 3, 80_000).await?;
+        api.sync_wallet(wallet_name).await?;
+
+        let psbt = api
+            .create_consolidation_psbt(
+                wallet_name,
+                1,
+                wallet_api::model::WalletConsolidationDto {
+                    include_outpoints: Vec::new(),
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                    max_input_count: Some(3),
+                    min_input_count: Some(2),
+                    min_utxo_value_sat: None,
+                    max_utxo_value_sat: None,
+                    max_fee_pct_of_input_value: None,
+                    strategy: None,
+                    selection_mode: None,
+                },
+            )
+            .await?;
+
+        assert_eq!(psbt.recipient_count, 1);
+        assert_eq!(psbt.output_count, 1);
+        assert!(psbt.change_amount_sat.is_some());
+        assert!(psbt.amount_sat > 0);
+        assert!(psbt.fee_sat > 0);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[serial]
+    async fn wallet_send_max_psbt_recipient_and_no_change_invariant() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
+        api.sync_wallet(wallet_name).await?;
+
+        let destination = api.address(wallet_name).await?;
+        let psbt = api
+            .create_send_max_psbt(wallet_name, &destination, 1)
+            .await?;
+
+        assert_eq!(psbt.recipient_count, 1);
+        assert_eq!(psbt.output_count, 1);
+        assert!(psbt.change_amount_sat.is_none());
+        assert!(psbt.amount_sat > 0);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[serial]
+    async fn wallet_coin_control_psbt_input_output_consistency() -> anyhow::Result<()> {
+        let env = RegtestEnv::new();
+        env.start()?;
+
+        let api = build_default_api().await?;
+        let wallet_name = "regtest-local";
+
+        let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
+        let requested = confirmed[0].0.clone();
+
+        let destination = api.address(wallet_name).await?;
+        let psbt = api
+            .create_psbt_with_coin_control(
+                wallet_name,
+                &destination,
+                10_000,
+                1,
+                wallet_api::model::WalletCoinControlDto {
+                    include_outpoints: vec![requested.clone()],
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                    selection_mode: None,
+                },
+            )
+            .await?;
+
+        assert_eq!(psbt.input_count, 1);
+        assert_eq!(psbt.selected_inputs.len(), 1);
+        assert_eq!(psbt.recipient_count, 1);
+        assert!(psbt.output_count >= 1);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_applies_max_utxo_value_filter() -> anyhow::Result<()>
     {
@@ -2293,7 +2426,13 @@ mod regtest_suite {
         let api = build_default_api().await?;
         let wallet_name = "regtest-local";
 
-        ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 50_000).await?;
+        for _ in 0..2 {
+            let addr = api.address(wallet_name).await?;
+            let addr = parse_regtest_address(&addr)?;
+            env.fund_sats(&addr, 20_000)?;
+        }
+        env.mine(1)?;
+        api.sync_wallet(wallet_name).await?;
 
         let psbt = api
             .create_consolidation_psbt(
@@ -2309,6 +2448,7 @@ mod regtest_suite {
                     max_utxo_value_sat: Some(30_000),
                     max_fee_pct_of_input_value: None,
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2317,7 +2457,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_rejects_fee_pct_limit() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -2343,6 +2483,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: Some(1),
                     strategy: None,
+                    selection_mode: None,
                 },
             )
             .await
@@ -2352,7 +2493,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_uses_largest_first_strategy() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -2368,6 +2509,7 @@ mod regtest_suite {
             .utxos(wallet_name)
             .await?
             .into_iter()
+            .filter(|u| u.confirmed)
             .map(|u| (u.outpoint, u.value))
             .collect();
         available.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -2388,6 +2530,7 @@ mod regtest_suite {
                     max_utxo_value_sat: None,
                     max_fee_pct_of_input_value: None,
                     strategy: Some(wallet_api::model::WalletConsolidationStrategyDto::LargestFirst),
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2400,7 +2543,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_uses_smallest_first_strategy() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -2416,6 +2559,7 @@ mod regtest_suite {
             .utxos(wallet_name)
             .await?
             .into_iter()
+            .filter(|u| u.confirmed)
             .map(|u| (u.outpoint, u.value))
             .collect();
         available.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
@@ -2438,6 +2582,7 @@ mod regtest_suite {
                     strategy: Some(
                         wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
                     ),
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2450,7 +2595,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_preserves_core_invariants() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
@@ -2478,6 +2623,7 @@ mod regtest_suite {
                     strategy: Some(
                         wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
                     ),
+                    selection_mode: None,
                 },
             )
             .await?;
@@ -2528,7 +2674,7 @@ mod regtest_suite {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[serial]
     async fn wallet_create_consolidation_psbt_fuzz_preserves_invariants() -> anyhow::Result<()> {
         fn next_u64(state: &mut u64) -> u64 {
@@ -2614,6 +2760,7 @@ mod regtest_suite {
                         max_utxo_value_sat,
                         max_fee_pct_of_input_value: None,
                         strategy,
+                        selection_mode: None,
                     },
                 )
                 .await;

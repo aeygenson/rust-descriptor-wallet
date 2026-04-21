@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports wallet-internal UTXO consolidation, including manual selected-input consolidation, automatic candidate selection, and full regtest integration coverage.
+Current milestone: the project now supports real wallet transaction operations across coin control, send-max, sweep, consolidation, RBF, and CPFP, with explicit input-selection modes and full local regtest integration coverage.
 
 ## Vision
 
@@ -64,6 +64,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - end-to-end create/sign/publish orchestration in the API layer
 - coin-control transaction building with explicit include/exclude outpoints
 - strict coin-control enforcement for explicitly included input sets
+- explicit input-selection modes: `strict-manual`, `manual-with-auto-completion`, and `automatic-only`
 - confirmed-only coin-control selection for safer manual spending
 - send-max PSBT creation and one-shot send flow
 - sweep PSBT creation and one-shot sweep flow
@@ -72,12 +73,12 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - replacement PSBT creation for RBF-enabled transactions
 - one-shot fee bump flow from replacement build through publish
 - CPFP PSBT creation for unconfirmed parent transactions
-- end-to-end CPFP flow through build, sign, publish, and confirmation in integration tests
+- one-shot CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
 - stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
 - regtest support scripts under `infra/regtest`
 - reusable `test_support` helpers for local node control, mining, funding, and mempool inspection
-- local integration tests covering receive, self-send/change, send-max, sweep, consolidation, coin control, RBF replacement, and CPFP flows
+- single-threaded local integration tests covering receive, self-send/change, send-max, sweep, consolidation, coin control, RBF replacement, and CPFP flows
 
 ### In Progress
 
@@ -88,9 +89,9 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 
 ### Expected Shortly
 
-- broader fee management and transaction controls
+- richer transaction policy controls around selection defaults, limits, and safety checks
 - hardware-signing flow on top of the same PSBT pipeline
-- first end-to-end wallet flow across the workspace layers
+- first desktop flow on top of the same wallet API boundary
 
 ## Planned Capabilities
 
@@ -211,23 +212,24 @@ cargo run -p wallet_cli -- status --name regtest-local
 cargo run -p wallet_cli -- txs --name regtest-local
 cargo run -p wallet_cli -- utxos --name regtest-local
 cargo run -p wallet_cli -- create-psbt --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2
-cargo run -p wallet_cli -- create-psbt-with-coin-control --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
+cargo run -p wallet_cli -- create-psbt-with-coin-control --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only --selection-mode strict-manual
 cargo run -p wallet_cli -- create-send-max-psbt --name regtest-local --to bcrt1... --fee-rate 2
-cargo run -p wallet_cli -- create-send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
-cargo run -p wallet_cli -- sweep-psbt --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only
-cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first
-cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --include <txid:vout> --include <txid:vout> --confirmed-only
-cargo run -p wallet_cli -- sign-psbt --name regtest-local --psbt '<base64>'
-cargo run -p wallet_cli -- publish-psbt --name regtest-local --psbt '<base64>'
+cargo run -p wallet_cli -- create-send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only --selection-mode strict-manual
+cargo run -p wallet_cli -- sweep-psbt --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only --selection-mode strict-manual
+cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first --selection-mode automatic-only
+cargo run -p wallet_cli -- create-consolidation-psbt --name regtest-local --fee-rate 2 --include <txid:vout> --include <txid:vout> --confirmed-only --selection-mode strict-manual
+cargo run -p wallet_cli -- sign-psbt --name regtest-local --psbt-base64 '<base64>'
+cargo run -p wallet_cli -- publish-psbt --name regtest-local --psbt-base64 '<base64>'
 cargo run -p wallet_cli -- bump-fee-psbt --name regtest-local --txid <txid> --fee-rate 5
 cargo run -p wallet_cli -- bump-fee --name regtest-local --txid <txid> --fee-rate 5
 cargo run -p wallet_cli -- cpfp-psbt --name regtest-local --parent-txid <txid> --outpoint <txid:vout> --fee-rate 5
+cargo run -p wallet_cli -- cpfp --name regtest-local --parent-txid <txid> --outpoint <txid:vout> --fee-rate 5
 cargo run -p wallet_cli -- send-psbt --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2
-cargo run -p wallet_cli -- send-psbt-with-coin-control --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
+cargo run -p wallet_cli -- send-psbt-with-coin-control --name regtest-local --to bcrt1... --amount 5000 --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only --selection-mode strict-manual
 cargo run -p wallet_cli -- send-max-psbt --name regtest-local --to bcrt1... --fee-rate 2
-cargo run -p wallet_cli -- send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only
-cargo run -p wallet_cli -- sweep --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only
-cargo run -p wallet_cli -- consolidate-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first
+cargo run -p wallet_cli -- send-max-psbt-with-coin-control --name regtest-local --to bcrt1... --fee-rate 2 --include <txid:vout> --exclude <txid:vout> --confirmed-only --selection-mode strict-manual
+cargo run -p wallet_cli -- sweep --name regtest-local --to bcrt1... --include <txid:vout> --exclude <txid:vout> --fee-rate 2 --confirmed-only --selection-mode strict-manual
+cargo run -p wallet_cli -- consolidate-psbt --name regtest-local --fee-rate 2 --confirmed-only --min-input-count 2 --strategy smallest-first --selection-mode automatic-only
 ```
 
 Current note on coin control:
@@ -235,7 +237,10 @@ Current note on coin control:
 - `--include` explicitly locks the spend to the listed wallet outpoints
 - `--exclude` marks wallet outpoints as unspendable for that build
 - `--confirmed-only` rejects selected unconfirmed inputs
-- included outpoints are now strict: if they do not fully fund the amount plus estimated fee, the build fails instead of auto-selecting more wallet inputs
+- without an explicit `--selection-mode`, included outpoints default to strict manual selection
+- `--selection-mode strict-manual` uses only explicitly included inputs
+- `--selection-mode manual-with-auto-completion` pins included inputs and allows extra eligible wallet inputs when needed
+- `--selection-mode automatic-only` ignores manual includes and lets the wallet select from eligible candidates
 - use `utxos` first, then `create-psbt-with-coin-control` or `send-psbt-with-coin-control`
 
 Current note on `send-max` and `sweep`:
@@ -252,12 +257,14 @@ Current note on consolidation:
 - without explicit includes, automatic selection defaults to confirmed-only and `smallest-first`
 - `--include` can force exact outpoints, while `--exclude` prevents specific wallet outpoints from being selected
 - `--min-input-count`, `--max-input-count`, `--min-utxo-value-sat`, `--max-utxo-value-sat`, `--max-fee-pct`, and `--strategy` tune automatic consolidation
+- `--selection-mode` decides whether consolidation is strict manual, manual plus automatic completion, or fully automatic
 
 Current note on `cpfp-psbt`:
 
 - use `txs` and `utxos` to choose a wallet-owned unconfirmed parent output
 - pass that outpoint explicitly with `--outpoint`
 - then run `cpfp-psbt`, `sign-psbt`, and `publish-psbt` for the full manual flow
+- or run `cpfp` for the one-shot build, sign, and publish flow
 
 What is stored right now:
 
@@ -280,7 +287,7 @@ What works at runtime now:
 - inspect spendable UTXOs from the current synced state
 - create an unsigned PSBT with destination, amount, fee, and selected input summary
 - create PSBTs with explicit include/exclude coin-control constraints
-- enforce strict exact-input selection when explicit include sets are provided
+- choose strict manual, manual-with-auto-completion, or automatic-only input selection
 - create send-max PSBTs that drain the full allowed spendable balance after fees
 - create sweep PSBTs that drain explicitly selected outpoints
 - create wallet-internal consolidation PSBTs from manual or automatically selected UTXO sets
@@ -298,6 +305,7 @@ What works at runtime now:
 - execute a full fee-bump flow through replacement build, sign, and publish
 - build CPFP PSBTs for eligible unconfirmed parent transactions
 - sign and publish CPFP child transactions through the same PSBT pipeline
+- run current-thread, serial regtest integration tests safely from RustRover or Cargo
 - run local regtest-backed integration flows against real node services
 
 Core domain types introduced:

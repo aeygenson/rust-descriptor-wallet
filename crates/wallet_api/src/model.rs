@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use wallet_core::model::{
-    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletPsbtInfo,
-    WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
+    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletInputSelectionMode,
+    WalletPsbtInfo, WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
 };
 
 /// Lightweight wallet summary for listing and UI
@@ -84,12 +84,60 @@ pub struct WalletStatusDto {
     pub last_block_height: Option<u32>,
 }
 
+/// DTO input-selection mode used by coin-control and consolidation APIs.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum WalletInputSelectionModeDto {
+    StrictManual,
+    ManualWithAutoCompletion,
+    AutomaticOnly,
+}
+
+impl From<WalletInputSelectionModeDto> for WalletInputSelectionMode {
+    fn from(value: WalletInputSelectionModeDto) -> Self {
+        match value {
+            WalletInputSelectionModeDto::StrictManual => WalletInputSelectionMode::StrictManual,
+            WalletInputSelectionModeDto::ManualWithAutoCompletion => {
+                WalletInputSelectionMode::ManualWithAutoCompletion
+            }
+            WalletInputSelectionModeDto::AutomaticOnly => WalletInputSelectionMode::AutomaticOnly,
+        }
+    }
+}
+
+impl From<WalletInputSelectionMode> for WalletInputSelectionModeDto {
+    fn from(value: WalletInputSelectionMode) -> Self {
+        match value {
+            WalletInputSelectionMode::StrictManual => Self::StrictManual,
+            WalletInputSelectionMode::ManualWithAutoCompletion => Self::ManualWithAutoCompletion,
+            WalletInputSelectionMode::AutomaticOnly => Self::AutomaticOnly,
+        }
+    }
+}
+
+impl std::str::FromStr for WalletInputSelectionModeDto {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "strict-manual" => Ok(Self::StrictManual),
+            "manual-with-auto-completion" => Ok(Self::ManualWithAutoCompletion),
+            "automatic-only" => Ok(Self::AutomaticOnly),
+            other => Err(format!(
+                "invalid input selection mode '{}'; expected one of: strict-manual, manual-with-auto-completion, automatic-only",
+                other
+            )),
+        }
+    }
+}
+
 /// Coin control options for transaction building
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WalletCoinControlDto {
     pub include_outpoints: Vec<String>,
     pub exclude_outpoints: Vec<String>,
     pub confirmed_only: bool,
+    pub selection_mode: Option<WalletInputSelectionModeDto>,
 }
 
 // Conversion into core model
@@ -99,6 +147,7 @@ impl From<WalletCoinControlDto> for WalletCoinControlInfo {
             include_outpoints: value.include_outpoints,
             exclude_outpoints: value.exclude_outpoints,
             confirmed_only: value.confirmed_only,
+            selection_mode: value.selection_mode.map(Into::into),
         }
     }
 }
@@ -157,6 +206,7 @@ pub struct WalletConsolidationDto {
     pub max_utxo_value_sat: Option<u64>,
     pub max_fee_pct_of_input_value: Option<u8>,
     pub strategy: Option<WalletConsolidationStrategyDto>,
+    pub selection_mode: Option<WalletInputSelectionModeDto>,
 }
 
 // Conversion into core model
@@ -172,6 +222,7 @@ impl From<WalletConsolidationDto> for WalletConsolidationInfo {
             max_utxo_value_sat: value.max_utxo_value_sat,
             max_fee_pct_of_input_value: value.max_fee_pct_of_input_value,
             strategy: value.strategy.map(Into::into),
+            selection_mode: value.selection_mode.map(Into::into),
         }
     }
 }

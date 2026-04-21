@@ -60,7 +60,7 @@ impl WalletService {
 
         Self::attach_signers_if_present(&mut wallet, config)?;
         info!(
-            "wallet_service: load_or_create success path={} network={:?} watch_only={}",
+            "wallet_service: load_or_create success path={} network={:?} watch_only= {}",
             config.db_path.display(),
             config.network,
             config.is_watch_only
@@ -197,65 +197,7 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{
-        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
-    };
-    use bitcoin::Network;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::{SystemTime, UNIX_EPOCH};
-    static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
-
-    fn test_config() -> WalletConfig {
-        WalletConfig {
-            network: Network::Signet,
-            descriptors: WalletDescriptors {
-                external: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/0/*)#z3x5097m".to_string(),
-                internal: "tr([12071a7c/86'/1'/0']tpubDCaLkqfh67Qr7ZuRrUNrCYQ54sMjHfsJ4yQSGb3aBr1yqt3yXpamRBUwnGSnyNnxQYu7rqeBiPfw3mjBcFNX4ky2vhjj9bDrGstkfUbLB9T/1/*)#n9r4jswr".to_string(),
-            },
-            backend: WalletBackendConfig {
-                sync: SyncBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                },
-                broadcast: Some(BroadcastBackendConfig::Esplora {
-                    url: "https://mempool.space/signet/api".to_string(),
-                }),
-            },
-            db_path: unique_test_db_path("wallet_core_lifecycle"),
-            is_watch_only: true,
-        }
-    }
-
-    fn signing_test_config() -> WalletConfig {
-        WalletConfig {
-            network: Network::Signet,
-            descriptors: WalletDescriptors {
-                external: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/0/*)#ps8nx7gn".to_string(),
-                internal: "tr([73c5da0a/86'/1'/0']tprv8gytrHbFLhE7zLJ6BvZWEDDGJe8aS8VrmFnvqpMv8CEZtUbn2NY5KoRKQNpkcL1yniyCBRi7dAPy4kUxHkcSvd9jzLmLMEG96TPwant2jbX/1/*)#syzjmtct".to_string(),
-            },
-            backend: WalletBackendConfig {
-                sync: SyncBackendConfig::Esplora {
-                    url: "https://mutinynet.com/api".to_string(),
-                },
-                broadcast: Some(BroadcastBackendConfig::Esplora {
-                    url: "https://mutinynet.com/api".to_string(),
-                }),
-            },
-            db_path: unique_test_db_path("wallet_core_lifecycle_signing"),
-            is_watch_only: false,
-        }
-    }
-
-    fn unique_test_db_path(prefix: &str) -> PathBuf {
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time before UNIX_EPOCH")
-            .as_nanos();
-        let counter = TEST_DB_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let pid = std::process::id();
-
-        std::env::temp_dir().join(format!("{}_{}_{}_{}.db", prefix, pid, nanos, counter))
-    }
+    use crate::service::test_support::test_support::{signing_test_config, test_config};
 
     #[test]
     fn load_or_create_creates_wallet_successfully() {

@@ -1,4 +1,4 @@
-use crate::{
+pub(crate) use crate::{
     types::{AmountSat, TxDirection, WalletKeychain},
     WalletCoreResult,
 };
@@ -53,6 +53,9 @@ pub struct WalletUtxoInfo {
 /// This also serves as the explicit input-selection model for sweep flows,
 /// where the caller provides the exact outpoints to drain to a destination.
 ///
+/// The model can also describe merged manual + automatic selection when
+/// `selection_mode` is set to `ManualWithAutoCompletion`.
+///
 /// This is a domain model (not API DTO) and should not depend on wallet_api.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WalletCoinControlInfo {
@@ -64,13 +67,24 @@ pub struct WalletCoinControlInfo {
 
     /// If true, only confirmed UTXOs may be used.
     pub confirmed_only: bool,
+
+    /// Describes how explicit manual selection should interact with automatic
+    /// selection.
+    pub selection_mode: Option<WalletInputSelectionMode>,
 }
 
 impl WalletCoinControlInfo {
-    pub fn is_empty(&self) -> bool {
+    /// Returns true when this configuration has no effect on input selection.
+    pub fn is_noop(&self) -> bool {
         self.include_outpoints.is_empty()
             && self.exclude_outpoints.is_empty()
             && !self.confirmed_only
+            && self.selection_mode.is_none()
+    }
+
+    /// Backward-compatible alias for `is_noop()`.
+    pub fn is_empty(&self) -> bool {
+        self.is_noop()
     }
 
     /// Returns true when an explicit include set is present.
@@ -80,6 +94,22 @@ impl WalletCoinControlInfo {
     pub fn has_explicit_include_set(&self) -> bool {
         !self.include_outpoints.is_empty()
     }
+}
+
+/// Domain mode describing how manual input selection should interact with
+/// automatic candidate selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum WalletInputSelectionMode {
+    /// Only explicitly included inputs may be used.
+    StrictManual,
+
+    /// Explicitly included inputs are pinned, and additional eligible inputs may
+    /// be added automatically if needed.
+    #[default]
+    ManualWithAutoCompletion,
+
+    /// Ignore explicit include sets and rely only on automatic selection.
+    AutomaticOnly,
 }
 
 /// Strategy used when automatically selecting UTXOs for consolidation.
@@ -107,6 +137,7 @@ pub enum WalletConsolidationStrategy {
 /// The model supports both:
 /// - strict/manual consolidation via an explicit include set
 /// - automatic consolidation via value filters and selection strategy
+/// - merged manual + automatic consolidation via `selection_mode`
 ///
 /// This is a domain model (not API DTO) and should not depend on wallet_api.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -140,10 +171,15 @@ pub struct WalletConsolidationInfo {
 
     /// Optional automatic candidate-selection strategy.
     pub strategy: Option<WalletConsolidationStrategy>,
+
+    /// Describes how explicit manual selection should interact with automatic
+    /// selection during consolidation.
+    pub selection_mode: Option<WalletInputSelectionMode>,
 }
 
 impl WalletConsolidationInfo {
-    pub fn is_empty(&self) -> bool {
+    /// Returns true when this configuration has no effect on consolidation behavior.
+    pub fn is_noop(&self) -> bool {
         self.include_outpoints.is_empty()
             && self.exclude_outpoints.is_empty()
             && !self.confirmed_only
@@ -153,6 +189,12 @@ impl WalletConsolidationInfo {
             && self.max_utxo_value_sat.is_none()
             && self.max_fee_pct_of_input_value.is_none()
             && self.strategy.is_none()
+            && self.selection_mode.is_none()
+    }
+
+    /// Backward-compatible alias for `is_noop()`.
+    pub fn is_empty(&self) -> bool {
+        self.is_noop()
     }
 
     /// Returns true when an explicit include set is present.
@@ -255,7 +297,9 @@ impl WalletPsbtInfo {
             .map(|txin| txin.previous_output.to_string())
             .collect();
         let output_count = psbt.unsigned_tx.output.len();
-        let recipient_count = output_count;
+        // Conservative assumption: if there is more than one output, one is likely change
+        // This avoids overcounting recipients in minimal mode without wallet context
+        let recipient_count = output_count.saturating_sub(1);
         let estimated_vsize = psbt.unsigned_tx.vsize() as u64;
 
         Ok(Self {
