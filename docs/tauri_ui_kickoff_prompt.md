@@ -41,14 +41,21 @@ Important domain/model concepts already exist or were recently added:
 - `WalletPsbtInfo`
 - `WalletCoinControlInfo`
 - `WalletCpfpPsbtInfo`
+- `WalletInputSelectionMode`
+  - `StrictManual`
+  - `ManualWithAutoCompletion`
+  - `AutomaticOnly`
 - `WalletSendAmountMode`
   - `Fixed(AmountSat)`
   - `Max`
 
 Important behavior already exists:
 - normal PSBT creation
-- coin control
-- strict input selection
+- coin control with explicit include/exclude outpoints
+- explicit input-selection modes:
+  - strict manual selection
+  - manual selection with automatic completion
+  - fully automatic selection
 - send-max
 - sweep semantics
 - wallet-internal consolidation
@@ -82,6 +89,7 @@ Important API capabilities already exist:
 Important DTOs already exist:
 - `WalletPsbtDto`
 - `WalletCoinControlDto`
+- input-selection mode DTO fields for coin control, send-max, sweep, and consolidation
 - transaction broadcast result DTOs
 - wallet/tx/utxo DTOs
 
@@ -101,6 +109,8 @@ Important DTOs already exist:
 - `output_count`
 - `recipient_count`
 - `estimated_vsize`
+
+The UI should preserve these preview fields instead of recomputing transaction facts in TypeScript.
 
 #### `wallet_cli`
 This is important.
@@ -126,6 +136,13 @@ The CLI/runtime currently exposes flows such as:
 - CPFP PSBT
 - CPFP
 
+Coin-control style commands now expose `--selection-mode` where relevant:
+- `strict-manual`
+- `manual-with-auto-completion`
+- `automatic-only`
+
+The Tauri UI should expose the same concept in user-friendly language, but keep the backend vocabulary visible in advanced/details views.
+
 I want the Tauri UI to treat `wallet_cli` as a strong reference for:
 - user-facing workflow shape
 - naming consistency
@@ -146,6 +163,9 @@ It already has regtest coverage for:
 - CPFP build / broadcast / confirm
 - explicit outpoint selection
 - coin control include/exclude/conflicts
+- strict manual selection
+- manual-with-auto-completion selection
+- automatic-only selection
 - strict insufficient-input behavior
 - send-max build / sweep
 - sweep as first-class API path
@@ -153,6 +173,7 @@ It already has regtest coverage for:
 - multi-input strict flows
 - confirmed-only behavior
 - no-internal-change invariants in sweep-like flows
+- current-thread, serial execution compatible with Cargo and RustRover
 
 This means the backend should be treated as relatively stable, and the UI should build on it rather than reshaping it.
 
@@ -180,11 +201,16 @@ The UTXO table should support:
 - value
 - confirmed/unconfirmed
 - keychain (external/internal)
+- address where available
 - maybe spendable state if available
 - sorting
 - filtering
 - multi-select checkboxes
 - ability to prefill send / send-max / sweep / consolidation forms from selected UTXOs
+- a clear selected-input policy control:
+  - selected only
+  - selected plus wallet completion
+  - automatic wallet selection
 
 ### 3. Send form
 A real send form, not just a single address/amount screen.
@@ -197,6 +223,7 @@ It should support:
 - manual UTXO selection
 - exclude selected UTXOs
 - confirmed-only toggle
+- input-selection mode selector
 - PSBT preview before broadcast
 - normal fixed send
 - send-max
@@ -216,6 +243,7 @@ Before signing or broadcasting, show:
 - change amount
 - replaceable yes/no
 - whether this is fixed send / send-max / sweep / consolidation / CPFP / RBF
+- selected-input policy and whether extra inputs were auto-selected
 
 ### 5. Transactions screen
 Should show:
@@ -240,6 +268,7 @@ For example:
 - select one or more UTXOs from UTXO table
 - choose “Sweep selected”
 - enter destination + fee rate
+- default to strict manual selection
 - preview no-change behavior
 - sign/broadcast
 
@@ -248,7 +277,7 @@ Consolidation should be presented as wallet maintenance, not as a recipient paym
 For example:
 - select two or more UTXOs from the UTXO table or use automatic selection
 - choose “Consolidate selected”
-- choose fee rate, confirmation policy, input-count/value filters, fee ceiling, and strategy
+- choose fee rate, selection mode, confirmation policy, input-count/value filters, fee ceiling, and strategy
 - preview that the output is wallet-internal
 - sign/broadcast
 
@@ -326,9 +355,12 @@ Especially commands around:
 - tx list
 - utxo list
 - create PSBT
+- create PSBT with coin control and selection mode
 - create send-max
 - create sweep
 - create consolidation
+- bump fee
+- CPFP
 - send / broadcast
 
 ### E. Design the UTXO table and send flow UX in detail
@@ -354,9 +386,11 @@ Such as:
 - overcoupling frontend state
 - duplicating backend logic
 - making coin control confusing
+- hiding the difference between strict manual, manual-with-auto-completion, and automatic-only selection
 - not representing strict sweep semantics clearly
 - presenting consolidation like an external payment instead of wallet maintenance
 - poor PSBT preview UX
+- letting frontend-selected UTXOs drift from backend-selected inputs without showing the final `selected_inputs`
 
 ---
 
@@ -401,4 +435,7 @@ When discussing transaction flows, use the existing project vocabulary:
 - CPFP
 - selected inputs
 - explicit include set
-- strict mode
+- input-selection mode
+- strict manual
+- manual-with-auto-completion
+- automatic-only
