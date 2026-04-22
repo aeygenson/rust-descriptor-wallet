@@ -1,7 +1,8 @@
 use tracing::{debug, info};
 
 use crate::model::WalletFinalizedTxInfo;
-use crate::service::common_tx::{extract_finalized_tx, finalized_tx_broadcast_info, parse_psbt};
+use crate::service::common_tx::{extract_finalized_tx, finalized_tx_broadcast_info};
+use crate::types::PsbtBase64;
 use crate::WalletCoreResult;
 
 use super::*;
@@ -11,18 +12,18 @@ impl WalletService {
     /// return the finalized transaction data needed for broadcasting.
     pub fn finalize_psbt_for_broadcast(
         &self,
-        psbt_base64: &str,
+        psbt_base64: &PsbtBase64,
     ) -> WalletCoreResult<WalletFinalizedTxInfo> {
         debug!("wallet_service: finalize_psbt_for_broadcast start");
 
-        let psbt = parse_psbt(psbt_base64)?;
+        let psbt = psbt_base64.to_psbt()?;
         let tx = extract_finalized_tx(&psbt)?;
         let (txid, tx_hex, replaceable) = finalized_tx_broadcast_info(&tx);
 
         info!(
             "wallet_service: finalize_psbt_for_broadcast prepared finalized transaction txid={} hex_len={}",
             txid,
-            tx_hex.len()
+            tx_hex.as_str().len()
         );
 
         Ok(WalletFinalizedTxInfo {
@@ -37,16 +38,23 @@ impl WalletService {
 mod tests {
     use super::*;
     use crate::model::WalletSignedPsbtInfo;
-    use crate::service::common_tx::is_psbt_finalized;
-    use crate::service::common_tx::RBF_SEQUENCE;
-    use crate::service::test_support::test_support::{
+    use crate::service::common_test_util::test_support::{
         test_config, unique_test_db_path, UNSIGNED_TEST_PSBT,
     };
+    use crate::service::common_tx::RBF_SEQUENCE;
+    use crate::service::common_tx::{is_psbt_finalized, parse_psbt};
+    use crate::types::WalletTxid;
     use crate::WalletCoreError;
     use bitcoin::psbt::Psbt;
     use bitcoin::{absolute, transaction, Amount, OutPoint, ScriptBuf, TxIn, TxOut, Witness};
 
-    fn finalized_test_psbt_base64() -> String {
+    /// Build a finalized PSBT fixture for publish/finalization tests.
+    ///
+    /// This file does not participate in wallet-core coin-control or typed
+    /// outpoint selection flows. The only `OutPoint` usage here is the raw
+    /// Bitcoin `OutPoint::null()` used to construct a standalone synthetic
+    /// transaction fixture for PSBT extraction tests.
+    fn finalized_test_psbt_base64() -> PsbtBase64 {
         let unsigned = bitcoin::Transaction {
             version: transaction::Version(2),
             lock_time: absolute::LockTime::ZERO,
@@ -73,13 +81,13 @@ mod tests {
 
         // Mark as finalized
         psbt.inputs[0].final_script_witness = Some(Witness::new());
-        psbt.to_string()
+        PsbtBase64::from(psbt.to_string())
     }
 
     #[test]
     fn finalized_psbt_is_detected_as_publishable() {
         let finalized_psbt = finalized_test_psbt_base64();
-        let psbt = parse_psbt(&finalized_psbt).unwrap();
+        let psbt = finalized_psbt.to_psbt().unwrap();
         assert!(is_psbt_finalized(&psbt));
     }
 
@@ -94,7 +102,7 @@ mod tests {
     #[test]
     fn finalized_psbt_extracts_transaction() {
         let finalized_psbt = finalized_test_psbt_base64();
-        let psbt = parse_psbt(&finalized_psbt).unwrap();
+        let psbt = finalized_psbt.to_psbt().unwrap();
         let tx = extract_finalized_tx(&psbt).unwrap();
 
         assert_eq!(
@@ -111,8 +119,8 @@ mod tests {
             .expect("watch-only wallet should load for finalize test");
 
         let finalized_psbt = finalized_test_psbt_base64();
-        let parsed = parse_psbt(&finalized_psbt).unwrap();
-        let expected_txid = parsed.unsigned_tx.compute_txid().to_string();
+        let parsed = finalized_psbt.to_psbt().unwrap();
+        let expected_txid = WalletTxid::from(parsed.unsigned_tx.compute_txid());
 
         let result = service.finalize_psbt_for_broadcast(&finalized_psbt);
 
@@ -120,7 +128,7 @@ mod tests {
         let finalized = result.unwrap();
         assert_eq!(finalized.txid, expected_txid);
         assert!(finalized.replaceable);
-        assert!(!finalized.tx_hex.is_empty());
+        assert!(!finalized.tx_hex.as_str().is_empty());
     }
 
     #[test]
@@ -129,7 +137,10 @@ mod tests {
             psbt_base64: finalized_test_psbt_base64(),
             modified: true,
             finalized: true,
-            txid: "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d".to_string(),
+            txid: WalletTxid::parse(
+                "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d",
+            )
+            .unwrap(),
         };
 
         assert!(matches!(

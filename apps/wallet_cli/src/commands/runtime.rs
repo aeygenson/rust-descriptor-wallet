@@ -3,6 +3,11 @@ use tracing::{debug, info};
 use wallet_api::model::WalletInputSelectionModeDto;
 use wallet_api::WalletApi;
 
+/// Create a PSBT with coin control through the CLI/runtime boundary.
+///
+/// This layer intentionally keeps outpoints as `Vec<String>` because it sits
+/// above `wallet_api`. Conversion into typed `WalletOutPoint` values happens in
+/// the API/model layer before entering `wallet_core`.
 pub async fn create_psbt_with_coin_control(
     api: &WalletApi,
     name: &str,
@@ -589,6 +594,10 @@ pub async fn bump_fee_psbt(
     Ok(())
 }
 
+/// Create a CPFP PSBT through the CLI/runtime boundary.
+///
+/// The selected outpoint remains a string at this layer and is parsed into a
+/// typed `WalletOutPoint` inside `wallet_api` before calling `wallet_core`.
 pub async fn cpfp_psbt(
     api: &WalletApi,
     name: &str,
@@ -658,6 +667,10 @@ pub async fn bump_fee(
     Ok(())
 }
 
+/// Build and broadcast a CPFP transaction through the CLI/runtime boundary.
+///
+/// The selected outpoint remains a string at this layer and is parsed into a
+/// typed `WalletOutPoint` inside `wallet_api` before calling `wallet_core`.
 pub async fn cpfp(
     api: &WalletApi,
     name: &str,

@@ -1,5 +1,5 @@
 use super::{
-    common_outpoint::parse_txid,
+    common_outpoint::parse_txid, // still valid (txid parsing unchanged by outpoint refactor)
     common_tx::{
         estimate_original_fee_rate_sat_per_vb, is_rbf_enabled, is_strict_fee_bump, RBF_SEQUENCE,
     },
@@ -9,7 +9,10 @@ use super::{
 use bdk_wallet::bitcoin::FeeRate;
 
 use crate::{
-    error::WalletCoreError, model::WalletPsbtInfo, types::FeeRateSatPerVb, WalletCoreResult,
+    error::WalletCoreError,
+    model::WalletPsbtInfo,
+    types::{FeeRateSatPerVb, WalletTxid},
+    WalletCoreResult,
 };
 
 impl WalletService {
@@ -21,13 +24,17 @@ impl WalletService {
     /// - It validates existence, confirmation status, and replaceability before
     ///   delegating to BDK's fee-bump builder.
     /// - `WalletPsbtInfo::from_psbt_minimal(...)` is expected to be the same conversion path
-    ///   used by your existing create/send PSBT flow.
+    ///   used by your existing create/send PSBT flow, with `original_txid` populated afterward
+    ///   using the strong `WalletTxid` domain type.
     pub fn bump_fee_psbt(
         &mut self,
         txid: &str,
         new_fee_rate_sat_per_vb: FeeRateSatPerVb,
     ) -> WalletCoreResult<WalletPsbtInfo> {
+        // Keep the raw Bitcoin txid for BDK lookups and error messages, while
+        // also preparing the strong wallet-domain txid for model assignment.
         let txid = parse_txid(txid)?;
+        let wallet_txid = WalletTxid::from(txid);
 
         let tx_node = self
             .wallet
@@ -86,7 +93,7 @@ impl WalletService {
                 reason: source.to_string(),
             }
         })?;
-        info.original_txid = Some(original_txid);
+        info.original_txid = Some(wallet_txid);
         Ok(info)
     }
 }
@@ -96,8 +103,7 @@ mod tests {
     use super::*;
     use crate::types::FeeRateSatPerVb;
     use bdk_wallet::bitcoin::{
-        absolute, transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
-        Witness,
+        absolute, transaction, Amount, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
     };
 
     fn build_tx_with_sequence(sequence: Sequence) -> Transaction {
@@ -105,7 +111,7 @@ mod tests {
             version: transaction::Version(2),
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: OutPoint::null(),
+                previous_output: bdk_wallet::bitcoin::OutPoint::null(),
                 script_sig: ScriptBuf::new(),
                 sequence,
                 witness: Witness::new(),

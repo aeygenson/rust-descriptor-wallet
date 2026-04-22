@@ -40,6 +40,8 @@ This is where transaction-building behavior lives.
 Important domain/model concepts already exist or were recently added:
 - `WalletPsbtInfo`
 - `WalletCoinControlInfo`
+- `WalletInputSelectionConfig`
+- `WalletCoinControlResolutionInfo`
 - `WalletCpfpPsbtInfo`
 - `WalletInputSelectionMode`
   - `StrictManual`
@@ -61,6 +63,7 @@ Important behavior already exists:
 - wallet-internal consolidation
 - RBF bump PSBT
 - CPFP PSBT
+- typed wallet-core identifiers and payloads such as `WalletTxid`, `WalletOutPoint`, `PsbtBase64`, `TxHex`, `VSize`, `BlockHeight`, and `Percent`
 
 Sweep is intentionally modeled as:
 - `WalletSendAmountMode::Max`
@@ -92,6 +95,8 @@ Important DTOs already exist:
 - input-selection mode DTO fields for coin control, send-max, sweep, and consolidation
 - transaction broadcast result DTOs
 - wallet/tx/utxo DTOs
+
+The API should remain DTO/string-oriented at the Tauri boundary. `wallet_api::model` is responsible for fallibly parsing DTO strings into `wallet_core` typed domain values, so the UI should show validation errors instead of trying to duplicate parsing rules in TypeScript.
 
 `WalletPsbtDto` includes useful UI-facing fields such as:
 - `psbt_base64`

@@ -1,5 +1,6 @@
 use bitcoin::{OutPoint, Txid};
 
+use crate::types::WalletOutPoint;
 use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a txid from string.
@@ -12,11 +13,11 @@ pub fn parse_txid(txid: &str) -> WalletCoreResult<Txid> {
 pub fn parse_outpoint(outpoint: &str) -> WalletCoreResult<(&str, u32)> {
     let (txid, vout) = outpoint
         .split_once(':')
-        .ok_or_else(|| WalletCoreError::InvalidTxid(outpoint.to_string()))?;
+        .ok_or_else(|| WalletCoreError::InvalidOutpoint(outpoint.to_string()))?;
 
     let vout = vout
         .parse::<u32>()
-        .map_err(|_| WalletCoreError::InvalidTxid(outpoint.to_string()))?;
+        .map_err(|_| WalletCoreError::InvalidOutpoint(outpoint.to_string()))?;
 
     Ok((txid, vout))
 }
@@ -28,9 +29,16 @@ pub fn parse_bitcoin_outpoint(outpoint: &str) -> WalletCoreResult<OutPoint> {
     Ok(OutPoint { txid, vout })
 }
 
+/// Parse an outpoint string in the form `txid:vout` directly into `WalletOutPoint`.
+pub fn parse_wallet_outpoint(outpoint: &str) -> WalletCoreResult<WalletOutPoint> {
+    parse_bitcoin_outpoint(outpoint).map(WalletOutPoint::from)
+}
+
 /// Parse an optional list of unique outpoints. Returns an empty vector when the
 /// input list is empty.
-pub fn parse_optional_unique_outpoints(outpoints: &[String]) -> WalletCoreResult<Vec<OutPoint>> {
+pub fn parse_optional_unique_outpoints(
+    outpoints: &[String],
+) -> WalletCoreResult<Vec<WalletOutPoint>> {
     if outpoints.is_empty() {
         Ok(Vec::new())
     } else {
@@ -38,15 +46,15 @@ pub fn parse_optional_unique_outpoints(outpoints: &[String]) -> WalletCoreResult
     }
 }
 
-/// Parse and deduplicate a list of outpoint strings into `OutPoint`s.
-pub fn parse_unique_outpoints(outpoints: &[String]) -> WalletCoreResult<Vec<OutPoint>> {
+/// Parse and deduplicate a list of outpoint strings into `WalletOutPoint`s.
+pub fn parse_unique_outpoints(outpoints: &[String]) -> WalletCoreResult<Vec<WalletOutPoint>> {
     use std::collections::HashSet;
 
     let mut seen = HashSet::new();
     let mut result = Vec::with_capacity(outpoints.len());
 
     for item in outpoints {
-        let outpoint = parse_bitcoin_outpoint(item)?;
+        let outpoint = parse_wallet_outpoint(item)?;
 
         if !seen.insert(outpoint) {
             return Err(WalletCoreError::CoinControlConflict(format!(
@@ -64,8 +72,8 @@ pub fn parse_unique_outpoints(outpoints: &[String]) -> WalletCoreResult<Vec<OutP
 /// Ensure there is no overlap between included and excluded outpoints.
 /// Returns an error if the same outpoint appears in both sets.
 pub fn ensure_no_outpoint_overlap(
-    included: &[OutPoint],
-    excluded: &[OutPoint],
+    included: &[WalletOutPoint],
+    excluded: &[WalletOutPoint],
 ) -> WalletCoreResult<()> {
     use std::collections::HashSet;
 
@@ -83,12 +91,9 @@ pub fn ensure_no_outpoint_overlap(
     Ok(())
 }
 
-/// Return the transaction id portion of an outpoint string (`txid:vout`).
-pub fn outpoint_txid(outpoint: &str) -> &str {
-    match outpoint.split_once(':') {
-        Some((txid, _)) => txid,
-        None => outpoint,
-    }
+/// Return the transaction id portion of a strongly-typed wallet outpoint.
+pub fn outpoint_txid(outpoint: &WalletOutPoint) -> crate::types::WalletTxid {
+    crate::types::WalletTxid::from(outpoint.as_ref().txid)
 }
 
 #[cfg(test)]
@@ -129,7 +134,7 @@ mod tests {
     #[test]
     fn parse_outpoint_fails_for_missing_separator() {
         let result = parse_outpoint("not-an-outpoint");
-        assert!(matches!(result, Err(WalletCoreError::InvalidTxid(_))));
+        assert!(matches!(result, Err(WalletCoreError::InvalidOutpoint(_))));
     }
 
     #[test]
@@ -144,6 +149,20 @@ mod tests {
             "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
         );
         assert_eq!(outpoint.vout, 2);
+    }
+
+    #[test]
+    fn parse_wallet_outpoint_works_for_valid_input() {
+        let outpoint = parse_wallet_outpoint(
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d:2",
+        )
+        .unwrap();
+
+        assert_eq!(
+            outpoint.as_ref().txid.to_string(),
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
+        );
+        assert_eq!(outpoint.as_ref().vout, 2);
     }
 
     #[test]
@@ -207,17 +226,17 @@ mod tests {
 
     #[test]
     fn outpoint_txid_extracts_txid_prefix() {
-        let txid =
-            outpoint_txid("b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1");
+        let outpoint = WalletOutPoint::parse(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+        )
+        .unwrap();
+        let txid = outpoint_txid(&outpoint);
         assert_eq!(
             txid,
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee"
+            crate::types::WalletTxid::parse(
+                "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee"
+            )
+            .unwrap()
         );
-    }
-
-    #[test]
-    fn outpoint_txid_returns_whole_string_when_separator_missing() {
-        let txid = outpoint_txid("not_an_outpoint");
-        assert_eq!(txid, "not_an_outpoint");
     }
 }

@@ -1,21 +1,22 @@
-// crates/wallet_core/src/service/test_support.rs
+// crates/wallet_core/src/service/common_test
 
 #![allow(dead_code)]
 
 #[cfg(test)]
 pub(crate) mod test_support {
+    use crate::config::{
+        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
+    };
+    use bdk_wallet::LocalOutput;
+    use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, TxOut};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use bdk_wallet::LocalOutput;
-    use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, TxOut};
-
-    use crate::config::{
-        BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
+    use crate::model::{
+        WalletConsolidationInfo, WalletInputSelectionConfig, WalletInputSelectionMode,
     };
-    use crate::model::{WalletConsolidationInfo, WalletInputSelectionMode};
-    use crate::service::psbt_coin_selector::SelectionConfig;
+    use crate::types::WalletOutPoint;
     use crate::{WalletConfig, WalletService};
 
     static TEST_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -84,17 +85,17 @@ pub(crate) mod test_support {
     }
 
     /// Build a default selector config for unit tests.
-    pub fn default_selection_config() -> SelectionConfig {
-        SelectionConfig {
-            include: vec![],
-            exclude: vec![],
+    pub fn default_selection_config() -> WalletInputSelectionConfig {
+        WalletInputSelectionConfig {
+            include_outpoints: vec![],
+            exclude_outpoints: vec![],
             confirmed_only: false,
+            selection_mode: Some(WalletInputSelectionMode::AutomaticOnly),
             max_input_count: None,
             min_input_count: None,
-            min_value: None,
-            max_value: None,
+            min_utxo_value_sat: None,
+            max_utxo_value_sat: None,
             strategy: None,
-            mode: WalletInputSelectionMode::AutomaticOnly,
         }
     }
 
@@ -175,18 +176,21 @@ pub(crate) mod test_support {
     /// Build a strict-manual consolidation config for unit tests.
     pub fn strict_manual_consolidation_cfg() -> WalletConsolidationInfo {
         WalletConsolidationInfo {
-            include_outpoints: vec![
-                "0000000000000000000000000000000000000000000000000000000000000001:0".to_string(),
-            ],
-            exclude_outpoints: Vec::new(),
-            confirmed_only: false,
-            max_input_count: None,
-            min_input_count: None,
-            min_utxo_value_sat: None,
-            max_utxo_value_sat: None,
+            selection: WalletInputSelectionConfig {
+                include_outpoints: vec![WalletOutPoint::parse(
+                    "0000000000000000000000000000000000000000000000000000000000000001:0",
+                )
+                .expect("valid test outpoint")],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+                selection_mode: Some(WalletInputSelectionMode::StrictManual),
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                strategy: None,
+            },
             max_fee_pct_of_input_value: None,
-            strategy: None,
-            selection_mode: Some(WalletInputSelectionMode::StrictManual),
         }
     }
 
@@ -195,7 +199,10 @@ pub(crate) mod test_support {
         selection_mode: WalletInputSelectionMode,
     ) -> WalletConsolidationInfo {
         WalletConsolidationInfo {
-            selection_mode: Some(selection_mode),
+            selection: WalletInputSelectionConfig {
+                selection_mode: Some(selection_mode),
+                ..WalletInputSelectionConfig::default()
+            },
             ..WalletConsolidationInfo::default()
         }
     }
@@ -280,7 +287,7 @@ pub(crate) mod test_support {
     fn consolidation_cfg_with_mode_sets_requested_mode() {
         let cfg = consolidation_cfg_with_mode(WalletInputSelectionMode::AutomaticOnly);
         assert_eq!(
-            cfg.selection_mode,
+            cfg.selection.selection_mode,
             Some(WalletInputSelectionMode::AutomaticOnly)
         );
     }
@@ -289,10 +296,10 @@ pub(crate) mod test_support {
     fn strict_manual_consolidation_cfg_sets_strict_manual_mode() {
         let cfg = strict_manual_consolidation_cfg();
         assert_eq!(
-            cfg.selection_mode,
+            cfg.selection.selection_mode,
             Some(WalletInputSelectionMode::StrictManual)
         );
-        assert_eq!(cfg.include_outpoints.len(), 1);
+        assert_eq!(cfg.selection.include_outpoints.len(), 1);
     }
 
     #[test]
@@ -314,8 +321,11 @@ pub(crate) mod test_support {
     #[test]
     fn default_selection_config_starts_empty_and_automatic() {
         let cfg = default_selection_config();
-        assert!(cfg.include.is_empty());
-        assert!(cfg.exclude.is_empty());
-        assert_eq!(cfg.mode, WalletInputSelectionMode::AutomaticOnly);
+        assert!(cfg.include_outpoints.is_empty());
+        assert!(cfg.exclude_outpoints.is_empty());
+        assert_eq!(
+            cfg.selection_mode,
+            Some(WalletInputSelectionMode::AutomaticOnly)
+        );
     }
 }

@@ -959,6 +959,7 @@ mod regtest_suite {
             .await
             .expect_err("expected invalid outpoint to fail");
 
+        assert!(matches!(err, wallet_api::WalletApiError::InvalidInput(_)));
         assert!(!err.to_string().is_empty());
 
         Ok(())

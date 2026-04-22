@@ -3,9 +3,10 @@ use tracing::{debug, info};
 use bdk_wallet::bitcoin::Amount;
 use bdk_wallet::KeychainKind;
 
-use super::common_outpoint::parse_bitcoin_outpoint;
+// no need for parse_wallet_outpoint, use WalletOutPoint::parse directly
 use crate::error::WalletCoreError;
-use crate::model::{WalletCpfpBuildPlan, WalletCpfpPsbtInfo};
+use crate::model::{WalletCpfpBuildPlanInfo, WalletCpfpPsbtInfo};
+use crate::types::{FeeRateSatPerVb, PsbtBase64, VSize, WalletOutPoint, WalletTxid};
 use crate::{WalletCoreResult, WalletService};
 
 const CPFP_INPUT_VBYTES: u64 = 58;
@@ -17,21 +18,19 @@ const CPFP_OVERHEAD_VBYTES: u64 = 11;
 /// This is a minimal scaffold implementation. It does NOT yet build
 /// a real transaction — it only defines the flow and logs steps.
 impl WalletService {
-    fn estimate_cpfp_vsize() -> u64 {
-        CPFP_INPUT_VBYTES + CPFP_OUTPUT_VBYTES + CPFP_OVERHEAD_VBYTES
+    fn estimate_cpfp_vsize() -> VSize {
+        VSize::from(CPFP_INPUT_VBYTES + CPFP_OUTPUT_VBYTES + CPFP_OVERHEAD_VBYTES)
     }
 
     fn build_cpfp_plan(
         parent_txid: &str,
-        selected_outpoint: &str,
+        selected_outpoint: &WalletOutPoint,
         input_value_sat: u64,
         fee_rate_sat_per_vb: u64,
-    ) -> WalletCoreResult<WalletCpfpBuildPlan> {
-        let _ = parse_bitcoin_outpoint(selected_outpoint)?;
-
+    ) -> WalletCoreResult<WalletCpfpBuildPlanInfo> {
         let estimated_vsize = Self::estimate_cpfp_vsize();
         let fee_sat = fee_rate_sat_per_vb
-            .checked_mul(estimated_vsize)
+            .checked_mul(estimated_vsize.as_u64())
             .ok_or_else(|| WalletCoreError::CpfpBuildFailed {
                 parent_txid: parent_txid.to_string(),
                 reason: "fee calculation overflow".to_string(),
@@ -45,8 +44,8 @@ impl WalletService {
 
         let child_output_value_sat = input_value_sat - fee_sat;
 
-        Ok(WalletCpfpBuildPlan {
-            input_outpoint: selected_outpoint.to_string(),
+        Ok(WalletCpfpBuildPlanInfo {
+            input_outpoint: *selected_outpoint,
             input_value_sat: crate::types::AmountSat(input_value_sat),
             child_output_value_sat: crate::types::AmountSat(child_output_value_sat),
             fee_sat: crate::types::AmountSat(fee_sat),
@@ -57,9 +56,11 @@ impl WalletService {
     fn build_cpfp_psbt_from_plan(
         &mut self,
         parent_txid: &str,
-        build_plan: &WalletCpfpBuildPlan,
-    ) -> WalletCoreResult<(String, String)> {
-        let outpoint = parse_bitcoin_outpoint(&build_plan.input_outpoint)?;
+        build_plan: &WalletCpfpBuildPlanInfo,
+    ) -> WalletCoreResult<(PsbtBase64, WalletTxid)> {
+        // Convert the typed wallet-domain outpoint into the raw Bitcoin outpoint
+        // only at the BDK transaction-builder boundary.
+        let outpoint = bitcoin::OutPoint::from(build_plan.input_outpoint);
 
         let internal_addr = self.wallet.peek_address(KeychainKind::Internal, 0);
 
@@ -84,8 +85,8 @@ impl WalletService {
                 reason: e.to_string(),
             })?;
 
-        let child_txid = psbt.unsigned_tx.compute_txid().to_string();
-        let psbt_base64 = psbt.to_string();
+        let child_txid = WalletTxid::from(psbt.unsigned_tx.compute_txid());
+        let psbt_base64 = PsbtBase64::from(psbt.to_string());
 
         Ok((psbt_base64, child_txid))
     }
@@ -93,7 +94,7 @@ impl WalletService {
     pub async fn create_cpfp_psbt(
         &mut self,
         parent_txid: &str,
-        selected_outpoint: &str,
+        selected_outpoint: &WalletOutPoint,
         fee_rate: u64,
     ) -> WalletCoreResult<WalletCpfpPsbtInfo> {
         info!(
@@ -106,12 +107,6 @@ impl WalletService {
         // --- Step 1: Validate inputs ---
         if parent_txid.is_empty() {
             return Err(WalletCoreError::CpfpEmptyParentTxid);
-        }
-
-        if selected_outpoint.is_empty() {
-            return Err(WalletCoreError::CpfpNoCandidateUtxo(
-                parent_txid.to_string(),
-            ));
         }
 
         if fee_rate == 0 {
@@ -127,12 +122,15 @@ impl WalletService {
 
         let candidates = self.unconfirmed_utxos_for_txid(parent_txid);
 
+        // Wallet UTXOs now expose strongly-typed WalletOutPoint values, so the
+        // explicitly requested outpoint can be matched directly without any
+        // string parsing or intermediate Bitcoin outpoint conversion.
         let selected = candidates
             .iter()
-            .find(|u| u.outpoint == selected_outpoint)
+            .find(|u| u.outpoint == *selected_outpoint)
             .ok_or_else(|| WalletCoreError::CpfpNoCandidateUtxo(selected_outpoint.to_string()))?;
 
-        let input_value_sat = selected.value.0;
+        let input_value_sat = selected.value.as_u64();
 
         // --- Step 3: Build child transaction plan ---
         let build_plan =
@@ -143,7 +141,7 @@ impl WalletService {
             input_value_sat = build_plan.input_value_sat.0,
             child_output_value_sat = build_plan.child_output_value_sat.0,
             fee_sat = build_plan.fee_sat.0,
-            estimated_vsize = build_plan.estimated_vsize,
+            estimated_vsize = %build_plan.estimated_vsize,
             "built CPFP child transaction plan"
         );
 
@@ -155,12 +153,13 @@ impl WalletService {
         Ok(WalletCpfpPsbtInfo {
             psbt_base64,
             txid: child_txid,
-            parent_txid: parent_txid.to_string(),
-            selected_outpoint: selected_outpoint.to_string(),
+            parent_txid: WalletTxid::parse(parent_txid)
+                .map_err(|_| WalletCoreError::InvalidTxid(parent_txid.to_string()))?,
+            selected_outpoint: *selected_outpoint,
             input_value_sat: build_plan.input_value_sat,
             child_output_value_sat: build_plan.child_output_value_sat,
             fee_sat: build_plan.fee_sat,
-            fee_rate_sat_per_vb: fee_rate,
+            fee_rate_sat_per_vb: FeeRateSatPerVb::from(fee_rate),
             replaceable: true,
             estimated_vsize: build_plan.estimated_vsize,
         })
@@ -175,7 +174,10 @@ mod tests {
     fn build_cpfp_plan_calculates_fee_and_output() {
         let plan = WalletService::build_cpfp_plan(
             "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+            &WalletOutPoint::parse(
+                "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+            )
+            .unwrap(),
             100_000,
             2,
         )
@@ -184,13 +186,16 @@ mod tests {
         let expected_vsize = CPFP_INPUT_VBYTES + CPFP_OUTPUT_VBYTES + CPFP_OVERHEAD_VBYTES;
         let expected_fee = expected_vsize * 2;
 
-        assert_eq!(plan.estimated_vsize, expected_vsize);
+        assert_eq!(plan.estimated_vsize, VSize::from(expected_vsize));
         assert_eq!(plan.fee_sat.0, expected_fee);
         assert_eq!(plan.input_value_sat.0, 100_000);
         assert_eq!(plan.child_output_value_sat.0, 100_000 - expected_fee);
         assert_eq!(
             plan.input_outpoint,
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1"
+            WalletOutPoint::parse(
+                "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1"
+            )
+            .unwrap()
         );
     }
 
@@ -198,7 +203,10 @@ mod tests {
     fn build_cpfp_plan_fails_when_fee_consumes_entire_input() {
         let err = WalletService::build_cpfp_plan(
             "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
-            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+            &WalletOutPoint::parse(
+                "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+            )
+            .unwrap(),
             100,
             2,
         )
@@ -208,15 +216,18 @@ mod tests {
     }
 
     #[test]
-    fn build_cpfp_plan_fails_for_invalid_outpoint_format() {
+    fn build_cpfp_plan_rejects_insufficient_value_edge_case() {
         let err = WalletService::build_cpfp_plan(
             "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
-            "invalid_outpoint",
-            100_000,
+            &WalletOutPoint::parse(
+                "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+            )
+            .unwrap(),
             1,
+            10,
         )
-        .expect_err("invalid outpoint should fail");
+        .expect_err("should fail when fee exceeds input");
 
-        assert!(matches!(err, WalletCoreError::InvalidTxid(_)));
+        assert!(matches!(err, WalletCoreError::CpfpInsufficientValue(_)));
     }
 }

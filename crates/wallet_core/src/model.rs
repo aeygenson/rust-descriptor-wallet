@@ -1,5 +1,8 @@
 pub(crate) use crate::{
-    types::{AmountSat, TxDirection, WalletKeychain},
+    types::{
+        AmountSat, BlockHeight, FeeRateSatPerVb, PsbtBase64, TxDirection, TxHex, VSize,
+        WalletKeychain, WalletOutPoint, WalletTxid,
+    },
     WalletCoreResult,
 };
 use bdk_wallet::bitcoin::{psbt::Psbt, Sequence};
@@ -15,9 +18,9 @@ use serde::{Deserialize, Serialize};
 /// - zero     => likely a self-transfer / reshuffle
 #[derive(Debug, Clone)]
 pub struct WalletTxInfo {
-    pub txid: String,
+    pub txid: WalletTxid,
     pub confirmed: bool,
-    pub confirmation_height: Option<u32>,
+    pub confirmation_height: Option<BlockHeight>,
     pub direction: TxDirection,
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
@@ -31,7 +34,7 @@ pub struct WalletTxInfo {
     pub fee: Option<AmountSat>,
 
     /// Fee rate in sat/vB when known.
-    pub fee_rate_sat_per_vb: Option<u64>,
+    pub fee_rate_sat_per_vb: Option<FeeRateSatPerVb>,
 }
 
 /// Core wallet UTXO model used inside wallet_core
@@ -40,59 +43,133 @@ pub struct WalletTxInfo {
 /// This is a domain model (not API DTO) and should not depend on wallet_api.
 #[derive(Debug, Clone)]
 pub struct WalletUtxoInfo {
-    pub outpoint: String,
+    pub outpoint: WalletOutPoint,
     pub value: AmountSat,
     pub confirmed: bool,
-    pub confirmation_height: Option<u32>,
+    pub confirmation_height: Option<BlockHeight>,
     pub address: Option<String>,
     pub keychain: WalletKeychain,
 }
 
-/// Core model describing coin control options for transaction building.
+/// Shared typed input-selection configuration used inside wallet-core.
 ///
-/// This also serves as the explicit input-selection model for sweep flows,
-/// where the caller provides the exact outpoints to drain to a destination.
-///
-/// The model can also describe merged manual + automatic selection when
-/// `selection_mode` is set to `ManualWithAutoCompletion`.
-///
-/// This is a domain model (not API DTO) and should not depend on wallet_api.
+/// Include/exclude outpoints stay in the wallet-core domain model as
+/// `WalletOutPoint` values. They are converted into raw Bitcoin outpoints only
+/// when matching against BDK `LocalOutput` values.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct WalletCoinControlInfo {
-    /// Explicitly included outpoints (txid:vout) to be used as inputs.
-    pub include_outpoints: Vec<String>,
-
-    /// Explicitly excluded outpoints (txid:vout) that must not be used.
-    pub exclude_outpoints: Vec<String>,
-
-    /// If true, only confirmed UTXOs may be used.
+pub struct WalletInputSelectionConfig {
+    pub include_outpoints: Vec<WalletOutPoint>,
+    pub exclude_outpoints: Vec<WalletOutPoint>,
     pub confirmed_only: bool,
-
-    /// Describes how explicit manual selection should interact with automatic
-    /// selection.
     pub selection_mode: Option<WalletInputSelectionMode>,
+
+    pub max_input_count: Option<usize>,
+    pub min_input_count: Option<usize>,
+    pub min_utxo_value_sat: Option<u64>,
+    pub max_utxo_value_sat: Option<u64>,
+    pub strategy: Option<WalletConsolidationStrategy>,
 }
 
-impl WalletCoinControlInfo {
-    /// Returns true when this configuration has no effect on input selection.
+impl WalletInputSelectionConfig {
     pub fn is_noop(&self) -> bool {
         self.include_outpoints.is_empty()
             && self.exclude_outpoints.is_empty()
             && !self.confirmed_only
             && self.selection_mode.is_none()
+            && self.max_input_count.is_none()
+            && self.min_input_count.is_none()
+            && self.min_utxo_value_sat.is_none()
+            && self.max_utxo_value_sat.is_none()
+            && self.strategy.is_none()
     }
 
-    /// Backward-compatible alias for `is_noop()`.
     pub fn is_empty(&self) -> bool {
         self.is_noop()
     }
 
-    /// Returns true when an explicit include set is present.
-    ///
-    /// This is the domain signal used by strict coin control and sweep-style
-    /// flows, where only the selected inputs may be used.
     pub fn has_explicit_include_set(&self) -> bool {
         !self.include_outpoints.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WalletCoinControlInfo {
+    pub selection: WalletInputSelectionConfig,
+}
+
+impl WalletCoinControlInfo {
+    /// Returns true when this configuration has no effect on input selection.
+    pub fn is_noop(&self) -> bool {
+        self.selection.is_noop()
+    }
+
+    /// Backward-compatible alias for `is_noop()`.
+    pub fn is_empty(&self) -> bool {
+        self.selection.is_empty()
+    }
+
+    /// Returns true when an explicit include set is present.
+    pub fn has_explicit_include_set(&self) -> bool {
+        self.selection.has_explicit_include_set()
+    }
+}
+
+/// Core model describing the resolved coin control state after validation.
+///
+/// This represents the normalized and validated result of applying
+/// `WalletCoinControlInfo` to wallet UTXOs.
+///
+/// This is a domain model (not API DTO) and should not depend on wallet_api.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalletCoinControlResolutionInfo {
+    /// Outpoints explicitly selected for inclusion.
+    pub included_outpoints: Vec<WalletOutPoint>,
+
+    /// Outpoints explicitly excluded from selection.
+    pub excluded_outpoints: Vec<WalletOutPoint>,
+
+    /// Whether only confirmed UTXOs are allowed.
+    pub confirmed_only: bool,
+
+    /// Effective selection mode after normalization.
+    pub selection_mode: Option<WalletInputSelectionMode>,
+
+    /// Whether the caller provided an explicit include set.
+    pub has_explicit_include_set: bool,
+}
+
+impl WalletCoinControlResolutionInfo {
+    /// Returns true when no constraints are applied.
+    pub fn is_noop(&self) -> bool {
+        self.included_outpoints.is_empty()
+            && self.excluded_outpoints.is_empty()
+            && !self.confirmed_only
+            && self.selection_mode.is_none()
+    }
+
+    /// Returns true when explicit manual input selection is active.
+    pub fn has_manual_selection(&self) -> bool {
+        self.has_explicit_include_set
+    }
+
+    /// Returns true when any explicit exclusions are present.
+    pub fn has_exclusions(&self) -> bool {
+        !self.excluded_outpoints.is_empty()
+    }
+
+    /// Returns the number of explicitly included outpoints.
+    pub fn included_count(&self) -> usize {
+        self.included_outpoints.len()
+    }
+
+    /// Returns the number of explicitly excluded outpoints.
+    pub fn excluded_count(&self) -> usize {
+        self.excluded_outpoints.len()
+    }
+
+    /// Returns true when explicit include or exclude constraints are present.
+    pub fn has_constraints(&self) -> bool {
+        !self.is_noop()
     }
 }
 
@@ -128,68 +205,18 @@ pub enum WalletConsolidationStrategy {
     OldestFirst,
 }
 
-/// Core model describing consolidation options for transaction building.
-///
-/// Consolidation is a wallet-internal maintenance flow that spends multiple
-/// wallet UTXOs into a smaller number of wallet-owned outputs, usually one,
-/// in order to reduce fragmentation and future spending cost.
-///
-/// The model supports both:
-/// - strict/manual consolidation via an explicit include set
-/// - automatic consolidation via value filters and selection strategy
-/// - merged manual + automatic consolidation via `selection_mode`
-///
-/// This is a domain model (not API DTO) and should not depend on wallet_api.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WalletConsolidationInfo {
-    /// Explicitly included outpoints (txid:vout) to be consolidated.
-    ///
-    /// When present, consolidation should be treated as strict/manual input
-    /// selection and only these inputs may be used.
-    pub include_outpoints: Vec<String>,
-
-    /// Explicitly excluded outpoints (txid:vout) that must not be used.
-    pub exclude_outpoints: Vec<String>,
-
-    /// If true, only confirmed UTXOs may be used.
-    pub confirmed_only: bool,
-
-    /// Optional cap on how many inputs may be included in the consolidation.
-    pub max_input_count: Option<usize>,
-
-    /// Optional minimum number of inputs required for consolidation.
-    pub min_input_count: Option<usize>,
-
-    /// Optional lower bound for eligible UTXO values in satoshis.
-    pub min_utxo_value_sat: Option<u64>,
-
-    /// Optional upper bound for eligible UTXO values in satoshis.
-    pub max_utxo_value_sat: Option<u64>,
+    pub selection: WalletInputSelectionConfig,
 
     /// Optional cap on fee as a percentage of total selected input value.
-    pub max_fee_pct_of_input_value: Option<u8>,
-
-    /// Optional automatic candidate-selection strategy.
-    pub strategy: Option<WalletConsolidationStrategy>,
-
-    /// Describes how explicit manual selection should interact with automatic
-    /// selection during consolidation.
-    pub selection_mode: Option<WalletInputSelectionMode>,
+    pub max_fee_pct_of_input_value: Option<crate::types::Percent>,
 }
 
 impl WalletConsolidationInfo {
     /// Returns true when this configuration has no effect on consolidation behavior.
     pub fn is_noop(&self) -> bool {
-        self.include_outpoints.is_empty()
-            && self.exclude_outpoints.is_empty()
-            && !self.confirmed_only
-            && self.max_input_count.is_none()
-            && self.min_input_count.is_none()
-            && self.min_utxo_value_sat.is_none()
-            && self.max_utxo_value_sat.is_none()
-            && self.max_fee_pct_of_input_value.is_none()
-            && self.strategy.is_none()
-            && self.selection_mode.is_none()
+        self.selection.is_noop() && self.max_fee_pct_of_input_value.is_none()
     }
 
     /// Backward-compatible alias for `is_noop()`.
@@ -198,11 +225,8 @@ impl WalletConsolidationInfo {
     }
 
     /// Returns true when an explicit include set is present.
-    ///
-    /// This is the domain signal for strict/manual consolidation, where only
-    /// the selected inputs may be used.
     pub fn has_explicit_include_set(&self) -> bool {
-        !self.include_outpoints.is_empty()
+        self.selection.has_explicit_include_set()
     }
 }
 
@@ -210,16 +234,20 @@ impl WalletConsolidationInfo {
 ///
 /// This represents the result of transaction construction and is independent
 /// from API/CLI formatting.
+///
+/// Unit-bearing and identifier-bearing fields use strong domain types such as
+/// `WalletTxid`, `FeeRateSatPerVb`, `VSize`, and `PsbtBase64` to reduce mixups
+/// inside wallet-core logic.
 #[derive(Debug, Clone)]
 pub struct WalletPsbtInfo {
     /// Base64-encoded PSBT payload.
-    pub psbt_base64: String,
+    pub psbt_base64: PsbtBase64,
 
     /// Transaction id of the PSBT.
-    pub txid: String,
+    pub txid: WalletTxid,
 
     /// Original transaction id (used for fee bump flows).
-    pub original_txid: Option<String>,
+    pub original_txid: Option<WalletTxid>,
 
     /// Destination address the wallet is paying to.
     pub to_address: String,
@@ -231,7 +259,7 @@ pub struct WalletPsbtInfo {
     pub fee_sat: AmountSat,
 
     /// Requested fee rate in sat/vB used when constructing the PSBT.
-    pub fee_rate_sat_per_vb: u64,
+    pub fee_rate_sat_per_vb: FeeRateSatPerVb,
 
     /// Whether the transaction was created as replaceable via RBF.
     pub replaceable: bool,
@@ -243,7 +271,7 @@ pub struct WalletPsbtInfo {
     pub selected_utxo_count: usize,
 
     /// Exact selected input outpoints used for this PSBT.
-    pub selected_inputs: Vec<String>,
+    pub selected_inputs: Vec<WalletOutPoint>,
 
     /// Total number of inputs in the transaction.
     pub input_count: usize,
@@ -255,7 +283,7 @@ pub struct WalletPsbtInfo {
     pub recipient_count: usize,
 
     /// Estimated virtual size of the transaction.
-    pub estimated_vsize: u64,
+    pub estimated_vsize: VSize,
 }
 
 impl WalletPsbtInfo {
@@ -288,28 +316,28 @@ impl WalletPsbtInfo {
             .iter()
             .any(|txin| txin.sequence.0 < Sequence::ENABLE_LOCKTIME_NO_RBF.0);
 
-        let txid = psbt.unsigned_tx.compute_txid().to_string();
+        let txid = WalletTxid::from(psbt.unsigned_tx.compute_txid());
         let input_count = psbt.unsigned_tx.input.len();
         let selected_inputs = psbt
             .unsigned_tx
             .input
             .iter()
-            .map(|txin| txin.previous_output.to_string())
-            .collect();
+            .map(|txin| WalletOutPoint::from(txin.previous_output))
+            .collect::<Vec<_>>();
         let output_count = psbt.unsigned_tx.output.len();
         // Conservative assumption: if there is more than one output, one is likely change
         // This avoids overcounting recipients in minimal mode without wallet context
         let recipient_count = output_count.saturating_sub(1);
-        let estimated_vsize = psbt.unsigned_tx.vsize() as u64;
+        let estimated_vsize = VSize::from(psbt.unsigned_tx.vsize() as u64);
 
         Ok(Self {
-            psbt_base64: psbt.to_string(),
+            psbt_base64: PsbtBase64::from(psbt.to_string()),
             txid,
             original_txid: None,
             to_address: String::new(),
             amount_sat: AmountSat::default(),
             fee_sat: AmountSat::default(),
-            fee_rate_sat_per_vb: 0,
+            fee_rate_sat_per_vb: FeeRateSatPerVb::ZERO,
             replaceable,
             change_amount_sat: None,
             selected_utxo_count: input_count,
@@ -319,6 +347,21 @@ impl WalletPsbtInfo {
             recipient_count,
             estimated_vsize,
         })
+    }
+
+    /// Returns true when the PSBT has at least one selected input.
+    pub fn has_selected_inputs(&self) -> bool {
+        !self.selected_inputs.is_empty()
+    }
+
+    /// Returns true when the PSBT appears to contain change.
+    pub fn has_change(&self) -> bool {
+        self.change_amount_sat.is_some()
+    }
+
+    /// Returns true when the PSBT represents a likely self-transfer.
+    pub fn is_likely_self_transfer(&self) -> bool {
+        self.recipient_count == 0 && self.has_change()
     }
 }
 
@@ -357,7 +400,7 @@ impl std::fmt::Display for PsbtSigningStatus {
 #[derive(Debug, Clone)]
 pub struct WalletSignedPsbtInfo {
     /// Base64-encoded signed PSBT payload.
-    pub psbt_base64: String,
+    pub psbt_base64: PsbtBase64,
 
     /// Whether the wallet modified the PSBT during signing.
     pub modified: bool,
@@ -366,7 +409,7 @@ pub struct WalletSignedPsbtInfo {
     pub finalized: bool,
 
     /// Transaction id of the resulting transaction represented by the PSBT.
-    pub txid: String,
+    pub txid: WalletTxid,
 }
 
 impl WalletSignedPsbtInfo {
@@ -390,10 +433,10 @@ impl WalletSignedPsbtInfo {
 #[derive(Debug, Clone)]
 pub struct WalletFinalizedTxInfo {
     /// Transaction id of the finalized transaction.
-    pub txid: String,
+    pub txid: WalletTxid,
 
     /// Raw transaction hex ready for broadcast.
-    pub tx_hex: String,
+    pub tx_hex: TxHex,
 
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
@@ -404,9 +447,9 @@ pub struct WalletFinalizedTxInfo {
 /// This is an internal domain model in `wallet_core` and keeps CPFP planning
 /// data structured in the same style as the other wallet models.
 #[derive(Debug, Clone)]
-pub struct WalletCpfpBuildPlan {
+pub struct WalletCpfpBuildPlanInfo {
     /// Selected input outpoint used for the CPFP child transaction.
-    pub input_outpoint: String,
+    pub input_outpoint: WalletOutPoint,
 
     /// Input value in satoshis.
     pub input_value_sat: AmountSat,
@@ -418,7 +461,7 @@ pub struct WalletCpfpBuildPlan {
     pub fee_sat: AmountSat,
 
     /// Estimated virtual size of the child transaction.
-    pub estimated_vsize: u64,
+    pub estimated_vsize: VSize,
 }
 
 /// Core model describing a CPFP (Child Pays For Parent) PSBT created by the wallet.
@@ -427,16 +470,16 @@ pub struct WalletCpfpBuildPlan {
 #[derive(Debug, Clone)]
 pub struct WalletCpfpPsbtInfo {
     /// Base64-encoded PSBT payload.
-    pub psbt_base64: String,
+    pub psbt_base64: PsbtBase64,
 
     /// Transaction id of the CPFP child transaction.
-    pub txid: String,
+    pub txid: WalletTxid,
 
     /// Transaction id of the parent transaction being accelerated via CPFP.
-    pub parent_txid: String,
+    pub parent_txid: WalletTxid,
 
     /// Selected outpoint (txid:vout) used for CPFP.
-    pub selected_outpoint: String,
+    pub selected_outpoint: WalletOutPoint,
 
     /// Input value in satoshis used for the CPFP child transaction.
     pub input_value_sat: AmountSat,
@@ -448,13 +491,13 @@ pub struct WalletCpfpPsbtInfo {
     pub fee_sat: AmountSat,
 
     /// Requested fee rate in sat/vB used for CPFP.
-    pub fee_rate_sat_per_vb: u64,
+    pub fee_rate_sat_per_vb: FeeRateSatPerVb,
 
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
 
     /// Estimated virtual size of the transaction.
-    pub estimated_vsize: u64,
+    pub estimated_vsize: VSize,
 }
 
 /// Domain mode describing how a send amount should be interpreted when building a PSBT.

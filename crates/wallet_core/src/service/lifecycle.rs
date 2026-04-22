@@ -7,6 +7,15 @@ use tracing::{debug, error, info};
 use super::*;
 
 impl WalletService {
+    /// This lifecycle path is unaffected by the recent typed-outpoint,
+    /// strong-domain-type, and shared-selection-model refactors.
+    ///
+    /// It only validates descriptors, opens/creates the underlying BDK wallet,
+    /// and persists state. Typed values such as `WalletOutPoint`, `WalletTxid`,
+    /// `VSize`, `PsbtBase64`, and shared selection wrappers such as
+    /// `WalletInputSelectionConfig` are used in transaction-building and
+    /// model-mapping paths rather than wallet initialization.
+    ///
     /// Load existing wallet or create a new one if it does not exist.
     ///
     /// Flow:
@@ -197,7 +206,7 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::test_support::test_support::{signing_test_config, test_config};
+    use crate::service::common_test_util::test_support::{signing_test_config, test_config};
 
     #[test]
     fn load_or_create_creates_wallet_successfully() {

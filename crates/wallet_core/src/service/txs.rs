@@ -6,8 +6,15 @@ use super::common_tx::{
 };
 use super::*;
 use crate::model::WalletTxInfo;
-use crate::types::{AmountSat, TxDirection};
+use crate::types::{AmountSat, BlockHeight, TxDirection, WalletTxid};
 impl WalletService {
+    /// This transaction view operates on wallet transactions already stored in
+    /// the BDK graph and does not participate in typed outpoint selection.
+    ///
+    /// The recent `WalletOutPoint` migration affects coin-control, sweep,
+    /// consolidation, and PSBT-input selection flows, but not this read-only
+    /// transaction summary path.
+    ///
     /// Return list of wallet transactions (basic view).
     ///
     /// This reads transaction data from the underlying BDK wallet.
@@ -45,7 +52,7 @@ impl WalletService {
         let mut result = Vec::new();
 
         for tx in self.wallet.transactions() {
-            let txid = tx.tx_node.txid.to_string();
+            let txid = WalletTxid::from(tx.tx_node.txid);
 
             let (sent, received) = self.wallet.sent_and_received(&tx.tx_node.tx);
             let sent_sat = sent.to_sat();
@@ -74,7 +81,9 @@ impl WalletService {
 
             // Determine confirmation status and height from chain position
             let (confirmed, confirmation_height) = match tx.chain_position {
-                ChainPosition::Confirmed { anchor, .. } => (true, Some(anchor.block_id.height)),
+                ChainPosition::Confirmed { anchor, .. } => {
+                    (true, Some(BlockHeight::from(anchor.block_id.height)))
+                }
                 ChainPosition::Unconfirmed { .. } => (false, None),
             };
 
@@ -98,7 +107,7 @@ impl WalletService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::test_support::test_support::test_config_with_db_prefix;
+    use crate::service::common_test_util::test_support::test_config_with_db_prefix;
 
     #[test]
     fn transactions_empty_for_fresh_wallet() {
@@ -120,7 +129,7 @@ mod tests {
         let txs = wallet.transactions();
 
         for tx in txs {
-            assert!(!tx.txid.is_empty(), "txid should not be empty");
+            assert!(!tx.txid.to_string().is_empty(), "txid should not be empty");
             // direction must be one of expected values
             assert!(
                 matches!(

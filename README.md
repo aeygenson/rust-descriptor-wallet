@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports real wallet transaction operations across coin control, send-max, sweep, consolidation, RBF, and CPFP, with explicit input-selection modes and full local regtest integration coverage.
+Current milestone: the project now supports real wallet transaction operations across coin control, send-max, sweep, consolidation, RBF, and CPFP, with explicit input-selection modes, stronger typed wallet-core domain boundaries, and full local regtest integration coverage.
 
 ## Vision
 
@@ -75,7 +75,8 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - CPFP PSBT creation for unconfirmed parent transactions
 - one-shot CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
-- stronger domain types for wallet amounts, fee rates, keychains, and transaction direction
+- stronger domain types for wallet amounts, fee rates, txids, outpoints, PSBT payloads, raw transaction hex, virtual size, block height, percentages, keychains, and transaction direction
+- fallible DTO-to-domain parsing at the API boundary so invalid outpoints and txids become API errors instead of panics
 - regtest support scripts under `infra/regtest`
 - reusable `test_support` helpers for local node control, mining, funding, and mempool inspection
 - single-threaded local integration tests covering receive, self-send/change, send-max, sweep, consolidation, coin control, RBF replacement, and CPFP flows
@@ -312,8 +313,12 @@ Core domain types introduced:
 
 - `AmountSat` for satoshi-denominated values
 - `FeeRateSatPerVb` for fee-rate validation
+- `WalletTxid` and `WalletOutPoint` for parsed transaction identifiers and input references
+- `PsbtBase64` and `TxHex` for serialized transaction payloads
+- `VSize`, `BlockHeight`, and `Percent` for transaction-size, chain-height, and policy-limit values
 - `WalletKeychain` for external vs internal wallet branches
 - `TxDirection` for received, sent, and self-transfer transaction classification
+- `WalletInputSelectionConfig` and `WalletCoinControlResolutionInfo` for normalized input-selection state
 - `PsbtSigningStatus` for stable signing-state classification
 
 Storage location:

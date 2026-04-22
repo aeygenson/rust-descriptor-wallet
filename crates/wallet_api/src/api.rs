@@ -177,6 +177,11 @@ impl WalletApi {
         .await
     }
 
+    /// Create a consolidation PSBT via the API boundary.
+    ///
+    /// This API layer remains DTO/string-based. Any outpoint strings inside
+    /// `WalletConsolidationDto` are parsed into typed `WalletOutPoint` values
+    /// in lower layers (`wallet_api::model` -> `wallet_core`).
     pub async fn create_consolidation_psbt(
         &self,
         name: &str,
@@ -344,6 +349,10 @@ impl WalletApi {
         psbt::bump_fee(&self.storage, name, txid, fee_rate_sat_per_vb).await
     }
 
+    /// Create a CPFP PSBT via the API boundary.
+    ///
+    /// The selected outpoint remains a string at the API boundary and is
+    /// converted into a typed `WalletOutPoint` inside the PSBT service layer.
     pub async fn cpfp_psbt(
         &self,
         name: &str,

@@ -4,14 +4,20 @@ use bdk_wallet::LocalOutput;
 
 use crate::error::WalletCoreError;
 use crate::model::{WalletConsolidationStrategy, WalletInputSelectionMode};
+use crate::types::WalletOutPoint;
 use crate::WalletCoreResult;
 
-/// Returns true when an explicit include set is present.
-pub fn has_explicit_include_set(include_outpoints: &[String]) -> bool {
+/// Returns true when a `WalletInputSelectionConfig` carries an explicit include set.
+///
+/// This helper stays field-oriented so it can be reused from both
+/// `WalletCoinControlInfo.selection` and `WalletConsolidationInfo.selection`
+/// without coupling common utilities to a higher-level wrapper type.
+pub fn has_explicit_include_set(include_outpoints: &[WalletOutPoint]) -> bool {
     !include_outpoints.is_empty()
 }
 
-/// Resolve the effective input-selection mode, defaulting to:
+/// Resolve the effective input-selection mode for a shared
+/// `WalletInputSelectionConfig`, defaulting to:
 /// - `StrictManual` when an explicit include set is present
 /// - `AutomaticOnly` otherwise.
 ///
@@ -19,7 +25,7 @@ pub fn has_explicit_include_set(include_outpoints: &[String]) -> bool {
 /// outpoints usually expect an exact input set, especially for sweep and strict
 /// coin-control flows.
 pub fn effective_selection_mode(
-    include_outpoints: &[String],
+    include_outpoints: &[WalletOutPoint],
     selection_mode: Option<WalletInputSelectionMode>,
 ) -> WalletInputSelectionMode {
     selection_mode.unwrap_or_else(|| {
@@ -31,9 +37,10 @@ pub fn effective_selection_mode(
     })
 }
 
-/// Returns true when the effective selection mode resolves to `StrictManual`.
+/// Returns true when a shared selection config effectively resolves to
+/// `StrictManual`.
 pub fn is_strict_manual_selection(
-    include_outpoints: &[String],
+    include_outpoints: &[WalletOutPoint],
     selection_mode: Option<WalletInputSelectionMode>,
 ) -> bool {
     effective_selection_mode(include_outpoints, selection_mode)
@@ -56,7 +63,7 @@ pub fn compare_local_outputs_by_strategy(
     b: &LocalOutput,
     strategy: WalletConsolidationStrategy,
 ) -> Ordering {
-    let by_outpoint = || a.outpoint.to_string().cmp(&b.outpoint.to_string());
+    let by_outpoint = || WalletOutPoint::from(a.outpoint).cmp(&WalletOutPoint::from(b.outpoint));
 
     match strategy {
         WalletConsolidationStrategy::SmallestFirst => a
@@ -138,6 +145,7 @@ pub fn validate_selected_input_count_bounds(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::WalletOutPoint;
     use bitcoin::{Amount, BlockHash, OutPoint, ScriptBuf, TxOut};
 
     fn sample_local_output(
@@ -186,7 +194,10 @@ mod tests {
     #[test]
     fn explicit_include_set_detection_works() {
         assert!(!has_explicit_include_set(&[]));
-        assert!(has_explicit_include_set(&["txid:0".to_string()]));
+        assert!(has_explicit_include_set(&[WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000001:0",
+        )
+        .unwrap(),]));
     }
 
     #[test]
@@ -198,7 +209,10 @@ mod tests {
     #[test]
     fn effective_selection_mode_defaults_to_strict_manual_with_includes() {
         let mode = effective_selection_mode(
-            &["0000000000000000000000000000000000000000000000000000000000000001:0".to_string()],
+            &[WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000001:0",
+            )
+            .unwrap()],
             None,
         );
         assert_eq!(mode, WalletInputSelectionMode::StrictManual);
@@ -207,7 +221,10 @@ mod tests {
     #[test]
     fn effective_selection_mode_preserves_explicit_mode() {
         let mode = effective_selection_mode(
-            &["0000000000000000000000000000000000000000000000000000000000000001:0".to_string()],
+            &[WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000001:0",
+            )
+            .unwrap()],
             Some(WalletInputSelectionMode::StrictManual),
         );
         assert_eq!(mode, WalletInputSelectionMode::StrictManual);
@@ -217,7 +234,10 @@ mod tests {
     fn strict_manual_selection_detection_defaults_to_true_with_includes() {
         assert!(!is_strict_manual_selection(&[], None));
         assert!(is_strict_manual_selection(
-            &["0000000000000000000000000000000000000000000000000000000000000001:0".to_string()],
+            &[WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+            )
+            .unwrap()],
             None,
         ));
     }
@@ -225,7 +245,10 @@ mod tests {
     #[test]
     fn strict_manual_selection_detection_is_true_when_explicitly_requested() {
         assert!(is_strict_manual_selection(
-            &["0000000000000000000000000000000000000000000000000000000000000001:0".to_string()],
+            &[WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+            )
+            .unwrap()],
             Some(WalletInputSelectionMode::StrictManual),
         ));
     }

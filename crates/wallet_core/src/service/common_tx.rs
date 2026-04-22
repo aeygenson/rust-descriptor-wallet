@@ -9,11 +9,12 @@ use bitcoin::Sequence;
 use bitcoin::Txid;
 
 use crate::model::{TxDirection, WalletSignedPsbtInfo};
+use crate::types::{FeeRateSatPerVb, PsbtBase64, TxHex, WalletTxid};
 use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a PSBT from its encoded string representation.
 pub fn parse_psbt(psbt_base64: &str) -> WalletCoreResult<Psbt> {
-    Psbt::from_str(psbt_base64).map_err(|e| WalletCoreError::InvalidPsbt(e.to_string()))
+    Ok(Psbt::from_str(psbt_base64)?)
 }
 
 /// Check if PSBT is finalized (ready for broadcast)
@@ -36,9 +37,9 @@ pub fn extract_finalized_tx(psbt: &Psbt) -> WalletCoreResult<Transaction> {
 
 /// Build broadcast-oriented metadata from a finalized transaction.
 /// Returns `(txid, tx_hex, replaceable)`.
-pub fn finalized_tx_broadcast_info(tx: &Transaction) -> (String, String, bool) {
-    let txid = tx.compute_txid().to_string();
-    let tx_hex = serialize_hex(tx);
+pub fn finalized_tx_broadcast_info(tx: &Transaction) -> (WalletTxid, TxHex, bool) {
+    let txid = WalletTxid::from(tx.compute_txid());
+    let tx_hex = TxHex::from(serialize_hex(tx));
     let replaceable = is_rbf_enabled(tx);
     (txid, tx_hex, replaceable)
 }
@@ -46,12 +47,12 @@ pub fn finalized_tx_broadcast_info(tx: &Transaction) -> (String, String, bool) {
 /// Build signed-PSBT metadata from a PSBT plus its original encoded form.
 pub fn signed_psbt_info(
     psbt: &Psbt,
-    original_psbt_base64: &str,
+    original_psbt_base64: &PsbtBase64,
     finalized: bool,
 ) -> WalletSignedPsbtInfo {
-    let txid = psbt.unsigned_tx.compute_txid().to_string();
-    let psbt_base64 = psbt.to_string();
-    let modified = psbt_base64 != original_psbt_base64;
+    let txid = WalletTxid::from(psbt.unsigned_tx.compute_txid());
+    let psbt_base64 = PsbtBase64::from(psbt.to_string());
+    let modified = psbt_base64 != *original_psbt_base64;
 
     WalletSignedPsbtInfo {
         txid,
@@ -117,27 +118,27 @@ pub fn classify_tx_direction(sent_sat: u64, received_sat: u64, net_value: i64) -
 }
 
 /// Derive fee rate in sat/vB from fee and virtual size.
-pub fn fee_rate_sat_per_vb_from_fee_and_vsize(fee_sat: u64, vsize: u64) -> u64 {
+pub fn fee_rate_sat_per_vb_from_fee_and_vsize(fee_sat: u64, vsize: u64) -> FeeRateSatPerVb {
     if vsize == 0 {
-        0
+        FeeRateSatPerVb::ZERO
     } else {
-        fee_sat.div_ceil(vsize)
+        FeeRateSatPerVb::from(fee_sat.div_ceil(vsize))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::test_support::test_support::load_test_wallet_with_db_prefix;
-    use crate::service::test_support::test_support::UNSIGNED_TEST_PSBT;
-    use bitcoin::{absolute, transaction, Amount, OutPoint, ScriptBuf, TxIn, TxOut, Witness};
+    use crate::service::common_test_util::test_support::load_test_wallet_with_db_prefix;
+    use crate::service::common_test_util::test_support::UNSIGNED_TEST_PSBT;
+    use bitcoin::{absolute, transaction, Amount, ScriptBuf, TxIn, TxOut, Witness};
 
     fn build_tx_with_sequence(sequence: Sequence) -> Transaction {
         Transaction {
             version: transaction::Version(2),
             lock_time: absolute::LockTime::ZERO,
             input: vec![TxIn {
-                previous_output: OutPoint::null(),
+                previous_output: bitcoin::OutPoint::null(),
                 script_sig: ScriptBuf::new(),
                 sequence,
                 witness: Witness::new(),
@@ -159,7 +160,10 @@ mod tests {
     fn parse_psbt_fails_for_invalid_string() {
         let result = parse_psbt("not-a-psbt");
 
-        assert!(matches!(result, Err(WalletCoreError::InvalidPsbt(_))));
+        assert!(matches!(
+            result,
+            Err(WalletCoreError::InvalidPsbtEncoding(_))
+        ));
     }
 
     #[test]
@@ -180,18 +184,18 @@ mod tests {
         let tx = build_tx_with_sequence(Sequence::MAX);
         let (txid, tx_hex, replaceable) = finalized_tx_broadcast_info(&tx);
 
-        assert_eq!(txid, tx.compute_txid().to_string());
-        assert!(!tx_hex.is_empty());
+        assert_eq!(txid, WalletTxid::from(tx.compute_txid()));
+        assert!(!tx_hex.as_str().is_empty());
         assert_eq!(replaceable, is_rbf_enabled(&tx));
     }
 
     #[test]
     fn signed_psbt_info_reports_txid_finalized_and_modified_state() {
         let psbt = parse_psbt(UNSIGNED_TEST_PSBT).unwrap();
-        let info = signed_psbt_info(&psbt, "different-original", false);
+        let info = signed_psbt_info(&psbt, &PsbtBase64::from("different-original"), false);
 
-        assert_eq!(info.txid, psbt.unsigned_tx.compute_txid().to_string());
-        assert_eq!(info.psbt_base64, psbt.to_string());
+        assert_eq!(info.txid, WalletTxid::from(psbt.unsigned_tx.compute_txid()));
+        assert_eq!(info.psbt_base64, PsbtBase64::from(psbt.to_string()));
         assert!(!info.finalized);
         assert!(info.modified);
     }
@@ -199,7 +203,7 @@ mod tests {
     #[test]
     fn signed_psbt_info_reports_unmodified_when_psbt_is_unchanged() {
         let psbt = parse_psbt(UNSIGNED_TEST_PSBT).unwrap();
-        let original = psbt.to_string();
+        let original = PsbtBase64::from(psbt.to_string());
         let info = signed_psbt_info(&psbt, &original, true);
 
         assert!(info.finalized);
@@ -277,11 +281,17 @@ mod tests {
 
     #[test]
     fn fee_rate_sat_per_vb_from_fee_and_vsize_handles_zero_vsize() {
-        assert_eq!(fee_rate_sat_per_vb_from_fee_and_vsize(100, 0), 0);
+        assert_eq!(
+            fee_rate_sat_per_vb_from_fee_and_vsize(100, 0),
+            FeeRateSatPerVb::ZERO
+        );
     }
 
     #[test]
     fn fee_rate_sat_per_vb_from_fee_and_vsize_rounds_up() {
-        assert_eq!(fee_rate_sat_per_vb_from_fee_and_vsize(101, 100), 2);
+        assert_eq!(
+            fee_rate_sat_per_vb_from_fee_and_vsize(101, 100),
+            FeeRateSatPerVb::from(2)
+        );
     }
 }

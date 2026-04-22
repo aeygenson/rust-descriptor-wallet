@@ -4,7 +4,7 @@ use crate::model::{
 };
 use crate::WalletApiResult;
 
-use wallet_core::types::{AmountSat, FeeRateSatPerVb};
+use wallet_core::types::{AmountSat, FeeRateSatPerVb, PsbtBase64, WalletOutPoint};
 use wallet_core::WalletService;
 use wallet_storage::WalletStorage;
 use wallet_sync::{WalletSyncError, WalletSyncService};
@@ -138,7 +138,7 @@ pub async fn create(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -173,7 +173,7 @@ pub async fn create_with_coin_control(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let to_address = to_address.to_string();
-    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let coin_control = coin_control.try_into_core()?;
     let name_for_error = name.to_string();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -217,7 +217,7 @@ pub async fn create_with_coin_control(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -281,7 +281,7 @@ pub async fn create_send_max(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -310,7 +310,7 @@ pub async fn create_send_max_with_coin_control(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let to_address = to_address.to_string();
-    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let coin_control = coin_control.try_into_core()?;
     let name_for_error = name.to_string();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -352,7 +352,7 @@ pub async fn create_send_max_with_coin_control(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -383,7 +383,7 @@ pub async fn create_sweep(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let to_address = to_address.to_string();
-    let coin_control = wallet_core::model::WalletCoinControlInfo::from(coin_control);
+    let coin_control = coin_control.try_into_core()?;
     let name_for_error = name.to_string();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -425,7 +425,7 @@ pub async fn create_sweep(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -460,7 +460,7 @@ pub async fn create_consolidation(
     let config = load_wallet_config(storage, name).await?;
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
-    let consolidation = wallet_core::model::WalletConsolidationInfo::from(consolidation);
+    let consolidation = consolidation.try_into_core()?;
     let name_for_error = name.to_string();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -495,7 +495,7 @@ pub async fn create_consolidation(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -509,7 +509,7 @@ pub async fn sign(
     debug!("api psbt: sign start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
-    let psbt_base64 = psbt_base64.to_string();
+    let psbt_base64 = PsbtBase64::from(psbt_base64);
     let name_for_error = name.to_string();
 
     let signed = spawn_wallet_blocking(move || {
@@ -529,7 +529,7 @@ pub async fn sign(
         signed.modified,
         signed.finalized,
         signed.txid,
-        signed.psbt_base64.len()
+        signed.psbt_base64.as_str().len()
     );
 
     Ok(signed.into())
@@ -543,7 +543,7 @@ pub async fn publish(
     debug!("api psbt: publish start name={}", name);
 
     let config = load_wallet_config(storage, name).await?;
-    let psbt_base64 = psbt_base64.to_string();
+    let psbt_base64 = PsbtBase64::from(psbt_base64);
     let name_for_error = name.to_string();
 
     let published = spawn_wallet_blocking(move || -> WalletApiResult<TxBroadcastResultDto> {
@@ -553,14 +553,14 @@ pub async fn publish(
         let finalized = wallet.finalize_psbt_for_broadcast(&psbt_base64)?;
 
         sync_service
-            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .broadcast_tx_hex(&config, finalized.tx_hex.as_str())
             .map_err(|e| {
                 log_publish_error(&name_for_error, &e);
                 e
             })?;
 
         Ok(TxBroadcastResultDto {
-            txid: finalized.txid,
+            txid: finalized.txid.to_string(),
             replaceable: Some(finalized.replaceable),
         })
     })
@@ -691,7 +691,7 @@ pub async fn bump_fee_psbt(
         psbt.output_count,
         psbt.recipient_count,
         psbt.estimated_vsize,
-        psbt.psbt_base64.len()
+        psbt.psbt_base64.as_str().len()
     );
 
     Ok(psbt.into())
@@ -721,7 +721,13 @@ pub async fn cpfp_psbt(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let parent_txid = parent_txid.to_string();
-    let selected_outpoint = selected_outpoint.to_string();
+    let selected_outpoint_str = selected_outpoint.to_string();
+    let selected_outpoint = WalletOutPoint::parse(selected_outpoint).map_err(|e| {
+        crate::WalletApiError::InvalidInput(format!(
+            "invalid selected_outpoint '{}': {}",
+            selected_outpoint_str, e
+        ))
+    })?;
     let name_for_error = name.to_string();
 
     let handle = Handle::current();
@@ -738,7 +744,7 @@ pub async fn cpfp_psbt(
                         "api psbt: cpfp_psbt failed name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={} error={}",
                         name_for_error,
                         parent_txid,
-                        selected_outpoint,
+                        selected_outpoint_str,
                         fee_rate_sat_per_vb.as_u64(),
                         e
                     );
@@ -760,7 +766,7 @@ pub async fn cpfp_psbt(
         cpfp.fee_rate_sat_per_vb,
         cpfp.replaceable,
         cpfp.estimated_vsize,
-        cpfp.psbt_base64.len()
+        cpfp.psbt_base64.as_str().len()
     );
 
     Ok(cpfp.into())
@@ -816,14 +822,14 @@ pub async fn bump_fee(
         let finalized = wallet.finalize_psbt_for_broadcast(&signed.psbt_base64)?;
 
         sync_service
-            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .broadcast_tx_hex(&config, finalized.tx_hex.as_str())
             .map_err(|e| {
                 log_publish_error(&name_for_error, &e);
                 e
             })?;
 
         Ok(TxBroadcastResultDto {
-            txid: finalized.txid,
+            txid: finalized.txid.to_string(),
             replaceable: Some(finalized.replaceable),
         })
     })
@@ -855,9 +861,15 @@ pub async fn cpfp(
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
 
     let parent_txid = parent_txid.to_string();
-    let selected_outpoint = selected_outpoint.to_string();
+    let selected_outpoint_str = selected_outpoint.to_string();
+    let selected_outpoint = WalletOutPoint::parse(selected_outpoint).map_err(|e| {
+        crate::WalletApiError::InvalidInput(format!(
+            "invalid selected_outpoint '{}': {}",
+            selected_outpoint_str, e
+        ))
+    })?;
     let parent_txid_for_log = parent_txid.clone();
-    let selected_outpoint_for_log = selected_outpoint.clone();
+    let selected_outpoint_for_log = selected_outpoint_str.clone();
     let fee_rate_sat_per_vb_for_log = fee_rate_sat_per_vb.as_u64();
     let name_for_error = name.to_string();
 
@@ -878,7 +890,7 @@ pub async fn cpfp(
                     "api psbt: cpfp build failed name={} parent_txid={} selected_outpoint={} fee_rate_sat_per_vb={} error={}",
                     name_for_error,
                     parent_txid,
-                    selected_outpoint,
+                    selected_outpoint_str,
                     fee_rate_sat_per_vb.as_u64(),
                     e
                 );
@@ -898,14 +910,14 @@ pub async fn cpfp(
         let finalized = wallet.finalize_psbt_for_broadcast(&signed.psbt_base64)?;
 
         sync_service
-            .broadcast_tx_hex(&config, &finalized.tx_hex)
+            .broadcast_tx_hex(&config, finalized.tx_hex.as_str())
             .map_err(|e| {
                 log_publish_error(&name_for_error, &e);
                 e
             })?;
 
         Ok(TxBroadcastResultDto {
-            txid: finalized.txid,
+            txid: finalized.txid.to_string(),
             replaceable: Some(finalized.replaceable),
         })
     })

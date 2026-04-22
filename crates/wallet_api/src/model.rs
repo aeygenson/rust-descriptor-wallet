@@ -1,8 +1,10 @@
 use serde::{Deserialize, Serialize};
+use wallet_core::error::WalletCoreError;
 use wallet_core::model::{
-    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletInputSelectionMode,
-    WalletPsbtInfo, WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
+    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletInputSelectionConfig,
+    WalletInputSelectionMode, WalletPsbtInfo, WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
 };
+use wallet_core::types::WalletOutPoint;
 
 /// Lightweight wallet summary for listing and UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,14 +41,14 @@ pub struct WalletTxDto {
 impl From<WalletTxInfo> for WalletTxDto {
     fn from(value: WalletTxInfo) -> Self {
         Self {
-            txid: value.txid,
+            txid: value.txid.to_string(),
             confirmed: value.confirmed,
-            confirmation_height: value.confirmation_height,
+            confirmation_height: value.confirmation_height.map(|h| h.as_u32()),
             direction: value.direction.as_str().to_string(),
             replaceable: value.replaceable,
             net_value: value.net_value,
             fee: value.fee.map(Into::into),
-            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb.map(|v| v.as_u64()),
         }
     }
 }
@@ -66,10 +68,10 @@ pub struct WalletUtxoDto {
 impl From<WalletUtxoInfo> for WalletUtxoDto {
     fn from(value: WalletUtxoInfo) -> Self {
         Self {
-            outpoint: value.outpoint,
+            outpoint: value.outpoint.to_string(),
             value: value.value.as_u64(),
             confirmed: value.confirmed,
-            confirmation_height: value.confirmation_height,
+            confirmation_height: value.confirmation_height.map(|h| h.as_u32()),
             address: value.address,
             keychain: value.keychain.as_str().to_string(),
         }
@@ -140,15 +142,31 @@ pub struct WalletCoinControlDto {
     pub selection_mode: Option<WalletInputSelectionModeDto>,
 }
 
-// Conversion into core model
-impl From<WalletCoinControlDto> for WalletCoinControlInfo {
-    fn from(value: WalletCoinControlDto) -> Self {
-        Self {
-            include_outpoints: value.include_outpoints,
-            exclude_outpoints: value.exclude_outpoints,
-            confirmed_only: value.confirmed_only,
-            selection_mode: value.selection_mode.map(Into::into),
-        }
+impl WalletCoinControlDto {
+    /// Convert caller-provided outpoint strings into typed core values.
+    ///
+    /// DTOs are user/API input, so malformed outpoints must become API errors
+    /// instead of panicking inside transaction construction.
+    pub fn try_into_core(self) -> Result<WalletCoinControlInfo, WalletCoreError> {
+        Ok(WalletCoinControlInfo {
+            selection: WalletInputSelectionConfig {
+                include_outpoints: parse_outpoints(
+                    self.include_outpoints,
+                    "WalletCoinControlDto.include_outpoints",
+                )?,
+                exclude_outpoints: parse_outpoints(
+                    self.exclude_outpoints,
+                    "WalletCoinControlDto.exclude_outpoints",
+                )?,
+                confirmed_only: self.confirmed_only,
+                selection_mode: self.selection_mode.map(Into::into),
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                strategy: None,
+            },
+        })
     }
 }
 
@@ -209,22 +227,46 @@ pub struct WalletConsolidationDto {
     pub selection_mode: Option<WalletInputSelectionModeDto>,
 }
 
-// Conversion into core model
-impl From<WalletConsolidationDto> for WalletConsolidationInfo {
-    fn from(value: WalletConsolidationDto) -> Self {
-        Self {
-            include_outpoints: value.include_outpoints,
-            exclude_outpoints: value.exclude_outpoints,
-            confirmed_only: value.confirmed_only,
-            max_input_count: value.max_input_count,
-            min_input_count: value.min_input_count,
-            min_utxo_value_sat: value.min_utxo_value_sat,
-            max_utxo_value_sat: value.max_utxo_value_sat,
-            max_fee_pct_of_input_value: value.max_fee_pct_of_input_value,
-            strategy: value.strategy.map(Into::into),
-            selection_mode: value.selection_mode.map(Into::into),
-        }
+impl WalletConsolidationDto {
+    /// Convert caller-provided consolidation controls into typed core values.
+    pub fn try_into_core(self) -> Result<WalletConsolidationInfo, WalletCoreError> {
+        Ok(WalletConsolidationInfo {
+            selection: WalletInputSelectionConfig {
+                include_outpoints: parse_outpoints(
+                    self.include_outpoints,
+                    "WalletConsolidationDto.include_outpoints",
+                )?,
+                exclude_outpoints: parse_outpoints(
+                    self.exclude_outpoints,
+                    "WalletConsolidationDto.exclude_outpoints",
+                )?,
+                confirmed_only: self.confirmed_only,
+                selection_mode: self.selection_mode.map(Into::into),
+                max_input_count: self.max_input_count,
+                min_input_count: self.min_input_count,
+                min_utxo_value_sat: self.min_utxo_value_sat,
+                max_utxo_value_sat: self.max_utxo_value_sat,
+                strategy: self.strategy.map(Into::into),
+            },
+            max_fee_pct_of_input_value: self
+                .max_fee_pct_of_input_value
+                .map(wallet_core::types::Percent::from),
+        })
     }
+}
+
+fn parse_outpoints(
+    outpoints: Vec<String>,
+    field_name: &str,
+) -> Result<Vec<WalletOutPoint>, WalletCoreError> {
+    outpoints
+        .into_iter()
+        .map(|s| {
+            WalletOutPoint::parse(&s).map_err(|_| {
+                WalletCoreError::CoinControlInvalidOutpoint(format!("{field_name}: {s}"))
+            })
+        })
+        .collect()
 }
 
 /// PSBT information for unsigned transaction creation
@@ -250,21 +292,25 @@ pub struct WalletPsbtDto {
 impl From<WalletPsbtInfo> for WalletPsbtDto {
     fn from(value: WalletPsbtInfo) -> Self {
         Self {
-            psbt_base64: value.psbt_base64,
-            txid: value.txid,
-            original_txid: value.original_txid,
+            psbt_base64: value.psbt_base64.to_string(),
+            txid: value.txid.to_string(),
+            original_txid: value.original_txid.map(|txid| txid.to_string()),
             to_address: value.to_address,
             amount_sat: value.amount_sat.as_u64(),
             fee_sat: value.fee_sat.as_u64(),
-            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb.as_u64(),
             replaceable: value.replaceable,
             change_amount_sat: value.change_amount_sat.map(|v| v.as_u64()),
             selected_utxo_count: value.selected_utxo_count,
-            selected_inputs: value.selected_inputs,
+            selected_inputs: value
+                .selected_inputs
+                .into_iter()
+                .map(|op| op.to_string())
+                .collect(),
             input_count: value.input_count,
             output_count: value.output_count,
             recipient_count: value.recipient_count,
-            estimated_vsize: value.estimated_vsize,
+            estimated_vsize: value.estimated_vsize.as_u64(),
         }
     }
 }
@@ -287,16 +333,16 @@ pub struct WalletCpfpPsbtDto {
 impl From<WalletCpfpPsbtInfo> for WalletCpfpPsbtDto {
     fn from(value: WalletCpfpPsbtInfo) -> Self {
         Self {
-            psbt_base64: value.psbt_base64,
-            txid: value.txid,
-            parent_txid: value.parent_txid,
-            selected_outpoint: value.selected_outpoint,
+            psbt_base64: value.psbt_base64.to_string(),
+            txid: value.txid.to_string(),
+            parent_txid: value.parent_txid.to_string(),
+            selected_outpoint: value.selected_outpoint.to_string(),
             input_value_sat: value.input_value_sat.as_u64(),
             child_output_value_sat: value.child_output_value_sat.as_u64(),
             fee_sat: value.fee_sat.as_u64(),
-            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb,
+            fee_rate_sat_per_vb: value.fee_rate_sat_per_vb.as_u64(),
             replaceable: value.replaceable,
-            estimated_vsize: value.estimated_vsize,
+            estimated_vsize: value.estimated_vsize.as_u64(),
         }
     }
 }
@@ -316,10 +362,10 @@ impl From<WalletSignedPsbtInfo> for WalletSignedPsbtDto {
         let signing_status = value.signing_status().as_str().to_string();
 
         Self {
-            psbt_base64: value.psbt_base64,
+            psbt_base64: value.psbt_base64.to_string(),
             modified: value.modified,
             finalized: value.finalized,
-            txid: value.txid,
+            txid: value.txid.to_string(),
             signing_status,
         }
     }

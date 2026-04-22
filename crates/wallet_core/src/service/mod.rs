@@ -1,5 +1,6 @@
 pub mod common_outpoint;
 pub mod common_selection;
+mod common_test_util;
 pub mod common_tx;
 mod lifecycle;
 pub mod psbt_coin_control;
@@ -10,7 +11,6 @@ mod psbt_create;
 pub mod psbt_publish;
 pub mod psbt_rbf;
 pub mod psbt_sign;
-mod test_support;
 mod txs;
 mod utxos;
 

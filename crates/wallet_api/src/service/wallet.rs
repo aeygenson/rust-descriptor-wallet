@@ -130,7 +130,10 @@ pub async fn status(storage: &WalletStorage, name: &str) -> WalletApiResult<Wall
     let balance = wallet.balance_sat()?;
     let utxos = wallet.utxos();
     let utxo_count = utxos.len();
-    let last_block_height = utxos.iter().filter_map(|u| u.confirmation_height).max();
+    let last_block_height = utxos
+        .iter()
+        .filter_map(|u| u.confirmation_height.map(|h| h.as_u32()))
+        .max();
 
     info!(
         "api wallet: status success name={} balance={} utxos={} last_block_height={:?}",

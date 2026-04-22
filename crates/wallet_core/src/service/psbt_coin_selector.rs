@@ -2,40 +2,49 @@ use super::common_outpoint::ensure_no_outpoint_overlap;
 use super::common_selection::{
     matches_value_filters, sort_local_outputs_by_strategy, validate_selected_input_count_bounds,
 };
-use crate::error::WalletCoreError;
-use crate::model::{WalletConsolidationStrategy, WalletInputSelectionMode};
-use crate::WalletCoreResult;
+use crate::model::{
+    WalletConsolidationStrategy, WalletInputSelectionConfig, WalletInputSelectionMode,
+};
+use crate::types::WalletOutPoint;
+use crate::{WalletCoreError, WalletCoreResult};
 use bdk_wallet::LocalOutput;
 use bitcoin::OutPoint;
 use std::collections::HashSet;
 
-#[derive(Debug, Clone)]
-pub struct SelectionConfig {
-    pub include: Vec<OutPoint>,
-    pub exclude: Vec<OutPoint>,
-    pub confirmed_only: bool,
-    pub max_input_count: Option<usize>,
-    pub min_input_count: Option<usize>,
-    pub min_value: Option<u64>,
-    pub max_value: Option<u64>,
-    pub strategy: Option<WalletConsolidationStrategy>,
-    pub mode: WalletInputSelectionMode,
-}
-
+/// Select wallet inputs using typed outpoint configuration.
+///
+/// The selection result remains in the wallet-core domain model as
+/// `WalletOutPoint` values. Raw Bitcoin outpoints are used only as a temporary
+/// comparison form when scanning BDK wallet UTXOs.
 pub fn select_inputs(
     utxos: &[LocalOutput],
-    cfg: &SelectionConfig,
-) -> WalletCoreResult<Vec<OutPoint>> {
-    ensure_no_outpoint_overlap(&cfg.include, &cfg.exclude)
+    cfg: &WalletInputSelectionConfig,
+) -> WalletCoreResult<Vec<WalletOutPoint>> {
+    ensure_no_outpoint_overlap(&cfg.include_outpoints, &cfg.exclude_outpoints)
         .map_err(|e| WalletCoreError::SelectionFailed(e.to_string()))?;
+
+    let include_bitcoin: HashSet<OutPoint> = cfg
+        .include_outpoints
+        .iter()
+        .map(|op| OutPoint::from(*op))
+        .collect();
+    let exclude_bitcoin: HashSet<OutPoint> = cfg
+        .exclude_outpoints
+        .iter()
+        .map(|op| OutPoint::from(*op))
+        .collect();
 
     // 1. Build candidate pool
     let mut candidates: Vec<&LocalOutput> = utxos
         .iter()
         .filter(|u| {
             (!cfg.confirmed_only || u.chain_position.is_confirmed())
-                && !cfg.exclude.contains(&u.outpoint)
-                && matches_value_filters(u.txout.value.to_sat(), cfg.min_value, cfg.max_value)
+                && !exclude_bitcoin.contains(&u.outpoint)
+                && matches_value_filters(
+                    u.txout.value.to_sat(),
+                    cfg.min_utxo_value_sat,
+                    cfg.max_utxo_value_sat,
+                )
         })
         .collect();
 
@@ -44,7 +53,7 @@ pub fn select_inputs(
     let mut selected: Vec<&LocalOutput> = Vec::new();
     let mut selected_outpoints: HashSet<OutPoint> = HashSet::new();
 
-    for inc in &cfg.include {
+    for inc in &include_bitcoin {
         let utxo = utxos.iter().find(|u| u.outpoint == *inc).ok_or_else(|| {
             WalletCoreError::SelectionFailed(format!("missing included outpoint {}", inc))
         })?;
@@ -56,14 +65,18 @@ pub fn select_inputs(
             )));
         }
 
-        if cfg.exclude.contains(&utxo.outpoint) {
+        if exclude_bitcoin.contains(&utxo.outpoint) {
             return Err(WalletCoreError::SelectionFailed(format!(
                 "included outpoint {} is also excluded",
                 inc
             )));
         }
 
-        if !matches_value_filters(utxo.txout.value.to_sat(), cfg.min_value, cfg.max_value) {
+        if !matches_value_filters(
+            utxo.txout.value.to_sat(),
+            cfg.min_utxo_value_sat,
+            cfg.max_utxo_value_sat,
+        ) {
             return Err(WalletCoreError::SelectionFailed(format!(
                 "included outpoint {} does not match value filters",
                 inc
@@ -79,13 +92,20 @@ pub fn select_inputs(
     candidates.retain(|u| !selected_outpoints.contains(&u.outpoint));
 
     // 3. If strict manual → return early
-    if cfg.mode == WalletInputSelectionMode::StrictManual {
+    if cfg
+        .selection_mode
+        .unwrap_or(WalletInputSelectionMode::AutomaticOnly)
+        == WalletInputSelectionMode::StrictManual
+    {
         validate_selected_input_count_bounds(
             selected.len(),
             cfg.min_input_count,
             cfg.max_input_count,
         )?;
-        return Ok(selected.into_iter().map(|u| u.outpoint).collect());
+        return Ok(selected
+            .into_iter()
+            .map(|u| WalletOutPoint::from(u.outpoint))
+            .collect());
     }
 
     // 4. Sort candidates by strategy
@@ -110,13 +130,16 @@ pub fn select_inputs(
     // 6. Final validation
     validate_selected_input_count_bounds(selected.len(), cfg.min_input_count, cfg.max_input_count)?;
 
-    Ok(selected.into_iter().map(|u| u.outpoint).collect())
+    Ok(selected
+        .into_iter()
+        .map(|u| WalletOutPoint::from(u.outpoint))
+        .collect())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::service::test_support::test_support::{
+    use crate::service::common_test_util::test_support::{
         default_selection_config, sample_local_output,
     };
 
@@ -131,13 +154,13 @@ mod tests {
     fn strict_manual_returns_only_included() {
         let utxo = sample_local_output(1000, 0, true);
         let mut cfg = default_selection_config();
-        cfg.include = vec![utxo.outpoint];
-        cfg.mode = WalletInputSelectionMode::StrictManual;
+        cfg.include_outpoints = vec![WalletOutPoint::from(utxo.outpoint)];
+        cfg.selection_mode = Some(WalletInputSelectionMode::StrictManual);
 
         let result = select_inputs(&[utxo.clone()], &cfg).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0], utxo.outpoint);
+        assert_eq!(result[0], WalletOutPoint::from(utxo.outpoint));
     }
 
     #[test]
@@ -146,12 +169,12 @@ mod tests {
         let u2 = sample_local_output(2000, 1, true);
 
         let mut cfg = default_selection_config();
-        cfg.exclude = vec![u1.outpoint];
+        cfg.exclude_outpoints = vec![WalletOutPoint::from(u1.outpoint)];
 
         let result = select_inputs(&[u1.clone(), u2.clone()], &cfg).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0], u2.outpoint);
+        assert_eq!(result[0], WalletOutPoint::from(u2.outpoint));
     }
 
     #[test]
@@ -191,6 +214,6 @@ mod tests {
         let result = select_inputs(&[confirmed.clone(), unconfirmed], &cfg).unwrap();
 
         assert_eq!(result.len(), 1);
-        assert_eq!(result[0], confirmed.outpoint);
+        assert_eq!(result[0], WalletOutPoint::from(confirmed.outpoint));
     }
 }

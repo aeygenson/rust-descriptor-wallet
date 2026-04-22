@@ -32,6 +32,24 @@ pub enum WalletCoreError {
     #[error("invalid txid: {0}")]
     InvalidTxid(String),
 
+    #[error("invalid outpoint: {0}")]
+    InvalidOutpoint(String),
+
+    #[error("invalid virtual size: {0}")]
+    InvalidVsize(String),
+
+    #[error("invalid block height: {0}")]
+    InvalidBlockHeight(String),
+
+    #[error("invalid percent: {0}")]
+    InvalidPercent(String),
+
+    #[error("invalid psbt base64: {0}")]
+    InvalidPsbtBase64(String),
+
+    #[error("invalid transaction hex: {0}")]
+    InvalidTxHex(String),
+
     #[error("transaction not found: {0}")]
     TransactionNotFound(String),
 
@@ -207,5 +225,35 @@ impl WalletCoreError {
     /// Build an invalid-PSBT semantic-state error.
     pub fn invalid_psbt_semantic(reason: impl Into<String>) -> Self {
         Self::InvalidPsbtSemantic(reason.into())
+    }
+
+    /// Build an invalid-outpoint error.
+    pub fn invalid_outpoint(reason: impl Into<String>) -> Self {
+        Self::InvalidOutpoint(reason.into())
+    }
+
+    /// Build an invalid-virtual-size error.
+    pub fn invalid_vsize(reason: impl Into<String>) -> Self {
+        Self::InvalidVsize(reason.into())
+    }
+
+    /// Build an invalid-block-height error.
+    pub fn invalid_block_height(reason: impl Into<String>) -> Self {
+        Self::InvalidBlockHeight(reason.into())
+    }
+
+    /// Build an invalid-percent error.
+    pub fn invalid_percent(reason: impl Into<String>) -> Self {
+        Self::InvalidPercent(reason.into())
+    }
+
+    /// Build an invalid-PSBT-base64 error.
+    pub fn invalid_psbt_base64(reason: impl Into<String>) -> Self {
+        Self::InvalidPsbtBase64(reason.into())
+    }
+
+    /// Build an invalid-transaction-hex error.
+    pub fn invalid_tx_hex(reason: impl Into<String>) -> Self {
+        Self::InvalidTxHex(reason.into())
     }
 }
