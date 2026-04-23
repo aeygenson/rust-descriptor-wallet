@@ -10,5 +10,5 @@ bitcoincore-rpc.workspace = true
 
 tracing.workspace = true
 
-bitcoin.workspace = true
+bitcoin = { workspace = true, features = ["base64"] }
 [dev-dependencies]

@@ -1,13 +1,16 @@
-
-
 #!/usr/bin/env bash
 set -euo pipefail
 
 # --- RPC config ----------------------------------------------------------
-BITCOIN_CLI_BIN="${BITCOIN_CLI_BIN:-/opt/homebrew/bin/bitcoin-cli}"
+BITCOIN_CLI_BIN="${BITCOIN_CLI_BIN:-$(command -v bitcoin-cli || true)}"
 RPC_USER="${BITCOIN_RPC_USER:-bitcoin}"
 RPC_PASS="${BITCOIN_RPC_PASS:-bitcoin}"
 RPC_PORT="${BITCOIN_RPC_PORT:-18443}"
+
+if [[ -z "$BITCOIN_CLI_BIN" || ! -x "$BITCOIN_CLI_BIN" ]]; then
+  echo "[regtest] bitcoin-cli not found. Set BITCOIN_CLI_BIN or install Bitcoin Core." >&2
+  exit 1
+fi
 
 # --- Arguments -----------------------------------------------------------
 BLOCK_COUNT="${1:-1}"

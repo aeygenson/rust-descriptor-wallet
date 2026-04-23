@@ -38,6 +38,67 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 
 ![Project Structure](docs/project-structure.svg)
 
+## CLI Documentation
+
+The CLI has dedicated documentation under [`apps/wallet_cli/docs`](apps/wallet_cli/docs):
+
+- [CLI overview](apps/wallet_cli/docs/overview.md)
+- [command reference](apps/wallet_cli/docs/command-reference.md)
+- [transaction flows](apps/wallet_cli/docs/transaction-flows.md)
+- [coin control](apps/wallet_cli/docs/coin-control.md)
+
+## Test Support Documentation
+
+The regtest integration-test helpers are documented under [`crates/test_support/docs`](crates/test_support/docs):
+
+- [test support overview](crates/test_support/docs/overview.md)
+- [test architecture](crates/test_support/docs/test-architecture.md)
+- [transaction scenarios](crates/test_support/docs/transaction-scenarios.md)
+
+## Wallet API Documentation
+
+The application-facing API boundary is documented under [`crates/wallet_api/docs`](crates/wallet_api/docs):
+
+- [wallet API overview](crates/wallet_api/docs/overview.md)
+- [architecture](crates/wallet_api/docs/architecture.md)
+- [service flows](crates/wallet_api/docs/service-flows.md)
+- [DTO boundary](crates/wallet_api/docs/dto-boundary.md)
+- [error model](crates/wallet_api/docs/error-model.md)
+
+## Wallet Core Documentation
+
+The domain wallet engine is documented under [`crates/wallet_core/docs`](crates/wallet_core/docs):
+
+- [wallet core overview](crates/wallet_core/docs/overview.md)
+- [transaction model](crates/wallet_core/docs/transaction-model.md)
+- [PSBT flows](crates/wallet_core/docs/psbt-flows.md)
+- [coin selection](crates/wallet_core/docs/coin-selection.md)
+- [fee model](crates/wallet_core/docs/fee-model.md)
+- [invariants](crates/wallet_core/docs/invariants.md)
+
+## Wallet Storage Documentation
+
+The SQLite wallet registry is documented under [`crates/wallet_storage/docs`](crates/wallet_storage/docs):
+
+- [wallet storage overview](crates/wallet_storage/docs/overview.md)
+- [schema](crates/wallet_storage/docs/schema.md)
+
+## Wallet Sync Documentation
+
+The blockchain integration layer is documented under [`crates/wallet_sync/docs`](crates/wallet_sync/docs):
+
+- [wallet sync overview](crates/wallet_sync/docs/overview.md)
+- [backend model](crates/wallet_sync/docs/backend-model.md)
+- [sync and broadcast flow](crates/wallet_sync/docs/sync-flow.md)
+
+## Infrastructure Documentation
+
+The local regtest infrastructure is documented under [`infra/docs`](infra/docs):
+
+- [infrastructure overview](infra/docs/overview.md)
+- [regtest setup](infra/docs/regtest-setup.md)
+- [regtest scripts](infra/docs/scripts.md)
+
 ## Current Progress
 
 ### Implemented
