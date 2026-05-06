@@ -37,6 +37,31 @@ Current desktop capabilities:
 - inspect transaction history with derived parent/child graph data
 - create and broadcast RBF and CPFP flows from the Transactions screen
 
+## Transaction Creation Flows
+
+The current GUI does not only support a basic fixed-amount send path. Four transaction-building modes are implemented and all of them converge into the same PSBT lifecycle:
+
+```mermaid
+flowchart TD
+    A["Send Screen"] --> B["Fixed Send Form"]
+    A --> C["Send Max Form"]
+    A --> D["Sweep Form"]
+    A --> E["Consolidation Form"]
+
+    B --> F["Coin Control + Request Shaping"]
+    C --> F
+    D --> F
+    E --> F
+
+    F --> G["Tauri send command"]
+    G --> H["wallet_api PSBT builder"]
+    H --> I["PSBT Preview"]
+    I --> J["Sign PSBT"]
+    J --> K["Publish PSBT"]
+```
+
+That shared downstream pipeline is the important product fact. The forms differ, but preview, signing, and publishing are intentionally unified.
+
 ## What Is Actually Running
 
 The frontend is under [src](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src).

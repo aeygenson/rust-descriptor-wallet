@@ -101,6 +101,25 @@ It owns:
 
 The Send page is stateful and intentionally coordinates several modes without introducing a separate global store.
 
+The implemented send architecture is multi-entry but single-pipeline:
+
+```mermaid
+flowchart LR
+    A["Fixed Send"] --> E["Send Page state"]
+    B["Send Max"] --> E
+    C["Sweep"] --> E
+    D["Consolidation"] --> E
+
+    E --> F["feature/send api.ts"]
+    F --> G["Tauri invoke helper"]
+    G --> H["src-tauri send.rs"]
+    H --> I["wallet_api"]
+    I --> J["WalletPsbtDto / WalletSignedPsbtDto"]
+    J --> K["Preview / Sign / Publish panels"]
+```
+
+This is why the diagrams should show send max, sweep, and consolidation explicitly. They are not side features outside the main transaction-creation path.
+
 ### Transactions
 
 [src/features/transactions](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/transactions) owns:

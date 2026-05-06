@@ -104,8 +104,10 @@ Implemented relationships:
 
 - Overview -> operational state and health
 - UTXOs -> Send with preselected outpoints
-- Send -> PSBT preview -> sign -> publish
+- Send fixed/send max/sweep/consolidate -> PSBT preview -> sign -> publish
 - Transactions -> RBF/CPFP workflows
+
+The Send screen should be understood as four transaction-entry flows that share one downstream workflow, not as one fixed-send screen with a few optional extras.
 
 ## Missing Screens
 
