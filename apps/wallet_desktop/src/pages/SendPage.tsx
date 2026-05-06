@@ -45,6 +45,7 @@ import {
   sumSelectedInputValue,
 } from "../features/send/lib";
 import { formatNullableBoolean } from "../features/send/format";
+import { saveTransactionIntent } from "../features/transactions/lib";
 import {
   toCreateConsolidationPsbtInput,
   toCreatePsbtInput,
@@ -344,6 +345,8 @@ export function SendPage() {
         psbtBase64: signedPsbt.psbt_base64,
       });
       setBroadcastResult(result);
+      const intent = mode === "consolidate" ? "consolidation" : mode;
+      saveTransactionIntent(selectedWalletName, result.txid, intent);
 
       try {
         await syncWallet(selectedWalletName);

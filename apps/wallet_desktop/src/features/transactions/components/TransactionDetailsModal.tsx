@@ -10,8 +10,14 @@ import {
 } from "../format";
 import { extractParentTxids } from "../lib";
 import type { TransactionDetailsModalProps } from "../types";
+import { TransactionIntentBadge } from "./TransactionIntentBadge";
 
-export function TransactionDetailsModal({ tx, onClose, onOpenTx }: TransactionDetailsModalProps) {
+export function TransactionDetailsModal({
+  tx,
+  intent = "unknown",
+  onClose,
+  onOpenTx,
+}: TransactionDetailsModalProps) {
   return (
     <div className="transactions-details-overlay" onClick={onClose}>
       <div
@@ -49,6 +55,12 @@ export function TransactionDetailsModal({ tx, onClose, onOpenTx }: TransactionDe
             value={formatConfirmationHeight(tx.confirmation_height)}
           />
           <TransactionDetailsItem label="Direction" value={formatDirectionLabel(tx.direction)} />
+          <div className="transactions-details-item">
+            <div className="transactions-details-label">Intent</div>
+            <div className="transactions-details-value">
+              <TransactionIntentBadge intent={intent} />
+            </div>
+          </div>
           <TransactionDetailsItem
             label="Replaceable"
             value={formatBooleanLabel(tx.replaceable)}

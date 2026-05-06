@@ -31,6 +31,7 @@ Implemented flows:
 - consolidation preview
 - PSBT sign and publish
 - transaction history inspection
+- transaction intent classification for fixed send, send max, sweep, consolidation, RBF, and CPFP
 - RBF PSBT workflow
 - CPFP PSBT workflow
 

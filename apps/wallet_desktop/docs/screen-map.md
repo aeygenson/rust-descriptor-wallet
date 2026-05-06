@@ -86,6 +86,7 @@ Current responsibilities:
 
 - load transaction history
 - derive transaction graph relationships
+- resolve transaction intent labels from stored metadata or fallback heuristics
 - filter transactions
 - open transaction details
 - trigger RBF PSBT flow
@@ -95,6 +96,7 @@ Current action surface:
 
 - copy txid
 - inspect details
+- inspect transaction intent badge in table and details modal
 - create/sign/publish RBF replacement PSBT
 - create/sign/publish CPFP PSBT
 

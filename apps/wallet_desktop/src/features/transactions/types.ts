@@ -18,6 +18,19 @@ export type TransactionFilter =
   | "sent"
   | "received";
 
+export type TransactionIntent =
+  | "fixed"
+  | "send_max"
+  | "sweep"
+  | "consolidation"
+  | "rbf"
+  | "cpfp"
+  | "unknown";
+
+export type TransactionIntentBadgeProps = {
+  intent: TransactionIntent;
+};
+
 export type TransactionsFilterBarProps = {
   transactions: WalletTxDto[];
   activeFilter: TransactionFilter;
@@ -32,6 +45,7 @@ export type TransactionRelationCellProps = {
 
 export type TransactionDetailsModalProps = {
   tx: WalletTxDto;
+  intent?: TransactionIntent;
   onClose: () => void;
   onOpenTx?: (txid: string) => void;
 };

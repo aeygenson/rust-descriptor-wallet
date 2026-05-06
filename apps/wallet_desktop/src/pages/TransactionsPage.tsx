@@ -15,8 +15,13 @@ import { RbfPsbtWorkflowPanel } from "../features/transactions/components/RbfPsb
 import { TransactionDetailsModal } from "../features/transactions/components/TransactionDetailsModal";
 import { TransactionActionsMenu } from "../features/transactions/components/TransactionActionsMenu";
 import { TransactionRelationCell } from "../features/transactions/components/TransactionRelationCell";
+import { TransactionIntentBadge } from "../features/transactions/components/TransactionIntentBadge";
 import { TransactionsFilterBar } from "../features/transactions/components/TransactionsFilterBar";
-import type { CpfpPsbtInput, TransactionFilter } from "../features/transactions/types";
+import type {
+  CpfpPsbtInput,
+  TransactionFilter,
+  TransactionIntent,
+} from "../features/transactions/types";
 import {
   formatBooleanLabel,
   formatConfirmationHeight,
@@ -34,6 +39,9 @@ import {
   isPendingTransaction,
   isReceivedTransaction,
   isSentTransaction,
+  loadTransactionIntents,
+  resolveTransactionIntent,
+  saveTransactionIntent,
 } from "../features/transactions/lib";
 import {
   attachTransactionGraph,
@@ -73,6 +81,9 @@ export function TransactionsPage() {
   const [cpfpLoading, setCpfpLoading] = useState(false);
   const [cpfpActionLoading, setCpfpActionLoading] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>("all");
+  const [storedTransactionIntents, setStoredTransactionIntents] = useState<
+    Record<string, TransactionIntent>
+  >({});
 
   useEffect(() => {
     let cancelled = false;
@@ -88,6 +99,7 @@ export function TransactionsPage() {
 
     setLoading(true);
     setError(null);
+    setStoredTransactionIntents(loadTransactionIntents(selectedWalletName));
 
     listTransactions(selectedWalletName)
       .then((data) => {
@@ -320,6 +332,8 @@ export function TransactionsPage() {
         psbtBase64: rbfSignedPsbt.psbt_base64,
       });
       setRbfBroadcastResult(result);
+      saveTransactionIntent(selectedWalletName, result.txid, "rbf");
+      setStoredTransactionIntents(loadTransactionIntents(selectedWalletName));
       showActionMessage("Replacement transaction broadcast");
       await refreshTransactions();
     } catch (e: unknown) {
@@ -368,6 +382,8 @@ export function TransactionsPage() {
         psbtBase64: cpfpSignedPsbt.psbt_base64,
       });
       setCpfpBroadcastResult(result);
+      saveTransactionIntent(selectedWalletName, result.txid, "cpfp");
+      setStoredTransactionIntents(loadTransactionIntents(selectedWalletName));
       showActionMessage("CPFP transaction broadcast");
       await refreshTransactions();
     } catch (e: unknown) {
@@ -472,6 +488,7 @@ export function TransactionsPage() {
       {detailsTx && (
         <TransactionDetailsModal
           tx={detailsTx}
+          intent={resolveTransactionIntent(detailsTx, storedTransactionIntents)}
           onOpenTx={handleOpenTxById}
           onClose={() => setDetailsTx(null)}
         />
@@ -546,6 +563,7 @@ export function TransactionsPage() {
                   <th>#</th>
                   <th>Txid</th>
                   <th>Direction</th>
+                  <th>Intent</th>
                   <th>Net Value</th>
                   <th>Fee</th>
                   <th>Fee Rate</th>
@@ -578,6 +596,11 @@ export function TransactionsPage() {
                         >
                           {formatDirectionLabel(tx.direction)}
                         </span>
+                      </td>
+                      <td>
+                        <TransactionIntentBadge
+                          intent={resolveTransactionIntent(tx, storedTransactionIntents)}
+                        />
                       </td>
                       <td
                         className={

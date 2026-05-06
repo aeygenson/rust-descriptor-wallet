@@ -2,6 +2,7 @@ import type {
   WalletTxDto,
   WalletTxOutputDto,
 } from "../../shared/types/dtos";
+import type { TransactionIntent } from "./types";
 
 export function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -90,4 +91,118 @@ export function getTransactionDirection(
   tx: WalletTxDto
 ): string {
   return tx.direction;
+}
+
+export function inferTransactionIntent(
+  tx: WalletTxDto
+): TransactionIntent {
+  if (isConsolidationTransaction(tx)) {
+    return "consolidation";
+  }
+
+  if (isSweepTransaction(tx)) {
+    return "sweep";
+  }
+
+  if (isFixedSendTransaction(tx)) {
+    return "fixed";
+  }
+
+  return "unknown";
+}
+
+export function isConsolidationTransaction(
+  tx: WalletTxDto
+): boolean {
+  if (!isSentTransaction(tx)) {
+    return false;
+  }
+
+  const outputs = tx.outputs ?? [];
+
+  return (
+    (tx.inputs?.length ?? 0) >= 2 &&
+    outputs.length === 1 &&
+    outputs.every(isWalletOwnedOutput)
+  );
+}
+
+export function isSweepTransaction(
+  tx: WalletTxDto
+): boolean {
+  if (!isSentTransaction(tx)) {
+    return false;
+  }
+
+  const outputs = tx.outputs ?? [];
+
+  return (
+    outputs.length === 1 &&
+    outputs.every((output) => !isWalletOwnedOutput(output))
+  );
+}
+
+export function isFixedSendTransaction(
+  tx: WalletTxDto
+): boolean {
+  if (!isSentTransaction(tx)) {
+    return false;
+  }
+
+  const outputs = tx.outputs ?? [];
+
+  return (
+    outputs.some((output) => !isWalletOwnedOutput(output)) &&
+    outputs.some(isWalletOwnedOutput)
+  );
+}
+
+export function getTxIntentStorageKey(
+  walletName: string
+): string {
+  return `rust-descriptor-wallet:tx-intents:${walletName}`;
+}
+
+export function loadTransactionIntents(
+  walletName: string
+): Record<string, TransactionIntent> {
+  try {
+    const raw = localStorage.getItem(getTxIntentStorageKey(walletName));
+
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+
+    return parsed as Record<string, TransactionIntent>;
+  } catch {
+    return {};
+  }
+}
+
+export function saveTransactionIntent(
+  walletName: string,
+  txid: string,
+  intent: TransactionIntent
+): void {
+  const current = loadTransactionIntents(walletName);
+
+  current[txid] = intent;
+
+  localStorage.setItem(
+    getTxIntentStorageKey(walletName),
+    JSON.stringify(current),
+  );
+}
+
+export function resolveTransactionIntent(
+  tx: WalletTxDto,
+  storedIntents: Record<string, TransactionIntent>
+): TransactionIntent {
+  return storedIntents[tx.txid] ?? inferTransactionIntent(tx);
 }

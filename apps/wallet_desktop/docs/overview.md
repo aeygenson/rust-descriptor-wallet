@@ -35,6 +35,7 @@ Current desktop capabilities:
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
 - sign and publish PSBTs
 - inspect transaction history with derived parent/child graph data
+- classify transactions by user-visible intent and show intent badges in history/details
 - create and broadcast RBF and CPFP flows from the Transactions screen
 
 ## Transaction Creation Flows
@@ -61,6 +62,26 @@ flowchart TD
 ```
 
 That shared downstream pipeline is the important product fact. The forms differ, but preview, signing, and publishing are intentionally unified.
+
+## Transaction Intent Layer
+
+The Transactions screen now exposes more than raw wallet history. The desktop client resolves a transaction intent for display:
+
+- `fixed`
+- `send_max`
+- `sweep`
+- `consolidation`
+- `rbf`
+- `cpfp`
+- `unknown`
+
+Intent resolution is hybrid:
+
+- the Send screen stores explicit intent after publishing fixed/send-max/sweep/consolidation flows
+- the Transactions screen stores explicit intent after broadcasting RBF and CPFP flows
+- if no stored intent exists, the frontend falls back to structural inference from wallet-owned outputs and input/output shape
+
+This is a desktop presentation feature. It improves operator understanding without changing Rust-side transaction semantics.
 
 ## What Is Actually Running
 

@@ -127,11 +127,20 @@ This is why the diagrams should show send max, sweep, and consolidation explicit
 - transaction list filters
 - action menus
 - transaction details modal
+- transaction intent badge rendering
 - RBF PSBT workflow panel
 - CPFP PSBT workflow panel
 - parent/child graph helpers
 
 The graph helper layer is implemented and unit-tested in [graph.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/transactions/graph.ts) and [graph.test.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/transactions/graph.test.ts).
+
+The Transactions feature now also owns a thin intent-resolution layer:
+
+- explicit intent persistence in browser `localStorage`
+- post-broadcast intent writes for send, RBF, and CPFP flows
+- fallback inference for unlabeled transactions
+
+That logic lives on the frontend because it is display-oriented metadata, not wallet-core transaction truth.
 
 ## Data Flow
 

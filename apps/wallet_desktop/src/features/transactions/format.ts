@@ -1,4 +1,7 @@
-import type { WalletTxDirection } from "./types";
+import type {
+  TransactionIntent,
+  WalletTxDirection,
+} from "./types";
 
 export function formatSats(value: number | null | undefined): string {
   if (value === null || value === undefined) {
@@ -51,6 +54,34 @@ export function formatConfirmationHeight(
 
 export function formatOwnershipLabel(isMine: boolean): string {
   return isMine ? "wallet" : "external";
+}
+
+export function formatTransactionIntentLabel(
+  intent: TransactionIntent
+): string {
+  switch (intent) {
+    case "fixed":
+      return "Fixed send";
+    case "send_max":
+      return "Send Max";
+    case "sweep":
+      return "Sweep";
+    case "consolidation":
+      return "Consolidation";
+    case "rbf":
+      return "RBF";
+    case "cpfp":
+      return "CPFP";
+    case "unknown":
+    default:
+      return "Standard";
+  }
+}
+
+export function formatTransactionIntentClass(
+  intent: TransactionIntent
+): string {
+  return `transactions-intent transactions-intent--${intent}`;
 }
 
 export function formatDirectionLabel(direction: WalletTxDirection | string): string {
