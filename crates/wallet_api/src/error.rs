@@ -32,6 +32,9 @@ pub enum WalletApiError {
     #[error("backend unavailable: {0}")]
     BackendUnavailable(String),
 
+    #[error("backend health check failed: {0}")]
+    BackendHealth(String),
+
     #[error(transparent)]
     Storage(#[from] WalletStorageError),
 

@@ -1,0 +1,153 @@
+
+
+/* Overview page */
+.overview-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+}
+
+.overview-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overview-page__title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.overview-page__subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.overview-card {
+  border: 1px solid #243244;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #111827 0%, #0b1220 100%);
+  padding: 18px;
+}
+
+.overview-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.overview-card__title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.overview-card__subtitle {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-metric {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #243244;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.overview-metric__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+  font-size: 14px;
+}
+
+.overview-label {
+  display: block;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.overview-value {
+  display: block;
+  margin-top: 6px;
+  color: #e5e7eb;
+  font-size: 16px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-empty {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.overview-error {
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 12px;
+  background: rgba(127, 29, 29, 0.28);
+  color: #fca5a5;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.overview-backend {
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .overview-page {
+    padding: 16px;
+    padding-bottom: 64px;
+  }
+
+  .overview-page__header,
+  .overview-card__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

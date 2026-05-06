@@ -8,12 +8,14 @@ authors.workspace = true
 [dependencies]
 thiserror.workspace = true
 bdk_esplora.workspace = true
-wallet_core={path="../wallet_core"}
+wallet_core = { workspace = true }
 tracing.workspace = true
 bdk_chain.workspace = true
 reqwest.workspace = true
 bdk_electrum = { workspace = true, optional = true }
 serde_json.workspace = true
+tokio = { workspace = true, features = ["time"] }
+
 [features]
 default = []
 electrum = ["bdk_electrum"]

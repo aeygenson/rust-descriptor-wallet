@@ -1,6 +1,8 @@
 use anyhow::Result;
 use std::path::Path;
-use wallet_api::model::{WalletDetailsDto, WalletSummaryDto};
+use wallet_api::model::{
+    WalletBackendHealthDto, WalletDetailsDto, WalletStatusDto, WalletSummaryDto,
+};
 use wallet_api::WalletApi;
 
 pub async fn list_wallets(api: &WalletApi) -> Result<()> {
@@ -18,6 +20,91 @@ pub async fn list_wallets(api: &WalletApi) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub async fn backend_health(api: &WalletApi, name: &str) -> Result<()> {
+    let health: WalletBackendHealthDto = api.backend_health(name).await?;
+
+    println!(
+        "sync_backend={}",
+        if health.sync_backend_reachable {
+            "ok"
+        } else {
+            "error"
+        }
+    );
+    println!(
+        "bitcoin_tip={} height={}",
+        if health.bitcoin_tip_reachable {
+            "ok"
+        } else {
+            "error"
+        },
+        health
+            .tip_height
+            .map(|height| height.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+    println!(
+        "broadcast_backend={}",
+        if health.broadcast_backend_reachable {
+            "ok"
+        } else {
+            "error"
+        }
+    );
+
+    if let Some(message) = health.message {
+        println!("message={message}");
+    }
+
+    Ok(())
+}
+
+pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
+    let addr = api.address(name).await?;
+    println!("{addr}");
+    Ok(())
+}
+
+pub async fn sync_wallet(api: &WalletApi, name: &str) -> Result<()> {
+    api.sync(name).await?;
+    let status: WalletStatusDto = api.status(name).await?;
+
+    println!("Synced wallet {name}");
+    print_wallet_status(&status);
+
+    Ok(())
+}
+
+pub async fn status(api: &WalletApi, name: &str) -> Result<()> {
+    let status: WalletStatusDto = api.status(name).await?;
+
+    println!("wallet={name}");
+    print_wallet_status(&status);
+
+    Ok(())
+}
+
+pub async fn balance(api: &WalletApi, name: &str) -> Result<()> {
+    let status: WalletStatusDto = api.status(name).await?;
+
+    println!("balance={} sats", status.balance);
+    println!("utxos={}", status.utxo_count);
+
+    Ok(())
+}
+
+fn print_wallet_status(status: &WalletStatusDto) {
+    println!("balance={} sats", status.balance);
+    println!("utxos={}", status.utxo_count);
+    println!(
+        "last_block_height={}",
+        status
+            .last_block_height
+            .map(|height| height.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
 }
 
 pub async fn get_wallet(api: &WalletApi, name: &str) -> Result<()> {

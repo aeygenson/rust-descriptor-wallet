@@ -35,6 +35,28 @@ pub struct WalletTxInfo {
 
     /// Fee rate in sat/vB when known.
     pub fee_rate_sat_per_vb: Option<FeeRateSatPerVb>,
+
+    /// Inputs spent by this transaction (needed for parent/child graph inspection)
+    pub inputs: Vec<WalletTxInputInfo>,
+
+    /// Outputs belonging to this transaction (needed for CPFP and UI inspection)
+    pub outputs: Vec<WalletTxOutputInfo>,
+}
+
+/// Core wallet transaction input model
+#[derive(Debug, Clone)]
+pub struct WalletTxInputInfo {
+    pub previous_outpoint: WalletOutPoint,
+}
+
+/// Core wallet transaction output model
+#[derive(Debug, Clone)]
+pub struct WalletTxOutputInfo {
+    pub outpoint: WalletOutPoint,
+    pub value: AmountSat,
+    pub address: Option<String>,
+    pub is_mine: bool,
+    pub keychain: Option<WalletKeychain>,
 }
 
 /// Core wallet UTXO model used inside wallet_core

@@ -56,6 +56,12 @@ pub enum Commands {
         /// Wallet name.
         name: String,
     },
+    /// Check real Bitcoin backend health without syncing.
+    Health {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+    },
     /// Show wallet balance.
     Balance {
         #[arg(long)]
@@ -91,6 +97,14 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
     },
     /// Create a PSBT using explicit coin control.
     CreatePsbtWithCoinControl {
@@ -109,6 +123,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
@@ -139,6 +157,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
     },
     /// Create a send-max PSBT using explicit coin control.
     CreateSendMaxPsbtWithCoinControl {
@@ -153,6 +175,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
@@ -184,6 +210,10 @@ pub enum Commands {
         /// Fee rate in sat/vB.
         fee_rate: u64,
 
+        #[arg(long = "replaceable", default_value_t = true)]
+        /// Whether transaction is replaceable via RBF (true/false).
+        replaceable: bool,
+
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
         include: Vec<String>,
@@ -214,6 +244,10 @@ pub enum Commands {
         /// Fee rate in sat/vB.
         fee_rate: u64,
 
+        #[arg(long = "replaceable", default_value_t = true)]
+        /// Whether transaction is replaceable via RBF (true/false).
+        replaceable: bool,
+
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
         include: Vec<String>,
@@ -239,6 +273,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = true)]
+        /// Whether transaction is replaceable via RBF (true/false).
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
@@ -289,6 +327,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = true)]
+        /// Whether transaction is replaceable via RBF (true/false).
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
@@ -395,6 +437,14 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
+
+        #[arg(long = "confirmed-only", default_value_t = false)]
+        /// Only allow confirmed UTXOs.
+        confirmed_only: bool,
     },
     /// Create, sign, and broadcast a transaction using coin control.
     SendPsbtWithCoinControl {
@@ -413,6 +463,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.
@@ -443,6 +497,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
     },
     /// Create, sign, and broadcast a send-max transaction using coin control.
     SendMaxPsbtWithCoinControl {
@@ -457,6 +515,10 @@ pub enum Commands {
         #[arg(long = "fee-rate")]
         /// Fee rate in sat/vB.
         fee_rate: u64,
+
+        #[arg(long = "replaceable", default_value_t = false)]
+        /// Mark the transaction replaceable via RBF.
+        replaceable: bool,
 
         #[arg(long = "include")]
         /// Explicit outpoints to include (txid:vout). Can be repeated.

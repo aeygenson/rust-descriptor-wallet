@@ -1,5 +1,6 @@
-pub mod runtime;
+pub mod psbt;
 pub mod wallet;
+pub mod inspect;
 
 use anyhow::Result;
 use wallet_api::WalletApi;
@@ -9,7 +10,7 @@ use crate::cli::Commands;
 pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
     match cmd {
         Commands::Status { name } => {
-            runtime::status(api, &name).await?;
+            wallet::status(api, &name).await?;
         }
         Commands::ListWallets => {
             wallet::list_wallets(api).await?;
@@ -24,44 +25,60 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             wallet::delete_wallet(api, &name).await?;
         }
         Commands::Address { name } => {
-            runtime::address(api, &name).await?;
+            wallet::address(api, &name).await?;
         }
         Commands::Sync { name } => {
-            runtime::sync(api, &name).await?;
+            wallet::sync_wallet(api, &name).await?;
+        }
+        Commands::Health { name } => {
+            wallet::backend_health(api, &name).await?;
         }
         Commands::Balance { name } => {
-            runtime::balance(api, &name).await?;
+            wallet::balance(api, &name).await?;
         }
         Commands::Txs { name } => {
-            runtime::txs(api, &name).await?;
+            inspect::txs(api, &name).await?;
         }
         Commands::Utxos { name } => {
-            runtime::utxos(api, &name).await?;
+            inspect::utxos(api, &name).await?;
         }
         Commands::CreatePsbt {
             name,
             to,
             amount,
             fee_rate,
+            replaceable,
+            confirmed_only,
         } => {
-            runtime::create_psbt(api, &name, &to, amount, fee_rate).await?;
+            psbt::create_psbt_with_options(
+                api,
+                &name,
+                &to,
+                amount,
+                fee_rate,
+                replaceable,
+                confirmed_only,
+            )
+            .await?;
         }
         Commands::CreatePsbtWithCoinControl {
             name,
             to,
             amount,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::create_psbt_with_coin_control(
+            psbt::create_psbt_with_coin_control_and_options(
                 api,
                 &name,
                 &to,
                 amount,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -69,23 +86,31 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             )
             .await?;
         }
-        Commands::CreateSendMaxPsbt { name, to, fee_rate } => {
-            runtime::create_send_max_psbt(api, &name, &to, fee_rate).await?;
+        Commands::CreateSendMaxPsbt {
+            name,
+            to,
+            fee_rate,
+            replaceable,
+        } => {
+            psbt::create_send_max_psbt_with_options(api, &name, &to, fee_rate, replaceable)
+                .await?;
         }
         Commands::CreateSendMaxPsbtWithCoinControl {
             name,
             to,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::create_send_max_psbt_with_coin_control(
+            psbt::create_send_max_psbt_with_coin_control_and_options(
                 api,
                 &name,
                 &to,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -94,49 +119,62 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             .await?;
         }
         Commands::SignPsbt { name, psbt_base64 } => {
-            runtime::sign_psbt(api, &name, &psbt_base64).await?;
+            psbt::sign_psbt(api, &name, &psbt_base64).await?;
         }
         Commands::PublishPsbt { name, psbt_base64 } => {
-            runtime::publish_psbt(api, &name, &psbt_base64).await?;
+            psbt::publish_psbt(api, &name, &psbt_base64).await?;
         }
         Commands::BumpFeePsbt {
             name,
             txid,
             fee_rate,
         } => {
-            runtime::bump_fee_psbt(api, &name, &txid, fee_rate).await?;
+            psbt::bump_fee_psbt(api, &name, &txid, fee_rate).await?;
         }
         Commands::BumpFee {
             name,
             txid,
             fee_rate,
         } => {
-            runtime::bump_fee(api, &name, &txid, fee_rate).await?;
+            psbt::bump_fee(api, &name, &txid, fee_rate).await?;
         }
         Commands::SendPsbt {
             name,
             to,
             amount,
             fee_rate,
+            replaceable,
+            confirmed_only,
         } => {
-            runtime::send_psbt(api, &name, &to, amount, fee_rate).await?;
+            psbt::send_psbt_with_options(
+                api,
+                &name,
+                &to,
+                amount,
+                fee_rate,
+                replaceable,
+                confirmed_only,
+            )
+            .await?;
         }
         Commands::SendPsbtWithCoinControl {
             name,
             to,
             amount,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::send_psbt_with_coin_control(
+            psbt::send_psbt_with_coin_control_and_options(
                 api,
                 &name,
                 &to,
                 amount,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -144,23 +182,30 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             )
             .await?;
         }
-        Commands::SendMaxPsbt { name, to, fee_rate } => {
-            runtime::send_max_psbt(api, &name, &to, fee_rate).await?;
+        Commands::SendMaxPsbt {
+            name,
+            to,
+            fee_rate,
+            replaceable,
+        } => {
+            psbt::send_max_psbt_with_options(api, &name, &to, fee_rate, replaceable).await?;
         }
         Commands::SendMaxPsbtWithCoinControl {
             name,
             to,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::send_max_psbt_with_coin_control(
+            psbt::send_max_psbt_with_coin_control_and_options(
                 api,
                 &name,
                 &to,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -172,16 +217,18 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             name,
             to,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::create_sweep_psbt(
+            psbt::create_sweep_psbt_with_options(
                 api,
                 &name,
                 &to,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -192,6 +239,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::CreateConsolidationPsbt {
             name,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
@@ -203,10 +251,11 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             strategy,
             selection_mode,
         } => {
-            runtime::create_consolidation_psbt(
+            psbt::create_consolidation_psbt_with_options(
                 api,
                 &name,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -224,16 +273,18 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             name,
             to,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
             selection_mode,
         } => {
-            runtime::sweep_psbt(
+            psbt::sweep_psbt_with_options(
                 api,
                 &name,
                 &to,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -244,6 +295,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::ConsolidatePsbt {
             name,
             fee_rate,
+            replaceable,
             include,
             exclude,
             confirmed_only,
@@ -255,10 +307,11 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             strategy,
             selection_mode,
         } => {
-            runtime::consolidate_psbt(
+            psbt::consolidate_psbt_with_options(
                 api,
                 &name,
                 fee_rate,
+                replaceable,
                 include,
                 exclude,
                 confirmed_only,
@@ -278,7 +331,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             selected_outpoint,
             fee_rate,
         } => {
-            runtime::cpfp_psbt(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
+            psbt::cpfp_psbt(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
         }
         Commands::Cpfp {
             name,
@@ -286,7 +339,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             selected_outpoint,
             fee_rate,
         } => {
-            runtime::cpfp(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
+            psbt::cpfp(api, &name, &parent_txid, &selected_outpoint, fee_rate).await?;
         }
     }
 

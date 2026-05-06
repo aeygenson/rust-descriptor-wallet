@@ -50,3 +50,21 @@ pub(crate) async fn sync_wallet_esplora(
 
     Ok(())
 }
+
+/// Fetch the current Esplora chain tip height without mutating wallet state.
+///
+/// This is used by backend health checks. It intentionally does not perform a
+/// wallet sync, does not apply updates, and does not persist anything.
+pub(crate) fn get_esplora_tip_height(url: &str) -> WalletSyncResult<u32> {
+    debug!("creating esplora client for health check");
+    let client = Builder::new(url).build_blocking();
+
+    let height = client.get_height().map_err(|e| {
+        warn!("esplora health check failed: {}", e);
+        WalletSyncError::BackendHealth(format!(
+            "failed to fetch Esplora tip height during health check: {e}"
+        ))
+    })?;
+
+    Ok(height as u32)
+}

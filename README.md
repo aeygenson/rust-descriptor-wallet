@@ -5,7 +5,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-actively--developing-yellow)
 
-A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundaries, BDK-based wallet logic, and a path toward a desktop wallet with a clear separation between core logic, chain integration, storage, API, and UI.
+A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundaries, BDK-based wallet logic, and a desktop path with a clear separation between core logic, chain integration, storage, API, and UI.
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
@@ -32,7 +32,7 @@ The goal is to build a descriptor-first Bitcoin wallet that demonstrates:
 - `wallet_api`: orchestration boundary shared by apps
 - `test_support`: local regtest helpers for integration tests and scripted environment control
 - `wallet_cli`: command-line entry point
-- `wallet_desktop`: desktop app entry point
+- `wallet_desktop`: Vite/Tauri desktop app with a Rust host under `apps/wallet_desktop/src-tauri`
 
 ## Project Structure
 
@@ -46,6 +46,15 @@ The CLI has dedicated documentation under [`apps/wallet_cli/docs`](apps/wallet_c
 - [command reference](apps/wallet_cli/docs/command-reference.md)
 - [transaction flows](apps/wallet_cli/docs/transaction-flows.md)
 - [coin control](apps/wallet_cli/docs/coin-control.md)
+
+## Desktop Documentation
+
+The desktop app is documented under [`apps/wallet_desktop/docs`](apps/wallet_desktop/docs):
+
+- [desktop overview](apps/wallet_desktop/docs/overview.md)
+- [UI architecture](apps/wallet_desktop/docs/ui-architecture.md)
+- [screen map](apps/wallet_desktop/docs/screen-map.md)
+- [command surface](apps/wallet_desktop/docs/command-surface.md)
 
 ## Test Support Documentation
 
@@ -99,12 +108,24 @@ The local regtest infrastructure is documented under [`infra/docs`](infra/docs):
 - [regtest setup](infra/docs/regtest-setup.md)
 - [regtest scripts](infra/docs/scripts.md)
 
+## Architecture Decision Records
+
+The repository's architecture decisions are tracked under [`docs/adrs`](docs/adrs):
+
+- [ADR index](docs/adrs/README.md)
+- [project architecture](docs/adrs/0001-project-architecture.md)
+- [PSBT-first design](docs/adrs/0002-psbt-first-design.md)
+- [coin selection model](docs/adrs/0003-coin-selection-model.md)
+- [backend abstraction](docs/adrs/0004-backend-abstraction.md)
+- [storage separation](docs/adrs/0005-storage-separation.md)
+- [regtest testing strategy](docs/adrs/0006-regtest-testing-strategy.md)
+
 ## Current Progress
 
 ### Implemented
 
 - Rust workspace with separate crates and app entry points
-- `wallet_cli`, `wallet_desktop`, `wallet_api`, `wallet_core`, `wallet_sync`, `wallet_storage`, and `test_support` crates wired into the workspace
+- `wallet_cli`, `wallet_api`, `wallet_core`, `wallet_sync`, `wallet_storage`, `test_support`, and the `wallet_desktop/src-tauri` host wired into the workspace
 - architecture and project-structure documentation
 - SQLite-backed wallet registry in `wallet_storage`
 - automatic storage initialization and migration on API startup
@@ -136,6 +157,9 @@ The local regtest infrastructure is documented under [`infra/docs`](infra/docs):
 - CPFP PSBT creation for unconfirmed parent transactions
 - one-shot CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
+- first Tauri desktop UI with Overview, UTXOs, Send, and Transactions screens
+- desktop PSBT preview/sign/publish flows for fixed send, send-max, sweep, and consolidation
+- desktop transaction actions for RBF and CPFP
 - stronger domain types for wallet amounts, fee rates, txids, outpoints, PSBT payloads, raw transaction hex, virtual size, block height, percentages, keychains, and transaction direction
 - fallible DTO-to-domain parsing at the API boundary so invalid outpoints and txids become API errors instead of panics
 - regtest support scripts under `infra/regtest`
@@ -147,13 +171,13 @@ The local regtest infrastructure is documented under [`infra/docs`](infra/docs):
 - descriptor validation and richer domain logic inside `wallet_core`
 - richer send controls and policy handling
 - richer command surface in `wallet_api`
-- desktop integration on top of the same runtime API
+- richer desktop integration on top of the same runtime API
 
 ### Expected Shortly
 
 - richer transaction policy controls around selection defaults, limits, and safety checks
 - hardware-signing flow on top of the same PSBT pipeline
-- first desktop flow on top of the same wallet API boundary
+- receive/settings wallet-management screens on top of the same wallet API boundary
 
 ## Planned Capabilities
 

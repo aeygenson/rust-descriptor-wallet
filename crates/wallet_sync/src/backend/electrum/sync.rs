@@ -1,6 +1,10 @@
 use wallet_core::{config::SyncBackendConfig, WalletConfig, WalletService};
 
-#[cfg(not(feature = "electrum"))]
+#[cfg(feature = "electrum")]
+use std::time::Duration;
+#[cfg(feature = "electrum")]
+use std::{sync::mpsc, thread};
+
 use tracing::warn;
 #[cfg(feature = "electrum")]
 use tracing::{debug, info};
@@ -41,20 +45,44 @@ pub(crate) async fn sync_wallet_electrum(
     const STOP_GAP: usize = 25;
     const BATCH_SIZE: usize = 50;
     const FETCH_PREV_TXOUTS: bool = false;
-
-    let client =
-        Client::new(url).map_err(|e| WalletSyncError::BackendUnavailable(e.to_string()))?;
-    debug!("electrum client created");
-    let bdk_client = BdkElectrumClient::new(client);
+    const FULL_SCAN_TIMEOUT: Duration = Duration::from_secs(30);
 
     debug!(
         "starting full scan: stop_gap = {}, batch_size = {}, fetch_prev_txouts = {}",
         STOP_GAP, BATCH_SIZE, FETCH_PREV_TXOUTS
     );
     let request = wallet.wallet_mut().start_full_scan().build();
-    let update = bdk_client
-        .full_scan(request, STOP_GAP, BATCH_SIZE, FETCH_PREV_TXOUTS)
-        .map_err(|e| WalletSyncError::SyncFailed(e.to_string()))?;
+    let url = url.to_owned();
+
+    let update = tokio::task::spawn_blocking(move || {
+        let (tx, rx) = mpsc::sync_channel(1);
+
+        thread::spawn(move || {
+            let result = (|| {
+                let client = Client::new(&url)
+                    .map_err(|e| WalletSyncError::BackendUnavailable(e.to_string()))?;
+                debug!("electrum client created");
+                let bdk_client = BdkElectrumClient::new(client);
+                bdk_client
+                    .full_scan(request, STOP_GAP, BATCH_SIZE, FETCH_PREV_TXOUTS)
+                    .map_err(|e| WalletSyncError::SyncFailed(e.to_string()))
+            })();
+
+            let _ = tx.send(result);
+        });
+
+        rx.recv_timeout(FULL_SCAN_TIMEOUT).map_err(|e| match e {
+            mpsc::RecvTimeoutError::Timeout => WalletSyncError::SyncFailed(format!(
+                "electrum full scan timed out after {} seconds",
+                FULL_SCAN_TIMEOUT.as_secs()
+            )),
+            mpsc::RecvTimeoutError::Disconnected => WalletSyncError::SyncFailed(
+                "electrum full scan worker disconnected before returning an update".to_string(),
+            ),
+        })?
+    })
+    .await
+    .map_err(|e| WalletSyncError::SyncFailed(format!("electrum sync task failed: {e}")))??;
 
     wallet
         .wallet_mut()
@@ -64,6 +92,33 @@ pub(crate) async fn sync_wallet_electrum(
     wallet.persist()?;
 
     Ok(())
+}
+
+/// Fetch the current Electrum chain tip height without mutating wallet state.
+///
+/// This is used by backend health checks. It intentionally does not perform a
+/// wallet sync, does not apply updates, and does not persist anything.
+#[cfg(feature = "electrum")]
+pub(crate) fn get_electrum_tip_height(url: &str) -> WalletSyncResult<u32> {
+    use bdk_electrum::electrum_client::{Client, ElectrumApi};
+
+    debug!("creating electrum client for health check");
+
+    let client = Client::new(url).map_err(|e| {
+        warn!("electrum health check failed while creating client: {}", e);
+        WalletSyncError::BackendHealth(format!(
+            "failed to create Electrum client for health check: {e}"
+        ))
+    })?;
+
+    let header_notification = client.block_headers_subscribe().map_err(|e| {
+        warn!("electrum health check failed while fetching tip: {}", e);
+        WalletSyncError::BackendHealth(format!(
+            "failed to fetch Electrum tip height during health check: {e}"
+        ))
+    })?;
+
+    Ok(header_notification.height as u32)
 }
 
 /// Fallback implementation when the crate is built without the `electrum`
@@ -79,6 +134,20 @@ pub(crate) async fn sync_wallet_electrum(
         url
     );
     Err(WalletSyncError::BackendUnavailable(format!(
+        "electrum backend is configured for '{}' but wallet_sync was built without the 'electrum' feature",
+        url
+    )))
+}
+
+/// Fallback health helper when the crate is built without the `electrum`
+/// feature enabled.
+#[cfg(not(feature = "electrum"))]
+pub(crate) fn get_electrum_tip_height(url: &str) -> WalletSyncResult<u32> {
+    warn!(
+        "electrum health check requested but feature is disabled: {}",
+        url
+    );
+    Err(WalletSyncError::BackendHealth(format!(
         "electrum backend is configured for '{}' but wallet_sync was built without the 'electrum' feature",
         url
     )))

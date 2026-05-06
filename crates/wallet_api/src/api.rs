@@ -6,9 +6,9 @@ use crate::service::{inspect, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
-    TxBroadcastResultDto, WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto,
-    WalletDetailsDto, WalletPsbtDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
-    WalletTxDto, WalletUtxoDto,
+    TxBroadcastResultDto, WalletBackendHealthDto, WalletCoinControlDto, WalletConsolidationDto,
+    WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto, WalletSignedPsbtDto, WalletStatusDto,
+    WalletSummaryDto, WalletTxDto, WalletUtxoDto,
 };
 
 use wallet_core::WalletCore;
@@ -63,14 +63,23 @@ impl WalletApi {
         wallet::address(&self.storage, name).await
     }
 
-    pub async fn sync_wallet(&self, name: &str) -> WalletApiResult<()> {
+    pub async fn sync(&self, name: &str) -> WalletApiResult<()> {
         wallet::sync(&self.storage, name).await
+    }
+
+    pub async fn backend_health(&self, name: &str) -> WalletApiResult<WalletBackendHealthDto> {
+        wallet::backend_health(&self.storage, name).await
     }
 
     pub async fn balance(&self, name: &str) -> WalletApiResult<u64> {
         wallet::balance(&self.storage, name).await
     }
 
+    /// Return wallet transaction history rows for CLI/API/UI.
+    ///
+    /// Each `WalletTxDto` includes input previous outpoints and wallet-owned
+    /// spendable outputs, allowing the UI to inspect parent/child relationships
+    /// and derive CPFP candidate outpoints without guessing.
     pub async fn txs(&self, name: &str) -> WalletApiResult<Vec<WalletTxDto>> {
         inspect::txs(&self.storage, name).await
     }
@@ -85,13 +94,27 @@ impl WalletApi {
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
+        confirmed_only: bool,
     ) -> WalletApiResult<WalletPsbtDto> {
+        debug!(
+            "api: create_psbt name={} to={} amount_sat={} fee_rate_sat_per_vb={} replaceable={} confirmed_only={}",
+            name,
+            to_address,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            confirmed_only,
+        );
+
         psbt::create(
             &self.storage,
             name,
             to_address,
             amount_sat,
             fee_rate_sat_per_vb,
+            replaceable,
+            confirmed_only,
         )
         .await
     }
@@ -102,22 +125,27 @@ impl WalletApi {
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<WalletPsbtDto> {
         debug!(
-            "api: create_psbt_with_coin_control name={} to={} amount_sat={} fee_rate_sat_per_vb={} selection_mode={:?}",
+            "api: create_psbt_with_coin_control name={} to={} amount_sat={} fee_rate_sat_per_vb={} replaceable={} confirmed_only={} selection_mode={:?}",
             name,
             to_address,
             amount_sat,
             fee_rate_sat_per_vb,
+            replaceable,
+            coin_control.confirmed_only,
             coin_control.selection_mode,
         );
+
         psbt::create_with_coin_control(
             &self.storage,
             name,
             to_address,
             amount_sat,
             fee_rate_sat_per_vb,
+            replaceable,
             coin_control,
         )
         .await
@@ -128,8 +156,21 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
     ) -> WalletApiResult<WalletPsbtDto> {
-        psbt::create_send_max(&self.storage, name, to_address, fee_rate_sat_per_vb).await
+        debug!(
+            "api: create_send_max_psbt name={} to={} fee_rate_sat_per_vb={} replaceable={}",
+            name, to_address, fee_rate_sat_per_vb, replaceable,
+        );
+
+        psbt::create_send_max(
+            &self.storage,
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            replaceable,
+        )
+        .await
     }
 
     pub async fn create_send_max_psbt_with_coin_control(
@@ -137,20 +178,25 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<WalletPsbtDto> {
         debug!(
-            "api: create_send_max_psbt_with_coin_control name={} to={} fee_rate_sat_per_vb={} selection_mode={:?}",
+            "api: create_send_max_psbt_with_coin_control name={} to={} fee_rate_sat_per_vb={} replaceable={} confirmed_only={} selection_mode={:?}",
             name,
             to_address,
             fee_rate_sat_per_vb,
+            replaceable,
+            coin_control.confirmed_only,
             coin_control.selection_mode,
         );
+
         psbt::create_send_max_with_coin_control(
             &self.storage,
             name,
             to_address,
             fee_rate_sat_per_vb,
+            replaceable,
             coin_control,
         )
         .await
@@ -161,17 +207,25 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<WalletPsbtDto> {
         debug!(
-            "api: create_sweep_psbt name={} to={} fee_rate_sat_per_vb={} selection_mode={:?}",
-            name, to_address, fee_rate_sat_per_vb, coin_control.selection_mode,
+            "api: create_sweep_psbt name={} to={} fee_rate_sat_per_vb={} replaceable={} confirmed_only={} selection_mode={:?}",
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control.confirmed_only,
+            coin_control.selection_mode,
         );
+
         psbt::create_sweep(
             &self.storage,
             name,
             to_address,
             fee_rate_sat_per_vb,
+            replaceable,
             coin_control,
         )
         .await
@@ -186,22 +240,36 @@ impl WalletApi {
         &self,
         name: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<WalletPsbtDto> {
         debug!(
-            "api: create_consolidation_psbt name={} fee_rate_sat_per_vb={} selection_mode={:?}",
-            name, fee_rate_sat_per_vb, consolidation.selection_mode,
+            "api: create_consolidation_psbt name={} fee_rate_sat_per_vb={} replaceable={} confirmed_only={} selection_mode={:?}",
+            name,
+            fee_rate_sat_per_vb,
+            replaceable,
+            consolidation.confirmed_only,
+            consolidation.selection_mode,
         );
-        psbt::create_consolidation(&self.storage, name, fee_rate_sat_per_vb, consolidation).await
+
+        psbt::create_consolidation(
+            &self.storage,
+            name,
+            fee_rate_sat_per_vb,
+            replaceable,
+            consolidation,
+        )
+        .await
     }
 
     pub async fn create_consolidation(
         &self,
         name: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<WalletPsbtDto> {
-        self.create_consolidation_psbt(name, fee_rate_sat_per_vb, consolidation)
+        self.create_consolidation_psbt(name, fee_rate_sat_per_vb, replaceable, consolidation)
             .await
     }
 
@@ -209,18 +277,24 @@ impl WalletApi {
         &self,
         name: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        psbt::consolidate(&self.storage, name, fee_rate_sat_per_vb, consolidation).await
+        let created = self
+            .create_consolidation_psbt(name, fee_rate_sat_per_vb, replaceable, consolidation)
+            .await?;
+
+        self.sign_and_publish(name, &created.psbt_base64).await
     }
 
     pub async fn consolidate(
         &self,
         name: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        self.consolidate_and_broadcast(name, fee_rate_sat_per_vb, consolidation)
+        self.consolidate_and_broadcast(name, fee_rate_sat_per_vb, replaceable, consolidation)
             .await
     }
 
@@ -229,25 +303,30 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        psbt::sweep(
-            &self.storage,
-            name,
-            to_address,
-            fee_rate_sat_per_vb,
-            coin_control,
-        )
-        .await
+        let created = self
+            .create_sweep_psbt(
+                name,
+                to_address,
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control,
+            )
+            .await?;
+
+        self.sign_and_publish(name, &created.psbt_base64).await
     }
 
     pub async fn send_consolidation_psbt(
         &self,
         name: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        self.consolidate_and_broadcast(name, fee_rate_sat_per_vb, consolidation)
+        self.consolidate_and_broadcast(name, fee_rate_sat_per_vb, replaceable, consolidation)
             .await
     }
 
@@ -257,6 +336,7 @@ impl WalletApi {
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
         let created = self
@@ -265,6 +345,7 @@ impl WalletApi {
                 to_address,
                 amount_sat,
                 fee_rate_sat_per_vb,
+                replaceable,
                 coin_control,
             )
             .await?;
@@ -277,9 +358,10 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
     ) -> WalletApiResult<TxBroadcastResultDto> {
         let created = self
-            .create_send_max_psbt(name, to_address, fee_rate_sat_per_vb)
+            .create_send_max_psbt(name, to_address, fee_rate_sat_per_vb, replaceable)
             .await?;
 
         self.sign_and_publish(name, &created.psbt_base64).await
@@ -290,6 +372,7 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
         let created = self
@@ -297,6 +380,7 @@ impl WalletApi {
                 name,
                 to_address,
                 fee_rate_sat_per_vb,
+                replaceable,
                 coin_control,
             )
             .await?;
@@ -309,10 +393,17 @@ impl WalletApi {
         name: &str,
         to_address: &str,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        self.sweep_and_broadcast(name, to_address, fee_rate_sat_per_vb, coin_control)
-            .await
+        self.sweep_and_broadcast(
+            name,
+            to_address,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        )
+        .await
     }
 
     pub async fn sign_psbt(
@@ -393,9 +484,18 @@ impl WalletApi {
         to_address: &str,
         amount_sat: u64,
         fee_rate_sat_per_vb: u64,
+        replaceable: bool,
+        confirmed_only: bool,
     ) -> WalletApiResult<TxBroadcastResultDto> {
         let created = self
-            .create_psbt(name, to_address, amount_sat, fee_rate_sat_per_vb)
+            .create_psbt(
+                name,
+                to_address,
+                amount_sat,
+                fee_rate_sat_per_vb,
+                replaceable,
+                confirmed_only,
+            )
             .await?;
 
         self.sign_and_publish(name, &created.psbt_base64).await
@@ -413,7 +513,7 @@ impl WalletApi {
         &self.sync
     }
 
-    async fn sign_and_publish(
+    pub async fn sign_and_publish(
         &self,
         name: &str,
         psbt_base64: &str,

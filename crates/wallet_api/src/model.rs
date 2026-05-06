@@ -24,6 +24,22 @@ pub struct WalletDetailsDto {
     pub is_watch_only: bool,
 }
 
+/// Transaction input information for wallet history and parent/child graph inspection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletTxInputDto {
+    pub previous_outpoint: String,
+}
+
+/// Transaction output information for wallet history and CPFP candidate selection.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletTxOutputDto {
+    pub outpoint: String,
+    pub value_sat: u64,
+    pub address: Option<String>,
+    pub is_mine: bool,
+    pub keychain: Option<String>,
+}
+
 /// Transaction information for wallet history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletTxDto {
@@ -35,6 +51,8 @@ pub struct WalletTxDto {
     pub net_value: i64,
     pub fee: Option<u64>,
     pub fee_rate_sat_per_vb: Option<u64>,
+    pub inputs: Vec<WalletTxInputDto>,
+    pub outputs: Vec<WalletTxOutputDto>,
 }
 
 // Conversion from core model
@@ -49,6 +67,26 @@ impl From<WalletTxInfo> for WalletTxDto {
             net_value: value.net_value,
             fee: value.fee.map(Into::into),
             fee_rate_sat_per_vb: value.fee_rate_sat_per_vb.map(|v| v.as_u64()),
+            inputs: value
+                .inputs
+                .into_iter()
+                .map(|input| WalletTxInputDto {
+                    previous_outpoint: input.previous_outpoint.to_string(),
+                })
+                .collect(),
+            outputs: value
+                .outputs
+                .into_iter()
+                .map(|output| WalletTxOutputDto {
+                    outpoint: output.outpoint.to_string(),
+                    value_sat: output.value.as_u64(),
+                    address: output.address,
+                    is_mine: output.is_mine,
+                    keychain: output
+                        .keychain
+                        .map(|keychain| keychain.as_str().to_string()),
+                })
+                .collect(),
         }
     }
 }
@@ -84,6 +122,20 @@ pub struct WalletStatusDto {
     pub balance: u64,
     pub utxo_count: usize,
     pub last_block_height: Option<u32>,
+}
+
+/// Real Bitcoin backend health status for CLI and UI.
+///
+/// This is intentionally separate from desktop/backend connectivity:
+/// desktop connectivity only proves React -> Tauri -> Rust works, while this
+/// DTO reports whether the configured Bitcoin infrastructure is reachable.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletBackendHealthDto {
+    pub sync_backend_reachable: bool,
+    pub bitcoin_tip_reachable: bool,
+    pub broadcast_backend_reachable: bool,
+    pub tip_height: Option<u32>,
+    pub message: Option<String>,
 }
 
 /// DTO input-selection mode used by coin-control and consolidation APIs.

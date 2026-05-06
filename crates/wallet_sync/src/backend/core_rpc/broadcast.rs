@@ -55,6 +55,76 @@ impl CoreRpcBroadcaster {
     pub fn broadcast_tx_hex(&self, tx_hex: &str) -> WalletSyncResult<()> {
         <Self as TxBroadcaster>::broadcast_tx_hex(self, tx_hex)
     }
+
+    /// Fetch the current Bitcoin Core chain tip height without mutating wallet state.
+    ///
+    /// This is used by backend health checks. It intentionally does not broadcast,
+    /// does not modify wallet state, and does not persist anything.
+    pub fn get_tip_height(&self) -> WalletSyncResult<u32> {
+        let payload = json!({
+            "jsonrpc": "1.0",
+            "id": "wallet_sync_health",
+            "method": "getblockcount",
+            "params": [],
+        });
+
+        debug!("checking Bitcoin Core RPC health");
+        debug!("rpc_url = {}", self.rpc_url);
+
+        let response = self
+            .client
+            .post(&self.rpc_url)
+            .basic_auth(&self.rpc_user, Some(&self.rpc_pass))
+            .json(&payload)
+            .send()
+            .map_err(|e| {
+                warn!("core rpc health check transport error: {}", e);
+                WalletSyncError::BackendHealth(format!(
+                    "failed to reach Bitcoin Core RPC during health check: {e}"
+                ))
+            })?;
+
+        let status = response.status();
+        let value: serde_json::Value = response.json().map_err(|e| {
+            WalletSyncError::BackendHealth(format!(
+                "failed to decode Bitcoin Core RPC health response: {e}"
+            ))
+        })?;
+
+        if !status.is_success() {
+            return Err(WalletSyncError::BackendHealth(format!(
+                "Bitcoin Core RPC health check returned HTTP status {status}: {value}"
+            )));
+        }
+
+        if let Some(error) = value.get("error") {
+            if !error.is_null() {
+                return Err(WalletSyncError::BackendHealth(format!(
+                    "Bitcoin Core RPC health check returned error: {error}"
+                )));
+            }
+        }
+
+        let height = value
+            .get("result")
+            .and_then(|result| result.as_u64())
+            .ok_or_else(|| {
+                WalletSyncError::BackendHealth(format!(
+                    "Bitcoin Core RPC health response missing numeric result: {value}"
+                ))
+            })?;
+
+        Ok(height as u32)
+    }
+}
+
+/// Fetch the current Bitcoin Core chain tip height without mutating wallet state.
+pub(crate) fn get_core_rpc_tip_height(
+    rpc_url: &str,
+    rpc_user: &str,
+    rpc_pass: &str,
+) -> WalletSyncResult<u32> {
+    CoreRpcBroadcaster::new(rpc_url, rpc_user, rpc_pass).get_tip_height()
 }
 
 impl TxBroadcaster for CoreRpcBroadcaster {

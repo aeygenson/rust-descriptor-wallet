@@ -7,16 +7,16 @@ authors.workspace = true
 
 [dependencies]
 thiserror.workspace = true
-wallet_core={path="../wallet_core"}
-wallet_sync = { path = "../wallet_sync", features = ["electrum"] }
-wallet_storage={path="../wallet_storage"}
+wallet_core = { workspace = true }
+wallet_sync = { workspace = true, features = ["electrum"] }
+wallet_storage = { workspace = true }
 tokio.workspace = true
 serde.workspace = true
 bitcoin.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
-test_support = { path = "../test_support" }
+test_support = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 serial_test.workspace = true
 anyhow.workspace = true

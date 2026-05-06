@@ -1,7 +1,7 @@
 use bitcoin::Network;
 use tracing::{debug, info};
 
-use crate::model::WalletStatusDto;
+use crate::model::{WalletBackendHealthDto, WalletStatusDto};
 use crate::{WalletApiError, WalletApiResult};
 
 use wallet_core::{
@@ -104,6 +104,38 @@ pub async fn sync(storage: &WalletStorage, name: &str) -> WalletApiResult<()> {
 
     info!("api wallet: sync success name={}", name);
     Ok(())
+}
+
+/// Check real Bitcoin backend health for the selected wallet.
+///
+/// This is intentionally separate from desktop/backend connectivity and does
+/// not perform a wallet sync, mutate wallet state, or broadcast anything.
+pub async fn backend_health(
+    storage: &WalletStorage,
+    name: &str,
+) -> WalletApiResult<WalletBackendHealthDto> {
+    debug!("api wallet: backend_health start name={}", name);
+
+    let config = load_wallet_config(storage, name).await?;
+    let sync_service = WalletSyncService::new();
+    let health = sync_service.health(&config).await?;
+
+    info!(
+        "api wallet: backend_health success name={} sync={} tip={} broadcast={} tip_height={:?}",
+        name,
+        health.sync_backend_reachable,
+        health.bitcoin_tip_reachable,
+        health.broadcast_backend_reachable,
+        health.tip_height
+    );
+
+    Ok(WalletBackendHealthDto {
+        sync_backend_reachable: health.sync_backend_reachable,
+        bitcoin_tip_reachable: health.bitcoin_tip_reachable,
+        broadcast_backend_reachable: health.broadcast_backend_reachable,
+        tip_height: health.tip_height,
+        message: health.message,
+    })
 }
 
 pub async fn balance(storage: &WalletStorage, name: &str) -> WalletApiResult<u64> {

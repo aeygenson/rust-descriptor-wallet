@@ -4,7 +4,7 @@ use bdk_chain::ChainPosition;
 use bdk_wallet::KeychainKind;
 use tracing::debug;
 
-use crate::model::WalletUtxoInfo;
+use crate::model::{WalletTxOutputInfo, WalletUtxoInfo};
 use crate::types::{AmountSat, BlockHeight, WalletKeychain, WalletOutPoint, WalletTxid};
 
 impl WalletService {
@@ -73,11 +73,45 @@ impl WalletService {
             .collect()
     }
 
+    /// Return wallet-owned outputs belonging to the given transaction id.
+    ///
+    /// This is intentionally based on the current wallet UTXO set, so it only returns
+    /// outputs that are still spendable by this wallet. That makes it suitable for
+    /// CPFP candidate selection in the UI.
+    pub fn wallet_owned_outputs_for_txid(&self, txid: &str) -> Vec<WalletTxOutputInfo> {
+        self.utxos_for_txid(txid)
+            .into_iter()
+            .map(|utxo| WalletTxOutputInfo {
+                outpoint: utxo.outpoint,
+                value: utxo.value,
+                address: utxo.address,
+                is_mine: true,
+                keychain: Some(utxo.keychain),
+            })
+            .collect()
+    }
+
     /// Return unconfirmed wallet UTXOs belonging to the given parent transaction id.
     pub fn unconfirmed_utxos_for_txid(&self, txid: &str) -> Vec<WalletUtxoInfo> {
         self.utxos_for_txid(txid)
             .into_iter()
             .filter(|u| !u.confirmed)
+            .collect()
+    }
+
+    /// Return unconfirmed wallet-owned outputs belonging to the given transaction id.
+    ///
+    /// These are the direct CPFP candidates for an unconfirmed parent transaction.
+    pub fn unconfirmed_wallet_owned_outputs_for_txid(&self, txid: &str) -> Vec<WalletTxOutputInfo> {
+        self.unconfirmed_utxos_for_txid(txid)
+            .into_iter()
+            .map(|utxo| WalletTxOutputInfo {
+                outpoint: utxo.outpoint,
+                value: utxo.value,
+                address: utxo.address,
+                is_mine: true,
+                keychain: Some(utxo.keychain),
+            })
             .collect()
     }
 }
@@ -124,5 +158,37 @@ mod tests {
                 "unexpected keychain"
             );
         }
+    }
+
+    #[test]
+    fn wallet_owned_outputs_for_missing_txid_is_empty() {
+        let config = test_config_with_db_prefix("wallet_core_utxos_outputs_missing");
+        let wallet = WalletService::load_or_create(&config)
+            .expect("wallet should load or create successfully");
+
+        let outputs = wallet.wallet_owned_outputs_for_txid(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+
+        assert!(
+            outputs.is_empty(),
+            "missing txid should have no owned outputs"
+        );
+    }
+
+    #[test]
+    fn unconfirmed_wallet_owned_outputs_for_missing_txid_is_empty() {
+        let config = test_config_with_db_prefix("wallet_core_utxos_unconfirmed_outputs_missing");
+        let wallet = WalletService::load_or_create(&config)
+            .expect("wallet should load or create successfully");
+
+        let outputs = wallet.unconfirmed_wallet_owned_outputs_for_txid(
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+
+        assert!(
+            outputs.is_empty(),
+            "missing txid should have no unconfirmed owned outputs"
+        );
     }
 }

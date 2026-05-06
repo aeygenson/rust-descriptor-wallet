@@ -5,15 +5,15 @@ use super::common_tx::{
     classify_tx_direction, fee_rate_sat_per_vb_from_fee_and_vsize, is_rbf_enabled,
 };
 use super::*;
-use crate::model::WalletTxInfo;
+use crate::model::{WalletTxInfo, WalletTxInputInfo};
 use crate::types::{AmountSat, BlockHeight, TxDirection, WalletTxid};
 impl WalletService {
     /// This transaction view operates on wallet transactions already stored in
-    /// the BDK graph and does not participate in typed outpoint selection.
+    /// the BDK graph and exposes a read-only transaction summary for CLI/API/UI.
     ///
-    /// The recent `WalletOutPoint` migration affects coin-control, sweep,
-    /// consolidation, and PSBT-input selection flows, but not this read-only
-    /// transaction summary path.
+    /// It now includes typed inputs and wallet-owned spendable outputs so the UI
+    /// can inspect parent/child transaction relationships and derive CPFP
+    /// candidate outpoints without guessing.
     ///
     /// Return list of wallet transactions (basic view).
     ///
@@ -27,10 +27,14 @@ impl WalletService {
     /// - direction (`received`, `sent`, `self`)
     /// - net value in satoshis
     /// - optional fee in satoshis
+    /// - optional fee rate in sat/vB
+    /// - previous outpoints spent by the transaction inputs
+    /// - wallet-owned spendable outputs currently visible in the wallet UTXO set
     ///
     /// Future improvements may include:
     /// - timestamps
     /// - richer transaction classification
+    /// - all transaction outputs, including non-wallet recipient outputs
     pub fn transactions(&self) -> Vec<WalletTxInfo> {
         debug!("wallet_service: transactions start");
 
@@ -79,6 +83,16 @@ impl WalletService {
 
             let replaceable = is_rbf_enabled(&tx.tx_node.tx);
 
+            let inputs = tx
+                .tx_node
+                .tx
+                .input
+                .iter()
+                .map(|input| WalletTxInputInfo {
+                    previous_outpoint: input.previous_output.into(),
+                })
+                .collect();
+
             // Determine confirmation status and height from chain position
             let (confirmed, confirmation_height) = match tx.chain_position {
                 ChainPosition::Confirmed { anchor, .. } => {
@@ -96,6 +110,8 @@ impl WalletService {
                 fee,
                 replaceable,
                 fee_rate_sat_per_vb,
+                inputs,
+                outputs: self.wallet_owned_outputs_for_txid(&txid.to_string()),
             });
         }
 
@@ -145,6 +161,22 @@ mod tests {
 
             if matches!(tx.direction, TxDirection::Received) {
                 assert!(tx.net_value >= 0, "received tx should not be negative");
+            }
+
+            for input in &tx.inputs {
+                assert!(
+                    input.previous_outpoint.to_string().contains(':'),
+                    "input previous outpoint should be in txid:vout form"
+                );
+            }
+
+            for output in &tx.outputs {
+                assert!(
+                    output.outpoint.to_string().contains(':'),
+                    "output outpoint should be in txid:vout form"
+                );
+                assert!(output.value.as_u64() > 0, "output value should be positive");
+                assert!(output.is_mine, "transaction outputs should be wallet-owned");
             }
         }
     }

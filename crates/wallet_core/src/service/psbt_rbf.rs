@@ -11,7 +11,7 @@ use bdk_wallet::bitcoin::FeeRate;
 use crate::{
     error::WalletCoreError,
     model::WalletPsbtInfo,
-    types::{FeeRateSatPerVb, WalletTxid},
+    types::{AmountSat, FeeRateSatPerVb, WalletTxid},
     WalletCoreResult,
 };
 
@@ -93,7 +93,28 @@ impl WalletService {
                 reason: source.to_string(),
             }
         })?;
+
+        // `from_psbt_minimal` intentionally does not know enough about previous outputs
+        // to derive the fee from the PSBT itself. For fee-bump PSBTs we already validated
+        // and applied the requested target fee rate through BDK's fee-bump builder, so make
+        // the preview DTO reflect the requested replacement fee target instead of showing 0.
+        let requested_fee_rate_sat_per_vb = requested_sat_per_vb.as_u64();
+        let estimated_vsize = u64::from(info.estimated_vsize);
+        let estimated_fee_sat = requested_fee_rate_sat_per_vb.saturating_mul(estimated_vsize);
+
         info.original_txid = Some(wallet_txid);
+        info.fee_rate_sat_per_vb = requested_sat_per_vb;
+        info.fee_sat = AmountSat::from(estimated_fee_sat);
+
+        tracing::info!(
+            original_txid = %original_txid,
+            replacement_txid = %info.txid,
+            requested_fee_rate_sat_per_vb = requested_fee_rate_sat_per_vb,
+            estimated_vsize = estimated_vsize,
+            estimated_fee_sat = estimated_fee_sat,
+            "wallet_core: bump_fee_psbt preview fee fields populated"
+        );
+
         Ok(info)
     }
 }
@@ -166,6 +187,26 @@ mod tests {
             original.as_u64(),
             requested.as_u64()
         ));
+    }
+
+    #[test]
+    fn estimates_bump_fee_preview_fee_from_requested_rate_and_vsize() {
+        let requested = FeeRateSatPerVb::from(18);
+        let estimated_vsize = 137_u64;
+
+        let estimated_fee_sat = requested.as_u64().saturating_mul(estimated_vsize);
+
+        assert_eq!(estimated_fee_sat, 2_466);
+    }
+
+    #[test]
+    fn estimates_bump_fee_preview_fee_saturates_on_overflow() {
+        let requested = FeeRateSatPerVb::from(u64::MAX);
+        let estimated_vsize = 2_u64;
+
+        let estimated_fee_sat = requested.as_u64().saturating_mul(estimated_vsize);
+
+        assert_eq!(estimated_fee_sat, u64::MAX);
     }
 }
 

@@ -7,7 +7,7 @@ authors.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-wallet_api = { path = "../../crates/wallet_api" }
+wallet_api = { workspace = true }
 clap.workspace = true
 tokio.workspace = true
 tracing.workspace = true

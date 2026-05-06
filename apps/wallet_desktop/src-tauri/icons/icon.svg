@@ -1,0 +1,50 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="76" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#18314F"/>
+      <stop offset="1" stop-color="#0B1828"/>
+    </linearGradient>
+    <linearGradient id="walletBody" x1="120" y1="172" x2="380" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#D97706"/>
+    </linearGradient>
+    <linearGradient id="walletFlap" x1="128" y1="156" x2="300" y2="250" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FCD34D"/>
+      <stop offset="1" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="coin" x1="290" y1="206" x2="378" y2="306" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FDE68A"/>
+      <stop offset="1" stop-color="#FBBF24"/>
+    </linearGradient>
+    <filter id="shadow" x="82" y="130" width="348" height="242" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="14"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0156863 0 0 0 0 0.0470588 0 0 0 0 0.109804 0 0 0 0.26 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#bg)"/>
+  <rect x="52" y="52" width="408" height="408" rx="92" stroke="#5EEAD4" stroke-opacity="0.12" stroke-width="4"/>
+
+  <g filter="url(#shadow)">
+    <path d="M132 194C132 176.327 146.327 162 164 162H298C311.338 162 323.933 168.126 332.178 178.621L372.582 230.041C377.146 235.851 379.624 243.033 379.624 250.422V318C379.624 335.673 365.297 350 347.624 350H164C146.327 350 132 335.673 132 318V194Z" fill="url(#walletBody)"/>
+    <path d="M132 188C132 170.327 146.327 156 164 156H282.826C296.164 156 308.759 162.126 317.005 172.621L337.942 199.27C344.544 207.674 338.556 220 327.869 220H164C146.327 220 132 205.673 132 188Z" fill="url(#walletFlap)"/>
+    <rect x="226" y="228" width="166" height="80" rx="34" fill="#10263D"/>
+    <circle cx="350" cy="268" r="13" fill="#5EEAD4"/>
+  </g>
+
+  <circle cx="320" cy="256" r="62" fill="url(#coin)" stroke="#FFF7D6" stroke-width="10"/>
+  <path d="M320 222V290" stroke="#8A5A00" stroke-width="14" stroke-linecap="round"/>
+  <path d="M346 236.5C341.333 228.833 332 225 320 225C302 225 292 233.5 292 246C292 258 301.5 264 322 268C339.333 271.333 348 278 348 288C348 300.667 337.333 309 320 309C305.333 309 294.833 304 288.5 294" stroke="#8A5A00" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="142" cy="376" r="14" fill="#5EEAD4"/>
+  <circle cx="190" cy="408" r="14" fill="#93C5FD"/>
+  <circle cx="240" cy="376" r="14" fill="#FCD34D"/>
+  <path d="M156 376H176" stroke="#D1FAE5" stroke-width="9" stroke-linecap="round"/>
+  <path d="M201 399L228 383" stroke="#D1FAE5" stroke-width="9" stroke-linecap="round"/>
+</svg>

@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use bdk_wallet::KeychainKind;
 use bitcoin::FeeRate;
-use bitcoin::{Address, Amount, Network};
+use bitcoin::{Address, Amount, Network, Sequence};
 use tracing::{debug, info};
 
 use super::common_outpoint::ensure_no_outpoint_overlap;
@@ -316,6 +316,8 @@ impl WalletService {
         builder.fee_rate(fee_rate);
         if enable_rbf {
             builder.set_exact_sequence(RBF_SEQUENCE);
+        } else {
+            builder.set_exact_sequence(Sequence::MAX);
         }
 
         match send_amount_mode {
@@ -354,6 +356,16 @@ impl WalletService {
         let psbt = builder
             .finish()
             .map_err(|e| crate::WalletCoreError::PsbtBuildFailed(e.to_string()))?;
+
+        for (idx, input) in psbt.unsigned_tx.input.iter().enumerate() {
+            debug!(
+                "wallet_service: psbt input sequence idx={} previous_output={} sequence={:?} enable_rbf={}",
+                idx,
+                input.previous_output,
+                input.sequence,
+                enable_rbf
+            );
+        }
 
         let actual_replaceable = psbt.unsigned_tx.is_explicitly_rbf();
 

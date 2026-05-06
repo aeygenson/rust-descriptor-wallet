@@ -15,6 +15,9 @@ pub enum WalletSyncError {
     #[error("backend unavailable: {0}")]
     BackendUnavailable(String),
 
+    #[error("backend health check failed: {0}")]
+    BackendHealth(String),
+
     #[error("sync failed: {0}")]
     SyncFailed(String),
 

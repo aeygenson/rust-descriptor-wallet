@@ -19,12 +19,40 @@ pub async fn create_psbt_with_coin_control(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: create_psbt_with_coin_control start name={} to={} amount={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    create_psbt_with_coin_control_and_options(
+        api,
         name,
         to,
         amount_sat,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn create_psbt_with_coin_control_and_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_psbt_with_coin_control_and_options start name={} to={} amount={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -37,6 +65,7 @@ pub async fn create_psbt_with_coin_control(
             to,
             amount_sat,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -52,6 +81,7 @@ pub async fn create_psbt_with_coin_control(
     println!("amount={} sats", psbt.amount_sat);
     println!("fee={} sats", psbt.fee_sat);
     println!("fee_rate={} sat/vB", psbt.fee_rate_sat_per_vb);
+    println!("replaceable={}", psbt.replaceable);
     println!("selected_utxos={}", psbt.selected_utxo_count);
     if !psbt.selected_inputs.is_empty() {
         println!("selected_inputs:");
@@ -61,7 +91,12 @@ pub async fn create_psbt_with_coin_control(
     }
     println!("inputs={}", psbt.input_count);
     println!("outputs={}", psbt.output_count);
+    println!("recipients={}", psbt.recipient_count);
     println!("estimated_vsize={} vB", psbt.estimated_vsize);
+
+    if let Some(change) = psbt.change_amount_sat {
+        println!("change={} sats", change);
+    }
 
     println!("\npsbt_base64:\n{}", psbt.psbt_base64);
 
@@ -74,13 +109,23 @@ pub async fn create_send_max_psbt(
     to: &str,
     fee_rate_sat_per_vb: u64,
 ) -> Result<()> {
+    create_send_max_psbt_with_options(api, name, to, fee_rate_sat_per_vb, true).await
+}
+
+pub async fn create_send_max_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+) -> Result<()> {
     debug!(
-        "cli runtime: create_send_max_psbt start name={} to={} fee_rate={}",
-        name, to, fee_rate_sat_per_vb
+        "cli runtime: create_send_max_psbt_with_options start name={} to={} fee_rate={} replaceable={}",
+        name, to, fee_rate_sat_per_vb, replaceable
     );
 
     let psbt = api
-        .create_send_max_psbt(name, to, fee_rate_sat_per_vb)
+        .create_send_max_psbt(name, to, fee_rate_sat_per_vb, replaceable)
         .await?;
 
     println!("Send-max PSBT created:");
@@ -121,11 +166,37 @@ pub async fn create_send_max_psbt_with_coin_control(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: create_send_max_psbt_with_coin_control start name={} to={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    create_send_max_psbt_with_coin_control_and_options(
+        api,
         name,
         to,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn create_send_max_psbt_with_coin_control_and_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_send_max_psbt_with_coin_control_and_options start name={} to={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -137,6 +208,7 @@ pub async fn create_send_max_psbt_with_coin_control(
             name,
             to,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -184,11 +256,37 @@ pub async fn create_sweep_psbt(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: create_sweep_psbt start name={} to={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    create_sweep_psbt_with_options(
+        api,
         name,
         to,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn create_sweep_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_sweep_psbt_with_options start name={} to={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -200,6 +298,7 @@ pub async fn create_sweep_psbt(
             name,
             to,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -252,10 +351,46 @@ pub async fn create_consolidation_psbt(
     strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: create_consolidation_psbt start name={} fee_rate={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?} selection_mode={:?}",
+    create_consolidation_psbt_with_options(
+        api,
         name,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        max_input_count,
+        min_input_count,
+        min_utxo_value_sat,
+        max_utxo_value_sat,
+        max_fee_pct_of_input_value,
+        strategy,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn create_consolidation_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    max_input_count: Option<usize>,
+    min_input_count: Option<usize>,
+    min_utxo_value_sat: Option<u64>,
+    max_utxo_value_sat: Option<u64>,
+    max_fee_pct_of_input_value: Option<u8>,
+    strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: create_consolidation_psbt_with_options start name={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?} selection_mode={:?}",
+        name,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -272,6 +407,7 @@ pub async fn create_consolidation_psbt(
         .create_consolidation(
             name,
             fee_rate_sat_per_vb,
+            replaceable,
             build_consolidation_dto(
                 include_outpoints,
                 exclude_outpoints,
@@ -353,134 +489,6 @@ fn build_consolidation_dto(
     }
 }
 
-pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: address start name={}", name);
-    let addr = api.address(name).await?;
-    info!("cli runtime: address generated for wallet {}", name);
-    println!("{addr}");
-    Ok(())
-}
-
-pub async fn sync(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: sync start name={}", name);
-    api.sync_wallet(name).await?;
-    info!("cli runtime: sync success for wallet {}", name);
-    println!("Synced wallet {name}");
-    Ok(())
-}
-pub async fn balance(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: balance start name={}", name);
-    let bal = api.balance(name).await?;
-    info!("cli runtime: balance fetched for wallet {}", name);
-    println!("balance={} sats", bal);
-    Ok(())
-}
-
-pub async fn status(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: status start name={}", name);
-
-    let status = api.status(name).await?;
-
-    let last_block = status
-        .last_block_height
-        .map(|h| h.to_string())
-        .unwrap_or_else(|| "unknown".to_string());
-
-    info!(
-        "cli runtime: status success name={} balance={} utxos={} last_block={}",
-        name, status.balance, status.utxo_count, last_block
-    );
-
-    println!("wallet={}", name);
-    println!("balance={} sats", status.balance);
-    println!("utxos={}", status.utxo_count);
-    println!("last_block={}", last_block);
-
-    Ok(())
-}
-
-pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: txs start name={}", name);
-
-    let mut txs = api.txs(name).await?;
-    txs.sort_by(|a, b| b.confirmation_height.cmp(&a.confirmation_height));
-
-    if txs.is_empty() {
-        println!("No transactions found.");
-    } else {
-        info!(
-            "cli runtime: txs fetched count={} for wallet {}",
-            txs.len(),
-            name
-        );
-
-        for tx in txs {
-            let fee = tx
-                .fee
-                .map(|v| format!("{} sats", v))
-                .unwrap_or_else(|| "n/a".to_string());
-
-            let fee_rate = tx
-                .fee_rate_sat_per_vb
-                .map(|v| format!("{} sat/vB", v))
-                .unwrap_or_else(|| "n/a".to_string());
-
-            let replaceable = tx.replaceable.to_string();
-
-            let height = tx
-                .confirmation_height
-                .map(|h| h.to_string())
-                .unwrap_or_else(|| "unconfirmed".to_string());
-
-            println!(
-                "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | fee_rate={:<10} | rbf={} | confirmed={} | height={}",
-                tx.txid,
-                tx.direction,
-                tx.net_value,
-                fee,
-                fee_rate,
-                replaceable,
-                tx.confirmed,
-                height
-            );
-        }
-    }
-
-    Ok(())
-}
-
-pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
-    debug!("cli runtime: utxos start name={}", name);
-
-    let mut utxos = api.utxos(name).await?;
-    utxos.sort_by(|a, b| b.confirmation_height.cmp(&a.confirmation_height));
-
-    if utxos.is_empty() {
-        println!("No UTXOs found.");
-    } else {
-        info!(
-            "cli runtime: utxos fetched count={} for wallet {}",
-            utxos.len(),
-            name
-        );
-
-        for utxo in utxos {
-            let address = utxo.address.as_deref().unwrap_or("unknown");
-
-            let height = utxo
-                .confirmation_height
-                .map(|h| h.to_string())
-                .unwrap_or_else(|| "unconfirmed".to_string());
-
-            println!(
-                "outpoint={} | value={} sats | addr={} | keychain={} | confirmed={} | height={}",
-                utxo.outpoint, utxo.value, address, utxo.keychain, utxo.confirmed, height
-            );
-        }
-    }
-
-    Ok(())
-}
 
 pub async fn create_psbt(
     api: &WalletApi,
@@ -489,22 +497,42 @@ pub async fn create_psbt(
     amount_sat: u64,
     fee_rate_sat_per_vb: u64,
 ) -> Result<()> {
+    create_psbt_with_options(api, name, to, amount_sat, fee_rate_sat_per_vb, true, false).await
+}
+
+pub async fn create_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> Result<()> {
     debug!(
-        "cli runtime: create_psbt start name={} to={} amount={} fee_rate={}",
-        name, to, amount_sat, fee_rate_sat_per_vb
+        "cli runtime: create_psbt_with_options start name={} to={} amount={} fee_rate={} replaceable={} confirmed_only={}",
+        name, to, amount_sat, fee_rate_sat_per_vb, replaceable, confirmed_only
     );
 
     let psbt = api
-        .create_psbt(name, to, amount_sat, fee_rate_sat_per_vb)
+        .create_psbt(
+            name,
+            to,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            confirmed_only,
+        )
         .await?;
 
     info!(
-        "cli runtime: create_psbt success name={} txid={} to={} amount={} fee={} inputs={} outputs={} recipients={} vsize={}",
+        "cli runtime: create_psbt_with_options success name={} txid={} to={} amount={} fee={} replaceable={} inputs={} outputs={} recipients={} vsize={}",
         name,
         psbt.txid,
         psbt.to_address,
         psbt.amount_sat,
         psbt.fee_sat,
+        psbt.replaceable,
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -751,17 +779,37 @@ pub async fn send_psbt(
     amount_sat: u64,
     fee_rate_sat_per_vb: u64,
 ) -> Result<()> {
+    send_psbt_with_options(api, name, to, amount_sat, fee_rate_sat_per_vb, true, false).await
+}
+
+pub async fn send_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> Result<()> {
     debug!(
-        "cli runtime: send start name={} to={} amount={} fee_rate={}",
-        name, to, amount_sat, fee_rate_sat_per_vb
+        "cli runtime: send_psbt_with_options start name={} to={} amount={} fee_rate={} replaceable={} confirmed_only={}",
+        name, to, amount_sat, fee_rate_sat_per_vb, replaceable, confirmed_only
     );
 
-    let published = api
-        .send_psbt(name, to, amount_sat, fee_rate_sat_per_vb)
+    let created = api
+        .create_psbt(
+            name,
+            to,
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            confirmed_only,
+        )
         .await?;
+    let published = api.sign_and_publish(name, &created.psbt_base64).await?;
 
     info!(
-        "cli runtime: send success name={} to={} amount={} txid={}",
+        "cli runtime: send_psbt_with_options success name={} to={} amount={} txid={}",
         name, to, amount_sat, published.txid
     );
 
@@ -785,24 +833,53 @@ pub async fn send_psbt_with_coin_control(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: send_psbt_with_coin_control start name={} to={} amount={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    send_psbt_with_coin_control_and_options(
+        api,
         name,
         to,
         amount_sat,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn send_psbt_with_coin_control_and_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send_psbt_with_coin_control_and_options start name={} to={} amount={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
         selection_mode,
     );
 
-    let published = api
-        .send_psbt_with_coin_control(
+    let created = api
+        .create_psbt_with_coin_control(
             name,
             to,
             amount_sat,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -811,6 +888,7 @@ pub async fn send_psbt_with_coin_control(
             },
         )
         .await?;
+    let published = api.sign_and_publish(name, &created.psbt_base64).await?;
 
     println!("Transaction sent with coin control:");
     println!("to={}", to);
@@ -827,12 +905,24 @@ pub async fn send_max_psbt(
     to: &str,
     fee_rate_sat_per_vb: u64,
 ) -> Result<()> {
+    send_max_psbt_with_options(api, name, to, fee_rate_sat_per_vb, true).await
+}
+
+pub async fn send_max_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+) -> Result<()> {
     debug!(
-        "cli runtime: send_max_psbt start name={} to={} fee_rate={}",
-        name, to, fee_rate_sat_per_vb
+        "cli runtime: send_max_psbt_with_options start name={} to={} fee_rate={} replaceable={}",
+        name, to, fee_rate_sat_per_vb, replaceable
     );
 
-    let published = api.send_max_psbt(name, to, fee_rate_sat_per_vb).await?;
+    let published = api
+        .send_max_psbt(name, to, fee_rate_sat_per_vb, replaceable)
+        .await?;
 
     println!("Send-max transaction sent successfully:");
     println!("to={}", to);
@@ -852,11 +942,37 @@ pub async fn send_max_psbt_with_coin_control(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: send_max_psbt_with_coin_control start name={} to={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    send_max_psbt_with_coin_control_and_options(
+        api,
         name,
         to,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn send_max_psbt_with_coin_control_and_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: send_max_psbt_with_coin_control_and_options start name={} to={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -868,6 +984,7 @@ pub async fn send_max_psbt_with_coin_control(
             name,
             to,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -895,11 +1012,37 @@ pub async fn sweep_psbt(
     confirmed_only: bool,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: sweep_psbt start name={} to={} fee_rate={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+    sweep_psbt_with_options(
+        api,
         name,
         to,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn sweep_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    to: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: sweep_psbt_with_options start name={} to={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} selection_mode={:?}",
+        name,
+        to,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -911,6 +1054,7 @@ pub async fn sweep_psbt(
             name,
             to,
             fee_rate_sat_per_vb,
+            replaceable,
             wallet_api::model::WalletCoinControlDto {
                 include_outpoints,
                 exclude_outpoints,
@@ -943,10 +1087,46 @@ pub async fn consolidate_psbt(
     strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
     selection_mode: Option<WalletInputSelectionModeDto>,
 ) -> Result<()> {
-    debug!(
-        "cli runtime: consolidate_psbt start name={} fee_rate={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?} selection_mode={:?}",
+    consolidate_psbt_with_options(
+        api,
         name,
         fee_rate_sat_per_vb,
+        true,
+        include_outpoints,
+        exclude_outpoints,
+        confirmed_only,
+        max_input_count,
+        min_input_count,
+        min_utxo_value_sat,
+        max_utxo_value_sat,
+        max_fee_pct_of_input_value,
+        strategy,
+        selection_mode,
+    )
+    .await
+}
+
+pub async fn consolidate_psbt_with_options(
+    api: &WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    include_outpoints: Vec<String>,
+    exclude_outpoints: Vec<String>,
+    confirmed_only: bool,
+    max_input_count: Option<usize>,
+    min_input_count: Option<usize>,
+    min_utxo_value_sat: Option<u64>,
+    max_utxo_value_sat: Option<u64>,
+    max_fee_pct_of_input_value: Option<u8>,
+    strategy: Option<wallet_api::model::WalletConsolidationStrategyDto>,
+    selection_mode: Option<WalletInputSelectionModeDto>,
+) -> Result<()> {
+    debug!(
+        "cli runtime: consolidate_psbt_with_options start name={} fee_rate={} replaceable={} include={} exclude={} confirmed_only={} max_input_count={:?} min_input_count={:?} min_utxo_value_sat={:?} max_utxo_value_sat={:?} max_fee_pct={:?} strategy={:?} selection_mode={:?}",
+        name,
+        fee_rate_sat_per_vb,
+        replaceable,
         include_outpoints.len(),
         exclude_outpoints.len(),
         confirmed_only,
@@ -963,6 +1143,7 @@ pub async fn consolidate_psbt(
         .consolidate_and_broadcast(
             name,
             fee_rate_sat_per_vb,
+            replaceable,
             build_consolidation_dto(
                 include_outpoints,
                 exclude_outpoints,

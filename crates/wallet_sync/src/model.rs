@@ -50,6 +50,47 @@ impl BackendProfile {
     }
 }
 
+/// Backend-agnostic health summary for the configured Bitcoin infrastructure.
+///
+/// This model is intentionally transport-free: it only reports the outcome of
+/// lightweight backend probes. API/UI layers can map it into their own DTOs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackendHealth {
+    pub sync_backend_reachable: bool,
+    pub bitcoin_tip_reachable: bool,
+    pub broadcast_backend_reachable: bool,
+    pub tip_height: Option<u32>,
+    pub message: Option<String>,
+}
+
+impl BackendHealth {
+    pub fn new(
+        sync_backend_reachable: bool,
+        bitcoin_tip_reachable: bool,
+        broadcast_backend_reachable: bool,
+        tip_height: Option<u32>,
+        message: Option<String>,
+    ) -> Self {
+        Self {
+            sync_backend_reachable,
+            bitcoin_tip_reachable,
+            broadcast_backend_reachable,
+            tip_height,
+            message,
+        }
+    }
+
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            sync_backend_reachable: false,
+            bitcoin_tip_reachable: false,
+            broadcast_backend_reachable: false,
+            tip_height: None,
+            message: Some(message.into()),
+        }
+    }
+}
+
 /// Minimal result returned by broadcast backends after a transaction was
 /// accepted for relay.
 #[derive(Debug, Clone, PartialEq, Eq)]
