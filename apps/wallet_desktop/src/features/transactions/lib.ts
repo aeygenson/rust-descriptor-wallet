@@ -2,7 +2,12 @@ import type {
   WalletTxDto,
   WalletTxOutputDto,
 } from "../../shared/types/dtos";
-import type { TransactionIntent } from "./types";
+import type {
+  TransactionConfirmationState,
+  TransactionIntent,
+  TransactionRowActions,
+  TransactionRowState,
+} from "./types";
 
 export function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -42,6 +47,16 @@ export function isConfirmedTransaction(tx: WalletTxDto): boolean {
   return tx.confirmed;
 }
 
+export function getTransactionConfirmationState(
+  tx: WalletTxDto,
+): TransactionConfirmationState {
+  if (!tx.confirmed) {
+    return "pending";
+  }
+
+  return "finalized";
+}
+
 export function isSentTransaction(tx: WalletTxDto): boolean {
   return tx.direction === "sent";
 }
@@ -66,17 +81,54 @@ export function canTransactionUseCpfp(tx: WalletTxDto): boolean {
   return isPendingTransaction(tx) && hasWalletOwnedOutput(tx);
 }
 
+export function getTransactionRowActions(tx: WalletTxDto): TransactionRowActions {
+  return {
+    canBumpFee: canTransactionBeRbfBumped(tx),
+    canCpfp: canTransactionUseCpfp(tx),
+    canCopyTxid: Boolean(tx.txid),
+    canOpenDetails: true,
+  };
+}
+
+export function getTransactionRowState(
+  tx: WalletTxDto,
+  selectedTxid?: string | null,
+): TransactionRowState {
+  return {
+    txid: tx.txid,
+    selected: selectedTxid === tx.txid,
+    expanded: false,
+    highlighted: !tx.confirmed,
+  };
+}
+
 export function isWalletOwnedOutput(output: WalletTxOutputDto): boolean {
   return output.is_mine;
+}
+
+export function getParentTxidFromOutpoint(
+  outpoint: string | null | undefined,
+): string | null {
+  if (!outpoint) {
+    return null;
+  }
+
+  const separatorIndex = outpoint.indexOf(":");
+
+  if (separatorIndex <= 0) {
+    return null;
+  }
+
+  return outpoint.slice(0, separatorIndex);
 }
 
 export function extractParentTxids(tx: WalletTxDto): string[] {
   return Array.from(
     new Set(
       (tx.inputs ?? [])
-        .map((input) => input.previous_outpoint.split(":")[0])
-        .filter(Boolean)
-    )
+        .map((input) => getParentTxidFromOutpoint(input.previous_outpoint))
+        .filter((txid): txid is string => Boolean(txid)),
+    ),
   );
 }
 
@@ -87,14 +139,36 @@ export function getCpfpOutpoints(tx: WalletTxDto): string[] {
     .filter(Boolean);
 }
 
-export function getTransactionDirection(
-  tx: WalletTxDto
-): string {
-  return tx.direction;
+export function getDefaultCpfpOutpoint(tx: WalletTxDto): string | null {
+  return getCpfpOutpoints(tx)[0] ?? null;
+}
+
+export function getTransactionDirection(tx: WalletTxDto): string {
+  return tx.direction || "unknown";
+}
+
+export function getTransactionDisplayDirection(tx: WalletTxDto): string {
+  const direction = getTransactionDirection(tx);
+
+  if (direction === "sent") {
+    return "sent";
+  }
+
+  if (direction === "received") {
+    return "received";
+  }
+
+  return direction;
+}
+
+export function getTransactionNetAmountSat(tx: WalletTxDto): number {
+  const value = Number(tx.net_value_sat ?? 0);
+
+  return Number.isFinite(value) ? value : 0;
 }
 
 export function inferTransactionIntent(
-  tx: WalletTxDto
+  tx: WalletTxDto,
 ): TransactionIntent {
   if (isConsolidationTransaction(tx)) {
     return "consolidation";
@@ -112,7 +186,7 @@ export function inferTransactionIntent(
 }
 
 export function isConsolidationTransaction(
-  tx: WalletTxDto
+  tx: WalletTxDto,
 ): boolean {
   if (!isSentTransaction(tx)) {
     return false;
@@ -128,7 +202,7 @@ export function isConsolidationTransaction(
 }
 
 export function isSweepTransaction(
-  tx: WalletTxDto
+  tx: WalletTxDto,
 ): boolean {
   if (!isSentTransaction(tx)) {
     return false;
@@ -143,7 +217,7 @@ export function isSweepTransaction(
 }
 
 export function isFixedSendTransaction(
-  tx: WalletTxDto
+  tx: WalletTxDto,
 ): boolean {
   if (!isSentTransaction(tx)) {
     return false;
@@ -157,14 +231,20 @@ export function isFixedSendTransaction(
   );
 }
 
-export function getTxIntentStorageKey(
-  walletName: string
-): string {
+export function getTxIntentStorageKey(walletName: string): string {
   return `rust-descriptor-wallet:tx-intents:${walletName}`;
 }
 
+export async function copyTransactionTxid(tx: WalletTxDto): Promise<void> {
+  if (!tx.txid) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(tx.txid);
+}
+
 export function loadTransactionIntents(
-  walletName: string
+  walletName: string,
 ): Record<string, TransactionIntent> {
   try {
     const raw = localStorage.getItem(getTxIntentStorageKey(walletName));
@@ -188,7 +268,7 @@ export function loadTransactionIntents(
 export function saveTransactionIntent(
   walletName: string,
   txid: string,
-  intent: TransactionIntent
+  intent: TransactionIntent,
 ): void {
   const current = loadTransactionIntents(walletName);
 
@@ -202,7 +282,7 @@ export function saveTransactionIntent(
 
 export function resolveTransactionIntent(
   tx: WalletTxDto,
-  storedIntents: Record<string, TransactionIntent>
+  storedIntents: Record<string, TransactionIntent>,
 ): TransactionIntent {
   return storedIntents[tx.txid] ?? inferTransactionIntent(tx);
 }

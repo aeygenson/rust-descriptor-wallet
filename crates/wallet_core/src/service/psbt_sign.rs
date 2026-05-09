@@ -71,14 +71,16 @@ impl WalletService {
         log_psbt_inputs("after", &psbt);
 
         let info = signed_psbt_info(&psbt, &original_psbt_base64, finalized);
-        let txid = info.txid.clone();
+        let txid = info.txid;
         let modified = info.modified;
+        let signing_status = info.signing_status();
 
         info!(
-            "wallet_service: sign_psbt success inputs={} modified={} finalized={} txid={}",
+            "wallet_service: sign_psbt success inputs={} modified={} finalized={} signing_status={} txid={}",
             psbt.inputs.len(),
             modified,
             finalized,
+            signing_status.as_str(),
             txid
         );
 
@@ -119,7 +121,7 @@ mod tests {
     }
 
     #[test]
-    fn test_signing_status_helper() {
+    fn signing_status_helper_reports_finalized() {
         let info = WalletSignedPsbtInfo {
             psbt_base64: PsbtBase64::from("dummy"),
             modified: true,
@@ -131,5 +133,35 @@ mod tests {
         };
 
         assert_eq!(info.signing_status(), PsbtSigningStatus::Finalized);
+    }
+
+    #[test]
+    fn signing_status_helper_reports_partially_signed() {
+        let info = WalletSignedPsbtInfo {
+            psbt_base64: PsbtBase64::from("dummy"),
+            modified: true,
+            finalized: false,
+            txid: WalletTxid::parse(
+                "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d",
+            )
+            .unwrap(),
+        };
+
+        assert_eq!(info.signing_status(), PsbtSigningStatus::PartiallySigned);
+    }
+
+    #[test]
+    fn signing_status_helper_reports_unsigned() {
+        let info = WalletSignedPsbtInfo {
+            psbt_base64: PsbtBase64::from("dummy"),
+            modified: false,
+            finalized: false,
+            txid: WalletTxid::parse(
+                "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d",
+            )
+            .unwrap(),
+        };
+
+        assert_eq!(info.signing_status(), PsbtSigningStatus::Unsigned);
     }
 }

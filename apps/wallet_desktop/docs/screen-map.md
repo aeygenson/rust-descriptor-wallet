@@ -7,11 +7,12 @@ This document describes the screens that are implemented today.
 Current sidebar routes:
 
 - Overview
+- Receive
 - UTXOs
 - Send
 - Transactions
 
-There is no Receive, Settings, or separate Maintenance route in the current app.
+There is no Settings or separate Maintenance route in the current app.
 
 ## Overview
 
@@ -47,6 +48,27 @@ Current actions:
 - send max with selected UTXOs
 - sweep selected UTXOs
 - consolidate selected UTXOs
+
+## Receive
+
+File:
+
+- [src/pages/ReceivePage.tsx](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/pages/ReceivePage.tsx)
+
+Current responsibilities:
+
+- show the currently selected wallet in a receive-specific header
+- request the next receive address from the Tauri backend
+- render address metadata returned by Rust
+- let the user generate a fresh address on demand
+- let the user copy the raw address or Bitcoin URI
+
+Current UI states:
+
+- no wallet selected
+- ready to generate
+- address generated
+- backend/request error
 
 ## Send
 
@@ -111,11 +133,12 @@ Implemented relationships:
 
 The Send screen should be understood as four transaction-entry flows that share one downstream workflow, not as one fixed-send screen with a few optional extras.
 
+The Receive screen should be understood as a dedicated address-generation workflow, not as a hidden sub-action inside Overview or UTXOs.
+
 ## Missing Screens
 
 Still not implemented:
 
-- dedicated receive page
 - wallet management page
 - settings/configuration page
 - standalone maintenance page

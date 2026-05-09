@@ -9,9 +9,10 @@ const initialForm: FixedSendFormState = {
   replaceable: false,
   confirmedOnly: true,
 };
-
-
-export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps) {
+export function FixedSendForm({
+  disabled = false,
+  onSubmit,
+}: FixedSendFormProps) {
   const [form, setForm] = useState<FixedSendFormState>(initialForm);
 
   const updateField = <K extends keyof FixedSendFormState>(
@@ -23,14 +24,22 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
 
   const amountSat = Number(form.amountSat);
   const feeRateSatPerVb = Number(form.feeRateSatPerVb);
+  const normalizedAddress = form.toAddress.trim();
+
+  const hasAddress = normalizedAddress.length > 0;
+  const hasValidAmount = Number.isFinite(amountSat) && amountSat > 0;
+  const hasValidFeeRate =
+    Number.isFinite(feeRateSatPerVb) && feeRateSatPerVb > 0;
 
   const canSubmit =
     !disabled &&
-    form.toAddress.trim().length > 0 &&
-    Number.isFinite(amountSat) &&
-    amountSat > 0 &&
-    Number.isFinite(feeRateSatPerVb) &&
-    feeRateSatPerVb > 0;
+    hasAddress &&
+    hasValidAmount &&
+    hasValidFeeRate;
+
+  const submitTitle = canSubmit
+    ? "Preview an unsigned fixed-amount PSBT"
+    : "Enter destination address, amount, and positive fee rate";
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,7 +50,7 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
 
     onSubmit({
       ...form,
-      toAddress: form.toAddress.trim(),
+      toAddress: normalizedAddress,
       amountSat: String(amountSat),
       feeRateSatPerVb: String(feeRateSatPerVb),
     });
@@ -63,6 +72,7 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
             placeholder="bc1... / tb1... / bcrt1..."
             maxLength={120}
             disabled={disabled}
+            aria-invalid={form.toAddress.length > 0 && !hasAddress}
           />
         </label>
 
@@ -81,10 +91,14 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
             autoComplete="off"
             aria-describedby="amount-sats-help"
             disabled={disabled}
+            aria-invalid={form.amountSat.length > 0 && !hasValidAmount}
           />
           <span id="amount-sats-help" className="field__hint">
             Whole satoshis only.
           </span>
+          {form.amountSat.length > 0 && !hasValidAmount ? (
+            <span className="field__error">Enter a positive satoshi amount.</span>
+          ) : null}
         </label>
 
         <label className="field">
@@ -93,7 +107,10 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
             className="field__input"
             value={form.feeRateSatPerVb}
             onChange={(event) =>
-              updateField("feeRateSatPerVb", sanitizeDecimalInput(event.target.value))
+              updateField(
+                "feeRateSatPerVb",
+                sanitizeDecimalInput(event.target.value),
+              )
             }
             placeholder="1.5"
             inputMode="decimal"
@@ -102,10 +119,16 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
             autoComplete="off"
             aria-describedby="fee-rate-help"
             disabled={disabled}
+            aria-invalid={form.feeRateSatPerVb.length > 0 && !hasValidFeeRate}
           />
           <span id="fee-rate-help" className="field__hint">
             Decimal values are allowed, for example 1.5.
           </span>
+          {form.feeRateSatPerVb.length > 0 && !hasValidFeeRate ? (
+            <span className="field__error">
+              Enter a positive fee rate in sat/vB.
+            </span>
+          ) : null}
         </label>
       </div>
 
@@ -114,7 +137,9 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
           <input
             type="checkbox"
             checked={form.replaceable}
-            onChange={(event) => updateField("replaceable", event.target.checked)}
+            onChange={(event) =>
+              updateField("replaceable", event.target.checked)
+            }
             disabled={disabled}
           />
           <span>RBF enabled</span>
@@ -123,15 +148,28 @@ export function FixedSendForm({ disabled = false, onSubmit }: FixedSendFormProps
           <input
             type="checkbox"
             checked={form.confirmedOnly}
-            onChange={(event) => updateField("confirmedOnly", event.target.checked)}
+            onChange={(event) =>
+              updateField("confirmedOnly", event.target.checked)
+            }
             disabled={disabled}
           />
           <span>Use only confirmed UTXOs</span>
         </label>
       </div>
-
+      <div className="send-helper-text">
+        <span>
+          Preview builds an unsigned PSBT first. Signing and publishing stay
+          separate so you can inspect fees, inputs, change, and RBF status
+          before broadcasting.
+        </span>
+      </div>
       <div className="send-form__actions">
-        <button className="primary-button" type="submit" disabled={!canSubmit}>
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={!canSubmit}
+          title={submitTitle}
+        >
           Preview PSBT
         </button>
       </div>

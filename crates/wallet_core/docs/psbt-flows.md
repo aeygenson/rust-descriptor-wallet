@@ -29,7 +29,7 @@ Behavior:
 - optionally pin selected inputs and mark excluded inputs unspendable
 - return `WalletPsbtInfo`
 
-`WalletPsbtInfo` includes the PSBT base64, txid, amount, fee, fee rate, replaceability, change amount, selected inputs, counts, and estimated vsize.
+`WalletPsbtInfo` includes the PSBT base64, txid, amount, fee, fee rate, replaceability, change amount, selected inputs, counts, and estimated vsize. For replacement flows it can also include `original_txid` and `replacement` lineage metadata.
 
 ## Send-Max
 
@@ -78,7 +78,7 @@ Behavior:
 - estimate the original fee rate
 - require the requested fee rate to be strictly higher
 - call BDK's fee-bump builder
-- return a minimal `WalletPsbtInfo` with `original_txid` populated
+- return a `WalletPsbtInfo` with `original_txid` populated and, when available, replacement lineage metadata
 
 Because BDK builds the replacement PSBT, some preview fields are conservative placeholders in the minimal conversion path.
 
@@ -109,7 +109,7 @@ Behavior:
 - sign with the wallet's configured signers
 - return `WalletSignedPsbtInfo`
 
-`WalletSignedPsbtInfo::signing_status` classifies the result as `unchanged`, `partially_signed`, or `finalized`.
+`WalletSignedPsbtInfo::signing_status` classifies the result as `unsigned`, `partially_signed`, or `finalized`.
 
 ## Finalization For Broadcast
 
@@ -120,6 +120,6 @@ Behavior:
 - parse `PsbtBase64`
 - require finalized inputs
 - extract the final transaction
-- return `WalletFinalizedTxInfo` with txid, raw transaction hex, and replaceability
+- return `WalletBroadcastCandidateInfo` with txid, raw transaction hex, replaceability, and optional broadcast-analysis metadata
 
 Despite the module name, this method does not broadcast. It prepares the finalized transaction for a broadcast backend.

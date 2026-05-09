@@ -1,7 +1,11 @@
 import type { FC } from "react";
 import type { CoinControlSummaryProps } from "../types";
 import { CoinControlSelector } from "./CoinControlSelector";
-import { formatOptionalSats } from "../format";
+import {
+  formatOptionalSats,
+  formatOutpoint,
+  formatSelectedInputWithBtc,
+} from "../format";
 import { normalizeSelectedOutpoints } from "../lib";
 
 export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
@@ -20,9 +24,18 @@ export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
 }) => {
   const isManual = selectionMode === "manual";
   const normalizedSelectedUtxos = normalizeSelectedOutpoints(selectedUtxos);
-  const resolvedSelectedInputCount = selectedInputCount ?? normalizedSelectedUtxos.length;
+  const resolvedSelectedInputCount =
+    selectedInputCount ?? normalizedSelectedUtxos.length;
   const hasSelection = resolvedSelectedInputCount > 0;
+  const selectedOutpointPreview = normalizedSelectedUtxos.slice(0, 3);
+  const hiddenSelectedOutpointCount = Math.max(
+    normalizedSelectedUtxos.length - selectedOutpointPreview.length,
+    0,
+  );
   const isInsufficient = remainingSat !== null && remainingSat < 0;
+
+  const selectedValueLabel = formatSelectedInputWithBtc(selectedValueSat);
+  const selectedValueTitle = formatOptionalSats(selectedValueSat);
 
   const modeToggleTitle = onSelectionModeChange
     ? isManual
@@ -54,6 +67,7 @@ export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
             onClick={handleModeToggle}
             disabled={!onSelectionModeChange}
             title={modeToggleTitle}
+            aria-pressed={isManual}
           >
             {isManual ? "Manual" : "Auto"}
           </button>
@@ -62,6 +76,7 @@ export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
               className="coin-control__button"
               type="button"
               onClick={() => onSelectionModeChange("manual")}
+              title="Switch to manual coin selection"
             >
               Enable manual selection
             </button>
@@ -72,29 +87,37 @@ export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
       <div className="coin-control__grid">
         <div className="coin-control__item">
           <div className="coin-control__label">Selected inputs</div>
-          <div className="coin-control__value">{resolvedSelectedInputCount}</div>
+          <div className="coin-control__value">
+            {resolvedSelectedInputCount.toLocaleString()}
+          </div>
         </div>
 
         <div className="coin-control__item">
           <div className="coin-control__label">Selected value</div>
-          <div className="coin-control__value">
-            {formatOptionalSats(selectedValueSat)}
+          <div className="coin-control__value" title={selectedValueTitle}>
+            {selectedValueLabel}
           </div>
         </div>
 
         <div className="coin-control__item">
           <div className="coin-control__label">Required</div>
-          <div className="coin-control__value">{formatOptionalSats(requiredSat)}</div>
+          <div className="coin-control__value">
+            {formatOptionalSats(requiredSat)}
+          </div>
         </div>
 
         <div className="coin-control__item">
           <div className="coin-control__label">Estimated fee</div>
-          <div className="coin-control__value">{formatOptionalSats(estimatedFeeSat)}</div>
+          <div className="coin-control__value">
+            {formatOptionalSats(estimatedFeeSat)}
+          </div>
         </div>
 
         <div className="coin-control__item">
           <div className="coin-control__label">Estimated change</div>
-          <div className="coin-control__value">{formatOptionalSats(changeSat)}</div>
+          <div className="coin-control__value">
+            {formatOptionalSats(changeSat)}
+          </div>
         </div>
 
         <div className="coin-control__item">
@@ -112,16 +135,39 @@ export const CoinControlSummary: FC<CoinControlSummaryProps> = ({
       <div className="coin-control__hint">
         {isManual
           ? hasSelection
-            ? "Manual coin control is enabled. The backend will spend only the selected inputs."
+            ? "Manual coin control is enabled. Only selected inputs will be spent."
             : "Manual coin control is enabled, but no inputs are selected yet."
           : "Coin control is in auto mode. Inputs are selected automatically by the backend."}
       </div>
+
+      {isManual && hasSelection ? (
+        <div className="coin-control__selected-outpoints">
+          <div className="coin-control__label">Selected outpoints</div>
+          <div className="coin-control__chips">
+            {selectedOutpointPreview.map((outpoint) => (
+              <span
+                className="coin-control__chip"
+                key={outpoint}
+                title={outpoint}
+              >
+                {formatOutpoint(outpoint)}
+              </span>
+            ))}
+            {hiddenSelectedOutpointCount > 0 ? (
+              <span className="coin-control__chip">
+                +{hiddenSelectedOutpointCount} more
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {isManual && hasSelection && onClearSelection ? (
         <button
           className="coin-control__clear"
           type="button"
           onClick={onClearSelection}
+          title="Clear selected inputs"
         >
           Clear selected inputs
         </button>

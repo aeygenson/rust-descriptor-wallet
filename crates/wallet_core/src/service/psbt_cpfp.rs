@@ -57,7 +57,7 @@ impl WalletService {
         &mut self,
         parent_txid: &str,
         build_plan: &WalletCpfpBuildPlanInfo,
-    ) -> WalletCoreResult<(PsbtBase64, WalletTxid)> {
+    ) -> WalletCoreResult<(PsbtBase64, WalletTxid, bool)> {
         // Convert the typed wallet-domain outpoint into the raw Bitcoin outpoint
         // only at the BDK transaction-builder boundary.
         let outpoint = bitcoin::OutPoint::from(build_plan.input_outpoint);
@@ -86,9 +86,10 @@ impl WalletService {
             })?;
 
         let child_txid = WalletTxid::from(psbt.unsigned_tx.compute_txid());
+        let child_replaceable = psbt.unsigned_tx.is_explicitly_rbf();
         let psbt_base64 = PsbtBase64::from(psbt.to_string());
 
-        Ok((psbt_base64, child_txid))
+        Ok((psbt_base64, child_txid, child_replaceable))
     }
 
     pub async fn create_cpfp_psbt(
@@ -108,6 +109,9 @@ impl WalletService {
         if parent_txid.is_empty() {
             return Err(WalletCoreError::CpfpEmptyParentTxid);
         }
+
+        let parent_wallet_txid = WalletTxid::parse(parent_txid)
+            .map_err(|_| WalletCoreError::InvalidTxid(parent_txid.to_string()))?;
 
         if fee_rate == 0 {
             return Err(WalletCoreError::InvalidFeeRate);
@@ -147,20 +151,20 @@ impl WalletService {
 
         // --- Step 4: Create PSBT ---
         debug!("creating PSBT from child transaction plan");
-        let (psbt_base64, child_txid) = self.build_cpfp_psbt_from_plan(parent_txid, &build_plan)?;
+        let (psbt_base64, child_txid, child_replaceable) =
+            self.build_cpfp_psbt_from_plan(parent_txid, &build_plan)?;
 
         // --- Step 5: Return result ---
         Ok(WalletCpfpPsbtInfo {
             psbt_base64,
             txid: child_txid,
-            parent_txid: WalletTxid::parse(parent_txid)
-                .map_err(|_| WalletCoreError::InvalidTxid(parent_txid.to_string()))?,
+            parent_txid: parent_wallet_txid,
             selected_outpoint: *selected_outpoint,
             input_value_sat: build_plan.input_value_sat,
             child_output_value_sat: build_plan.child_output_value_sat,
             fee_sat: build_plan.fee_sat,
             fee_rate_sat_per_vb: FeeRateSatPerVb::from(fee_rate),
-            replaceable: true,
+            replaceable: child_replaceable,
             estimated_vsize: build_plan.estimated_vsize,
         })
     }
@@ -200,6 +204,26 @@ mod tests {
     }
 
     #[test]
+    fn build_cpfp_plan_uses_estimated_vsize_for_fee() {
+        let outpoint = WalletOutPoint::parse(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+        )
+        .unwrap();
+
+        let plan = WalletService::build_cpfp_plan(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
+            &outpoint,
+            50_000,
+            5,
+        )
+        .expect("plan should build");
+
+        assert_eq!(plan.estimated_vsize, WalletService::estimate_cpfp_vsize());
+        assert_eq!(plan.fee_sat.0, plan.estimated_vsize.as_u64() * 5);
+        assert_eq!(plan.child_output_value_sat.0, 50_000 - plan.fee_sat.0);
+    }
+
+    #[test]
     fn build_cpfp_plan_fails_when_fee_consumes_entire_input() {
         let err = WalletService::build_cpfp_plan(
             "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
@@ -207,7 +231,7 @@ mod tests {
                 "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
             )
             .unwrap(),
-            100,
+            224,
             2,
         )
         .expect_err("fee >= input should fail");

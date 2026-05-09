@@ -3,6 +3,143 @@ mod common;
 use common::*;
 use serial_test::serial;
 use wallet_api::factory::build_default_api;
+use wallet_api::model::{
+    CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto, SweepRequestDto,
+    WalletAddressRequestDto, WalletCoinControlDto, WalletTransactionsRequestDto,
+    WalletUtxosRequestDto,
+};
+use wallet_api::service;
+
+async fn wallet_address(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
+    service::wallet::address(
+        &api.storage,
+        WalletAddressRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_txs(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletTxDto>> {
+    service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_utxos(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletUtxoDto>> {
+    service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn create_sweep_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletPsbtDto> {
+    service::psbt::create_sweep(
+        &api.storage,
+        SweepRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await
+}
+
+async fn sweep_and_broadcast(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    service::psbt::sweep(
+        &api.storage,
+        SweepRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await
+}
+
+async fn send_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let coin_control = if confirmed_only {
+        Some(WalletCoinControlDto {
+            confirmed_only: true,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let created = service::psbt::create(
+        &api.storage,
+        CreatePsbtRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await?;
+
+    let signed = service::psbt::sign(
+        &api.storage,
+        SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: created.psbt_base64,
+        },
+    )
+    .await?;
+
+    service::psbt::publish(
+        &api.storage,
+        PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: signed.psbt_base64,
+        },
+    )
+    .await
+}
 
 #[tokio::test(flavor = "current_thread")]
 #[serial]
@@ -19,21 +156,23 @@ async fn wallet_create_sweep_psbt_uses_requested_utxo() -> anyhow::Result<()> {
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for sweep coin control");
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_sweep_psbt(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    assert_eq!(destination.keychain, "external");
+    assert!(destination.index.is_some());
+    let psbt = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert_eq!(inputs.len(), 1, "expected exactly one selected input");
@@ -54,6 +193,10 @@ async fn wallet_create_sweep_psbt_uses_requested_utxo() -> anyhow::Result<()> {
         vec![requested.0.clone()],
         "expected sweep selected_inputs to contain only the requested outpoint"
     );
+    assert!(
+        psbt.replacement.is_none(),
+        "sweep PSBT should not contain replacement metadata"
+    );
 
     Ok(())
 }
@@ -69,25 +212,25 @@ async fn wallet_create_sweep_psbt_rejects_missing_selected_outpoint() -> anyhow:
 
     api.sync(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
-    let err = api
-        .create_sweep_psbt(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![
-                    "0000000000000000000000000000000000000000000000000000000000000001:0"
-                        .to_string(),
-                ],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: false,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected sweep PSBT creation to fail for missing selected outpoint");
+    let destination = wallet_address(&api, wallet_name).await?;
+    let err = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![
+                "0000000000000000000000000000000000000000000000000000000000000001:0"
+                    .to_string(),
+            ],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: false,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected sweep PSBT creation to fail for missing selected outpoint");
 
     let msg = err.to_string();
     assert!(
@@ -111,22 +254,22 @@ async fn wallet_create_sweep_psbt_rejects_conflicting_rules() -> anyhow::Result<
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let outpoint = confirmed[0].0.clone();
 
-    let destination = api.address(wallet_name).await?;
-    let err = api
-        .create_sweep_psbt(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![outpoint.clone()],
-                exclude_outpoints: vec![outpoint.clone()],
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected sweep include/exclude conflict to fail");
+    let destination = wallet_address(&api, wallet_name).await?;
+    let err = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![outpoint.clone()],
+            exclude_outpoints: vec![outpoint.clone()],
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected sweep include/exclude conflict to fail");
 
     let msg = err.to_string();
     assert!(
@@ -150,38 +293,45 @@ async fn wallet_create_sweep_psbt_rejects_unconfirmed_selected_utxo_when_confirm
 
     api.sync(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
     );
 
     api.sync(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let selected = utxos
         .iter()
         .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
         .expect("expected at least one unconfirmed wallet-owned output");
 
-    let next_destination = api.address(wallet_name).await?;
-    let err = api
-        .create_sweep_psbt(
-            wallet_name,
-            &next_destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![selected.outpoint.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected confirmed-only sweep to reject unconfirmed selected UTXO");
+    let next_destination = wallet_address(&api, wallet_name).await?;
+    let err = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &next_destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![selected.outpoint.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected confirmed-only sweep to reject unconfirmed selected UTXO");
 
     let msg = err.to_string();
     assert!(
@@ -208,22 +358,22 @@ async fn wallet_create_sweep_psbt_rejects_insufficient_after_fees() -> anyhow::R
         .min_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for strict sweep test");
 
-    let destination = api.address(wallet_name).await?;
-    let err = api
-        .create_sweep_psbt(
-            wallet_name,
-            &destination,
-            requested.1 + 1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected strict sweep to fail when fees consume the selected input");
+    let destination = wallet_address(&api, wallet_name).await?;
+    let err = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        requested.1 + 1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected strict sweep to fail when fees consume the selected input");
 
     let msg = err.to_string();
     assert!(
@@ -252,26 +402,26 @@ async fn wallet_sweep_psbt_sweeps_requested_utxo() -> anyhow::Result<()> {
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for sweep send");
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .sweep_and_broadcast(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = sweep_and_broadcast(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(!published.txid.is_empty(), "expected published sweep txid");
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     assert!(
         !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
         "expected requested outpoint {} to be fully swept",
@@ -287,7 +437,7 @@ async fn wallet_sweep_psbt_sweeps_requested_utxo() -> anyhow::Result<()> {
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)
@@ -318,21 +468,21 @@ async fn wallet_create_sweep_psbt_uses_all_requested_utxos() -> anyhow::Result<(
         .map(|(outpoint, _)| outpoint.clone())
         .collect();
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_sweep_psbt(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: requested.clone(),
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let psbt = create_sweep_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: requested.clone(),
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
@@ -351,6 +501,10 @@ async fn wallet_create_sweep_psbt_uses_all_requested_utxos() -> anyhow::Result<(
     assert_eq!(
         psbt.output_count, 1,
         "expected a single recipient output in strict multi-input sweep"
+    );
+    assert!(
+        psbt.replacement.is_none(),
+        "multi-input sweep PSBT should not contain replacement metadata"
     );
 
     Ok(())
@@ -374,21 +528,21 @@ async fn wallet_sweep_psbt_sweeps_all_requested_utxos() -> anyhow::Result<()> {
         .map(|(outpoint, _)| outpoint.clone())
         .collect();
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .sweep_and_broadcast(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: requested.clone(),
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = sweep_and_broadcast(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: requested.clone(),
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(
         !published.txid.is_empty(),
@@ -396,7 +550,7 @@ async fn wallet_sweep_psbt_sweeps_all_requested_utxos() -> anyhow::Result<()> {
     );
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     for outpoint in &requested {
         assert!(
             !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
@@ -414,7 +568,7 @@ async fn wallet_sweep_psbt_sweeps_all_requested_utxos() -> anyhow::Result<()> {
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)

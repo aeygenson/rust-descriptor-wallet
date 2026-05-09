@@ -3,6 +3,128 @@ mod common;
 use common::*;
 use serial_test::serial;
 use wallet_api::factory::build_default_api;
+use wallet_api::model::{
+    PublishPsbtRequestDto, SendMaxRequestDto, SignPsbtRequestDto, WalletAddressRequestDto,
+    WalletCoinControlDto, WalletTransactionsRequestDto, WalletUtxosRequestDto,
+};
+use wallet_api::service;
+
+async fn wallet_address(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
+    service::wallet::address(
+        &api.storage,
+        WalletAddressRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_txs(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletTxDto>> {
+    service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_utxos(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletUtxoDto>> {
+    service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn create_send_max_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletPsbtDto> {
+    service::psbt::create_send_max(
+        &api.storage,
+        SendMaxRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control: None,
+        },
+    )
+    .await
+}
+
+async fn create_send_max_psbt_with_coin_control(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletPsbtDto> {
+    service::psbt::create_send_max(
+        &api.storage,
+        SendMaxRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control: Some(coin_control),
+        },
+    )
+    .await
+}
+
+async fn send_max_psbt_with_coin_control(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let created = create_send_max_psbt_with_coin_control(
+        api,
+        name,
+        to_address,
+        fee_rate_sat_per_vb,
+        replaceable,
+        coin_control,
+    )
+    .await?;
+
+    let signed = service::psbt::sign(
+        &api.storage,
+        SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: created.psbt_base64,
+        },
+    )
+    .await?;
+
+    service::psbt::publish(
+        &api.storage,
+        PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: signed.psbt_base64,
+        },
+    )
+    .await
+}
 
 #[tokio::test(flavor = "current_thread")]
 #[serial]
@@ -17,17 +139,19 @@ async fn wallet_create_send_max_psbt_builds_after_sync() -> anyhow::Result<()> {
     api.sync(wallet_name).await?;
     let available_total = api.balance(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_send_max_psbt(wallet_name, &destination, 1, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    assert_eq!(destination.keychain, "external");
+    assert!(destination.index.is_some());
+
+    let psbt =
+        create_send_max_psbt(&api, wallet_name, &destination.address, 1, false).await?;
 
     assert!(
         !psbt.psbt_base64.is_empty(),
         "expected send-max PSBT payload"
     );
     assert!(!psbt.txid.is_empty(), "expected send-max txid");
-    assert_eq!(psbt.to_address, destination);
+    assert_eq!(psbt.to_address, destination.address);
     assert!(psbt.amount_sat > 0, "expected positive send-max amount");
     assert!(psbt.fee_sat > 0, "expected positive send-max fee");
     assert!(
@@ -40,6 +164,10 @@ async fn wallet_create_send_max_psbt_builds_after_sync() -> anyhow::Result<()> {
         psbt.selected_inputs.len(),
         psbt.input_count,
         "expected selected_inputs to match actual input count"
+    );
+    assert!(
+        psbt.replacement.is_none(),
+        "send-max PSBT should not contain replacement metadata"
     );
 
     Ok(())
@@ -60,21 +188,21 @@ async fn wallet_create_send_max_psbt_with_coin_control_uses_requested_utxo() -> 
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for send-max coin control");
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_send_max_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let psbt = create_send_max_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert_eq!(inputs.len(), 1, "expected exactly one selected input");
@@ -89,6 +217,10 @@ async fn wallet_create_send_max_psbt_with_coin_control_uses_requested_utxo() -> 
     assert_eq!(
         psbt.output_count, 1,
         "expected a single recipient output in strict send-max sweep"
+    );
+    assert!(
+        psbt.replacement.is_none(),
+        "send-max coin-control PSBT should not contain replacement metadata"
     );
 
     Ok(())
@@ -109,21 +241,21 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyho
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for send-max coin control send");
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_max_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = send_max_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(
         !published.txid.is_empty(),
@@ -131,7 +263,7 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyho
     );
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     assert!(
         !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
         "expected requested outpoint {} to be fully swept",
@@ -147,7 +279,7 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyho
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)
@@ -176,22 +308,22 @@ async fn wallet_create_send_max_psbt_with_coin_control_rejects_insufficient_afte
         .min_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for strict send-max test");
 
-    let destination = api.address(wallet_name).await?;
-    let err = api
-        .create_send_max_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            requested.1 + 1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected strict send-max to fail when fees consume the selected input");
+    let destination = wallet_address(&api, wallet_name).await?;
+    let err = create_send_max_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        requested.1 + 1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected strict send-max to fail when fees consume the selected input");
 
     let msg = err.to_string();
     assert!(
@@ -223,21 +355,21 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos() -> 
         .map(|(outpoint, _)| outpoint.clone())
         .collect();
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_max_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: requested.clone(),
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = send_max_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: requested.clone(),
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(
         !published.txid.is_empty(),
@@ -245,7 +377,7 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos() -> 
     );
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     for outpoint in &requested {
         assert!(
             !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
@@ -263,7 +395,7 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos() -> 
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)
@@ -288,10 +420,9 @@ async fn wallet_send_max_psbt_recipient_and_no_change_invariant() -> anyhow::Res
     ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     api.sync(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_send_max_psbt(wallet_name, &destination, 1, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let psbt =
+        create_send_max_psbt(&api, wallet_name, &destination.address, 1, false).await?;
 
     assert_eq!(psbt.recipient_count, 1);
     assert_eq!(psbt.output_count, 1);

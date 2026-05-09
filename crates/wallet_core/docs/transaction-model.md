@@ -27,8 +27,15 @@
 - `confirmation_height: Option<BlockHeight>`
 - `address: Option<String>`
 - `keychain: WalletKeychain`
+- `derivation_index: Option<AddressIndex>`
 
 `utxos.rs` converts BDK local outputs into this model and also supports filtering unconfirmed UTXOs by txid for CPFP.
+
+`WalletReceiveAddressInfo` is the generated-address model:
+
+- `address: String`
+- `keychain: WalletKeychain`
+- `index: Option<AddressIndex>`
 
 ## PSBT Preview
 
@@ -37,6 +44,7 @@
 - `psbt_base64`
 - `txid`
 - `original_txid`
+- `replacement`
 - `to_address`
 - `amount_sat`
 - `fee_sat`
@@ -50,7 +58,7 @@
 - `recipient_count`
 - `estimated_vsize`
 
-Most builders populate all fields from the actual built PSBT. RBF currently uses `from_psbt_minimal`, which preserves PSBT payload, txid, selected inputs, counts, RBF flag, and vsize while using conservative placeholders for UI-oriented payment metadata.
+Most builders populate all fields from the actual built PSBT. RBF can use `from_psbt_minimal`, which preserves PSBT payload, txid, selected inputs, counts, RBF flag, and vsize while using conservative placeholders for UI-oriented payment metadata. When richer metadata is available, `replacement` carries `replaced_txid`, `replacement_txid`, `replacement_depth`, and `replacement_chain`.
 
 ## Signing And Finalization
 
@@ -61,13 +69,18 @@ Most builders populate all fields from the actual built PSBT. RBF currently uses
 - whether it finalized the PSBT
 - txid
 
-`PsbtSigningStatus` derives `unchanged`, `partially_signed`, or `finalized` from those flags.
+`PsbtSigningStatus` derives `unsigned`, `partially_signed`, or `finalized` from those flags.
 
-`WalletFinalizedTxInfo` reports the broadcast-ready final transaction:
+`WalletBroadcastCandidateInfo` reports the broadcast-ready final transaction:
 
 - txid
 - raw transaction hex
 - replaceability
+- optional fee
+- optional fee rate
+- optional vsize
+- optional ancestor count
+- optional descendant count
 
 Broadcast itself is not part of `wallet_core`.
 

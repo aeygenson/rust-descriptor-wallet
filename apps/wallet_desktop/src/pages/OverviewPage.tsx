@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getAppInfo, getBackendHealth, getWalletStatus } from "../features/wallet/api";
 import type { WalletBackendHealthDto, WalletStatusDto } from "../shared/types/dtos";
 import { useWallet } from "../app/providers/useWallet";
+import { formatOptionalSats } from "../features/send/format";
 
 export function OverviewPage() {
   const [backendInfo, setBackendInfo] = useState("Connecting to backend...");
@@ -14,6 +15,12 @@ export function OverviewPage() {
   const [backendHealthError, setBackendHealthError] = useState<string | null>(null);
 
   const { selectedWalletName } = useWallet();
+
+  const backendHealthOk = backendHealth
+    ? backendHealth.sync_backend_reachable &&
+      backendHealth.bitcoin_tip_reachable &&
+      backendHealth.broadcast_backend_reachable
+    : false;
 
   useEffect(() => {
     let isMounted = true;
@@ -141,6 +148,9 @@ export function OverviewPage() {
               <span className="status-dot" aria-hidden="true" />
               {backendInfo}
             </p>
+            <p className="overview-card__subtitle">
+              Wallet: {selectedWalletName ?? "none selected"}
+            </p>
           </div>
         </section>
 
@@ -157,6 +167,16 @@ export function OverviewPage() {
               <span className="overview-empty">Checking backend health...</span>
             ) : backendHealth ? (
               <div className="overview-health">
+                <div className="overview-health-row">
+                  <span
+                    className={`status-dot ${backendHealthOk ? "status-dot--ok" : "status-dot--error"}`}
+                    aria-hidden="true"
+                  />
+                  <span className="overview-label">Overall</span>
+                  <strong className="overview-value">
+                    {backendHealthOk ? "ready" : "needs attention"}
+                  </strong>
+                </div>
                 <HealthRow
                   label="Sync backend"
                   ok={backendHealth.sync_backend_reachable}
@@ -204,7 +224,7 @@ export function OverviewPage() {
                 <div className="overview-metric">
                   <span className="overview-metric__icon" aria-hidden="true">₿</span>
                   <span className="overview-label">Balance</span>
-                  <strong className="overview-value">{formatSats(status.balance)}</strong>
+                  <strong className="overview-value">{formatOptionalSats(status.balance_sat)}</strong>
                 </div>
 
                 <div className="overview-metric">
@@ -254,8 +274,4 @@ function HealthRow({ label, ok, value }: HealthRowProps) {
 
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString() : "—";
-}
-
-function formatSats(value: number): string {
-  return `${formatNumber(value)} sats`;
 }

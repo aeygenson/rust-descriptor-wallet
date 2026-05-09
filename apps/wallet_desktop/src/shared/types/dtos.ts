@@ -33,10 +33,18 @@ export interface WalletDetailsDto {
 }
 
 // === Wallet Status ===
+
 export interface WalletStatusDto {
-    balance: number;
+    balance_sat: number;
     utxo_count: number;
     last_block_height: number | null;
+}
+
+// === Receive Address ===
+export interface WalletReceiveAddressDto {
+    address: string;
+    keychain: string;
+    index: number | null;
 }
 
 // === Input Selection Mode ===
@@ -73,8 +81,8 @@ export interface WalletTxDto {
     confirmation_height: number | null;
     direction: string;
     replaceable: boolean;
-    net_value: number;
-    fee: number | null;
+    net_value_sat: number;
+    fee_sat: number | null;
     fee_rate_sat_per_vb: number | null;
     inputs: WalletTxInputDto[];
     outputs: WalletTxOutputDto[];
@@ -86,7 +94,7 @@ export interface WalletTxDto {
 // === UTXOs ===
 export interface WalletUtxoDto {
     outpoint: string;
-    value: number;
+    value_sat: number;
     confirmed: boolean;
     confirmation_height: number | null;
     address: string | null;
@@ -118,6 +126,62 @@ export interface WalletConsolidationDto {
     max_fee_pct_of_input_value: number | null;
     strategy: WalletConsolidationStrategyDto | null;
     selection_mode: WalletInputSelectionModeDto | null;
+}
+
+// === Canonical Request DTOs ===
+export interface CreatePsbtRequestDto {
+    name: string;
+    to_address: string;
+    amount_sat: number;
+    fee_rate_sat_per_vb: number;
+    replaceable: boolean;
+    coin_control: WalletCoinControlDto | null;
+}
+
+export interface SendMaxRequestDto {
+    name: string;
+    to_address: string;
+    fee_rate_sat_per_vb: number;
+    replaceable: boolean;
+    coin_control: WalletCoinControlDto | null;
+}
+
+export interface SweepRequestDto {
+    name: string;
+    to_address: string;
+    fee_rate_sat_per_vb: number;
+    replaceable: boolean;
+    coin_control: WalletCoinControlDto | null;
+}
+
+export interface ConsolidationRequestDto {
+    name: string;
+    fee_rate_sat_per_vb: number;
+    replaceable: boolean;
+    consolidation: WalletConsolidationDto;
+}
+
+export interface SignPsbtRequestDto {
+    name: string;
+    psbt_base64: string;
+}
+
+export interface PublishPsbtRequestDto {
+    name: string;
+    psbt_base64: string;
+}
+
+export interface BumpFeeRequestDto {
+    name: string;
+    txid: string;
+    fee_rate_sat_per_vb: number;
+}
+
+export interface CpfpRequestDto {
+    name: string;
+    parent_txid: string;
+    selected_outpoint: string;
+    fee_rate_sat_per_vb: number;
 }
 
 // === PSBT ===

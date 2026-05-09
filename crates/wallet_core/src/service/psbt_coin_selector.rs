@@ -1,9 +1,11 @@
 use super::common_outpoint::ensure_no_outpoint_overlap;
 use super::common_selection::{
-    matches_value_filters, sort_local_outputs_by_strategy, validate_selected_input_count_bounds,
+    build_selection_result, matches_value_filters, sort_local_outputs_by_strategy,
+    validate_selected_input_count_bounds,
 };
 use crate::model::{
     WalletConsolidationStrategy, WalletInputSelectionConfig, WalletInputSelectionMode,
+    WalletSelectionResult,
 };
 use crate::types::WalletOutPoint;
 use crate::{WalletCoreError, WalletCoreResult};
@@ -19,7 +21,7 @@ use std::collections::HashSet;
 pub fn select_inputs(
     utxos: &[LocalOutput],
     cfg: &WalletInputSelectionConfig,
-) -> WalletCoreResult<Vec<WalletOutPoint>> {
+) -> WalletCoreResult<WalletSelectionResult> {
     ensure_no_outpoint_overlap(&cfg.include_outpoints, &cfg.exclude_outpoints)
         .map_err(|e| WalletCoreError::SelectionFailed(e.to_string()))?;
 
@@ -88,6 +90,11 @@ pub fn select_inputs(
         }
     }
 
+    let manual_selected_count = selected.len();
+    let strategy_used = cfg
+        .strategy
+        .unwrap_or(WalletConsolidationStrategy::SmallestFirst);
+
     // Remove already selected from candidates.
     candidates.retain(|u| !selected_outpoints.contains(&u.outpoint));
 
@@ -102,18 +109,20 @@ pub fn select_inputs(
             cfg.min_input_count,
             cfg.max_input_count,
         )?;
-        return Ok(selected
+        let selected_outpoints = selected
             .into_iter()
             .map(|u| WalletOutPoint::from(u.outpoint))
-            .collect());
+            .collect();
+        return Ok(build_selection_result(
+            selected_outpoints,
+            manual_selected_count,
+            cfg.exclude_outpoints.len(),
+            Some(strategy_used),
+        ));
     }
 
     // 4. Sort candidates by strategy
-    sort_local_outputs_by_strategy(
-        &mut candidates,
-        cfg.strategy
-            .unwrap_or(WalletConsolidationStrategy::SmallestFirst),
-    );
+    sort_local_outputs_by_strategy(&mut candidates, strategy_used);
 
     // 5. Auto-complete selection
     for c in candidates {
@@ -130,10 +139,17 @@ pub fn select_inputs(
     // 6. Final validation
     validate_selected_input_count_bounds(selected.len(), cfg.min_input_count, cfg.max_input_count)?;
 
-    Ok(selected
+    let selected_outpoints = selected
         .into_iter()
         .map(|u| WalletOutPoint::from(u.outpoint))
-        .collect())
+        .collect();
+
+    Ok(build_selection_result(
+        selected_outpoints,
+        manual_selected_count,
+        cfg.exclude_outpoints.len(),
+        Some(strategy_used),
+    ))
 }
 
 #[cfg(test)]
@@ -159,8 +175,10 @@ mod tests {
 
         let result = select_inputs(&[utxo.clone()], &cfg).unwrap();
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], WalletOutPoint::from(utxo.outpoint));
+        assert_eq!(result.selected_count(), 1);
+        assert_eq!(result.manual_selected_count, 1);
+        assert_eq!(result.auto_selected_count, 0);
+        assert_eq!(result.selected_outpoints[0], WalletOutPoint::from(utxo.outpoint));
     }
 
     #[test]
@@ -173,8 +191,9 @@ mod tests {
 
         let result = select_inputs(&[u1.clone(), u2.clone()], &cfg).unwrap();
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], WalletOutPoint::from(u2.outpoint));
+        assert_eq!(result.selected_count(), 1);
+        assert_eq!(result.excluded_count, 1);
+        assert_eq!(result.selected_outpoints[0], WalletOutPoint::from(u2.outpoint));
     }
 
     #[test]
@@ -188,7 +207,7 @@ mod tests {
 
         let result = select_inputs(&[u1, u2, u3], &cfg).unwrap();
 
-        assert_eq!(result.len(), 2);
+        assert_eq!(result.selected_count(), 2);
     }
 
     #[test]
@@ -213,7 +232,25 @@ mod tests {
 
         let result = select_inputs(&[confirmed.clone(), unconfirmed], &cfg).unwrap();
 
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0], WalletOutPoint::from(confirmed.outpoint));
+        assert_eq!(result.selected_count(), 1);
+        assert_eq!(result.selected_outpoints[0], WalletOutPoint::from(confirmed.outpoint));
+    }
+
+    #[test]
+    fn automatic_selection_reports_auto_count_and_strategy() {
+        let u1 = sample_local_output(1000, 0, true);
+        let u2 = sample_local_output(2000, 1, true);
+
+        let cfg = default_selection_config();
+
+        let result = select_inputs(&[u1, u2], &cfg).unwrap();
+
+        assert_eq!(result.selected_count(), 2);
+        assert_eq!(result.manual_selected_count, 0);
+        assert_eq!(result.auto_selected_count, 2);
+        assert_eq!(
+            result.strategy_used,
+            Some(WalletConsolidationStrategy::SmallestFirst)
+        );
     }
 }

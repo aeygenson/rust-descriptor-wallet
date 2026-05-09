@@ -4,6 +4,7 @@
   flex-direction: column;
   gap: 16px;
   padding: 24px;
+  min-width: 0;
 }
 
 .send-page__header {
@@ -11,6 +12,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
 }
 
 .send-page__header--compact {
@@ -52,6 +54,7 @@
   grid-template-columns: minmax(0, 1fr) minmax(360px, 0.8fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
 }
 
 .send-column {
@@ -66,6 +69,8 @@
   border: 1px solid #1f2937;
   border-radius: 12px;
   padding: 16px;
+  min-width: 0;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.18);
 }
 
 .send-section-header {
@@ -121,6 +126,11 @@
   font-weight: 800;
   padding: 10px 12px;
   text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .send-mode-tab:hover:not(:disabled) {
@@ -142,6 +152,23 @@
 .send-mode-tab:focus-visible {
   outline: 2px solid #60a5fa;
   outline-offset: 2px;
+}
+
+.send-mode-tab__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  min-width: 18px;
+  color: #60a5fa;
+  font-size: 14px;
+}
+
+.send-mode-tab__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .send-card > .coin-control,
@@ -193,6 +220,8 @@
 .send-form-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .send-form-field {
@@ -397,6 +426,37 @@
   color: #94a3b8;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.coin-control__selected-outpoints {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #243244;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.coin-control__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.coin-control__chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: #0b1220;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .coin-control__clear {
@@ -639,6 +699,7 @@
 
 .send-preview-section {
   margin-top: 16px;
+  min-width: 0;
 }
 
 .send-preview-section__title {
@@ -667,6 +728,42 @@
   font-size: 12px;
 }
 
+.send-preview-raw {
+  margin-top: 16px;
+  border: 1px solid #243244;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.72);
+  padding: 12px;
+}
+
+.send-preview-raw summary {
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.send-preview-raw textarea {
+  width: 100%;
+  min-height: 120px;
+  margin-top: 10px;
+  resize: vertical;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: #020617;
+  color: #dbeafe;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.send-preview-raw textarea:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+  border-color: #60a5fa;
+}
+
 .send-actions {
   display: flex;
   align-items: center;
@@ -684,6 +781,7 @@
   border-radius: 16px;
   background: linear-gradient(180deg, #111827 0%, #0b1220 100%);
   padding: 18px;
+  min-width: 0;
 }
 
 .send-result-card__label {
@@ -704,6 +802,28 @@
   font-size: 13px;
 }
 
+.send-result-card__meta {
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.send-result-card__outpoints {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.send-result-card__outpoints div {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #cbd5e1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
 .send-error {
   border: 1px solid rgba(248, 113, 113, 0.24);
   border-radius: 12px;
@@ -716,6 +836,7 @@
 @media (max-width: 1100px) {
   .send-layout {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
   .send-mode-tabs {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -725,7 +846,7 @@
 @media (max-width: 760px) {
   .send-page {
     padding: 16px;
-    padding-bottom: 64px;
+    padding-bottom: 72px;
   }
 
   .send-form__grid,
@@ -772,5 +893,50 @@
 
   .send-mode-tabs {
     grid-template-columns: 1fr;
+  }
+
+  .send-page__header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .send-wallet-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .send-form__actions,
+  .send-form-actions {
+    justify-content: stretch;
+  }
+
+  .send-form-actions button {
+    width: 100%;
+  }
+}
+
+
+@media (max-width: 520px) {
+  .send-page {
+    padding: 12px;
+    padding-bottom: 72px;
+  }
+
+  .send-card,
+  .coin-control,
+  .coin-selector,
+  .send-preview,
+  .send-preview-empty,
+  .send-result-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .send-page__title {
+    font-size: 21px;
+  }
+
+  .coin-selector__row {
+    padding: 10px;
   }
 }

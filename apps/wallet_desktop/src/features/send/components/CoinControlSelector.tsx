@@ -1,8 +1,10 @@
 import type { CoinControlSelectorProps } from "../types";
-import { formatSats } from "../format";
+import {
+  formatOutpoint,
+  formatSelectedInputWithBtc,
+  formatSats,
+} from "../format";
 import { normalizeSelectedOutpoints, sumSelectedInputValue } from "../lib";
-
-
 export function CoinControlSelector({
   utxos,
   selectedUtxos,
@@ -15,11 +17,17 @@ export function CoinControlSelector({
     const outpoint = utxo.outpoint.trim();
     return (
       outpoint.length > 0 &&
-      allUtxos.findIndex((candidate) => candidate.outpoint.trim() === outpoint) === index
+      allUtxos.findIndex(
+        (candidate) => candidate.outpoint.trim() === outpoint,
+      ) === index
     );
   });
 
-  const selectedValueSat = sumSelectedInputValue(visibleUtxos, normalizedSelectedUtxos);
+  const selectedValueSat = sumSelectedInputValue(
+    visibleUtxos,
+    normalizedSelectedUtxos,
+  );
+  const selectedValueLabel = formatSelectedInputWithBtc(selectedValueSat);
 
   const toggleUtxo = (outpoint: string) => {
     const normalizedOutpoint = outpoint.trim();
@@ -30,7 +38,9 @@ export function CoinControlSelector({
 
     if (selectedSet.has(normalizedOutpoint)) {
       onSelectionChange(
-        normalizedSelectedUtxos.filter((selected) => selected !== normalizedOutpoint),
+        normalizedSelectedUtxos.filter(
+          (selected) => selected !== normalizedOutpoint,
+        ),
       );
       return;
     }
@@ -53,19 +63,26 @@ export function CoinControlSelector({
         </div>
 
         <div className="coin-selector__summary">
-          <strong>{normalizedSelectedUtxos.length}</strong>
+          <strong title={formatSats(selectedValueSat)}>
+            {selectedValueLabel}
+          </strong>
           <span>selected</span>
-          <strong>{formatSats(selectedValueSat)}</strong>
+          <strong>{normalizedSelectedUtxos.length}</strong>
         </div>
       </div>
 
       {visibleUtxos.length === 0 ? (
-        <div className="coin-selector__empty">No spendable UTXOs found for this wallet.</div>
+        <div className="coin-selector__empty">
+          No spendable UTXOs found for this wallet.
+        </div>
       ) : (
         <div className="coin-selector__list">
           {visibleUtxos.map((utxo, index) => {
             const checked = selectedSet.has(utxo.outpoint);
-            const rowId = `coin-selector-${utxo.outpoint.replace(/[^a-zA-Z0-9_-]/g, "-")}-${index}`;
+            const rowId = `coin-selector-${utxo.outpoint.replace(
+              /[^a-zA-Z0-9_-]/g,
+              "-",
+            )}-${index}`;
             const confirmationLabel =
               utxo.confirmations === null || utxo.confirmations === undefined
                 ? utxo.confirmed === true
@@ -74,6 +91,7 @@ export function CoinControlSelector({
                     ? "unconfirmed"
                     : "confirmation status unknown"
                 : `${utxo.confirmations.toLocaleString()} confirmations`;
+            const valueLabel = formatSelectedInputWithBtc(utxo.valueSat);
 
             return (
               <label
@@ -92,7 +110,12 @@ export function CoinControlSelector({
                 />
 
                 <span className="coin-selector__main">
-                  <span className="coin-selector__outpoint">{utxo.outpoint}</span>
+                  <span
+                    className="coin-selector__outpoint"
+                    title={utxo.outpoint}
+                  >
+                    {formatOutpoint(utxo.outpoint)}
+                  </span>
                   <span className="coin-selector__meta">
                     {utxo.label ? `${utxo.label} · ` : ""}
                     {confirmationLabel}
@@ -102,7 +125,12 @@ export function CoinControlSelector({
                   ) : null}
                 </span>
 
-                <strong className="coin-selector__value">{formatSats(utxo.valueSat)}</strong>
+                <strong
+                  className="coin-selector__value"
+                  title={formatSats(utxo.valueSat)}
+                >
+                  {valueLabel}
+                </strong>
               </label>
             );
           })}
@@ -110,7 +138,11 @@ export function CoinControlSelector({
       )}
 
       {normalizedSelectedUtxos.length > 0 ? (
-        <button className="coin-selector__clear" type="button" onClick={clearSelection}>
+        <button
+          className="coin-selector__clear"
+          type="button"
+          onClick={clearSelection}
+        >
           Clear selected inputs
         </button>
       ) : null}

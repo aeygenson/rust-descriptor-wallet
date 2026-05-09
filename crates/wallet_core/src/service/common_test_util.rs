@@ -1,4 +1,4 @@
-// crates/wallet_core/src/service/common_test
+// crates/wallet_core/src/service/common_test_util.rs
 
 #![allow(dead_code)]
 
@@ -7,7 +7,7 @@ pub(crate) mod test_support {
     use crate::config::{
         BroadcastBackendConfig, SyncBackendConfig, WalletBackendConfig, WalletDescriptors,
     };
-    use bdk_wallet::LocalOutput;
+    use bdk_wallet::{KeychainKind, LocalOutput};
     use bitcoin::{Amount, BlockHash, Network, OutPoint, ScriptBuf, TxOut};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -45,8 +45,33 @@ pub(crate) mod test_support {
     /// Shared finalized PSBT fixture used across publish/broadcast tests.
     pub const FINALIZED_TEST_PSBT: &str = "cHNidP8BAHECAAAAAZ7///////////////////////////////8AAAAAAAAA/////wIAAAAAAAAAIgAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAEBH3///////////////////////////////wAAAAAAAAAA/////wEAAAAAAAAAABYAFJQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEHAgAAAAAAACIAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAQEf///////////////////////////////8AAAAAAAAAAP////8BAAAAAAAAAAAWABSUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
+    /// Build a sample typed wallet outpoint using the canonical test txid.
+    pub fn sample_wallet_outpoint(vout: u32) -> WalletOutPoint {
+        WalletOutPoint::parse(&format!(
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d:{vout}"
+        ))
+        .expect("valid sample wallet outpoint")
+    }
+
     /// Build a sample local wallet output for selector/unit tests.
     pub fn sample_local_output(value_sat: u64, vout: u32, confirmed: bool) -> LocalOutput {
+        sample_local_output_with_metadata(
+            value_sat,
+            vout,
+            confirmed,
+            KeychainKind::External,
+            0,
+        )
+    }
+
+    /// Build a sample local wallet output with explicit keychain and derivation metadata.
+    pub fn sample_local_output_with_metadata(
+        value_sat: u64,
+        vout: u32,
+        confirmed: bool,
+        keychain: KeychainKind,
+        derivation_index: u32,
+    ) -> LocalOutput {
         LocalOutput {
             outpoint: OutPoint::new(
                 "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d"
@@ -58,9 +83,9 @@ pub(crate) mod test_support {
                 value: Amount::from_sat(value_sat),
                 script_pubkey: ScriptBuf::new(),
             },
-            keychain: bdk_wallet::KeychainKind::External,
+            keychain,
             is_spent: false,
-            derivation_index: 0,
+            derivation_index,
             chain_position: if confirmed {
                 bdk_chain::ChainPosition::Confirmed {
                     anchor: bdk_chain::ConfirmationBlockTime {
@@ -177,10 +202,7 @@ pub(crate) mod test_support {
     pub fn strict_manual_consolidation_cfg() -> WalletConsolidationInfo {
         WalletConsolidationInfo {
             selection: WalletInputSelectionConfig {
-                include_outpoints: vec![WalletOutPoint::parse(
-                    "0000000000000000000000000000000000000000000000000000000000000001:0",
-                )
-                .expect("valid test outpoint")],
+                include_outpoints: vec![sample_wallet_outpoint(0)],
                 exclude_outpoints: Vec::new(),
                 confirmed_only: false,
                 selection_mode: Some(WalletInputSelectionMode::StrictManual),
@@ -316,6 +338,33 @@ pub(crate) mod test_support {
         assert_eq!(out.txout.value.to_sat(), 2_000);
         assert_eq!(out.outpoint.vout, 2);
         assert!(!out.chain_position.is_confirmed());
+    }
+
+    #[test]
+    fn sample_local_output_with_metadata_sets_keychain_and_derivation_index() {
+        let out = sample_local_output_with_metadata(
+            3_000,
+            3,
+            true,
+            KeychainKind::Internal,
+            42,
+        );
+
+        assert_eq!(out.txout.value.to_sat(), 3_000);
+        assert_eq!(out.outpoint.vout, 3);
+        assert_eq!(out.keychain, KeychainKind::Internal);
+        assert_eq!(out.derivation_index, 42);
+        assert!(out.chain_position.is_confirmed());
+    }
+
+    #[test]
+    fn sample_wallet_outpoint_uses_canonical_test_txid() {
+        let outpoint = sample_wallet_outpoint(7);
+
+        assert_eq!(
+            outpoint.to_string(),
+            "d8d4ffb424e4cfc699ac1173fcabacab5c7f1a061ace368da18cb7dc9b00e01d:7"
+        );
     }
 
     #[test]

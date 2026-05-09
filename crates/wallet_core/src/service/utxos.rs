@@ -5,7 +5,9 @@ use bdk_wallet::KeychainKind;
 use tracing::debug;
 
 use crate::model::{WalletTxOutputInfo, WalletUtxoInfo};
-use crate::types::{AmountSat, BlockHeight, WalletKeychain, WalletOutPoint, WalletTxid};
+use crate::types::{
+    AddressIndex, AmountSat, BlockHeight, WalletKeychain, WalletOutPoint, WalletTxid,
+};
 
 impl WalletService {
     /// Return list of wallet UTXOs (basic view).
@@ -14,11 +16,14 @@ impl WalletService {
     /// No network calls are performed — data must be synced beforehand.
     ///
     /// Currently also includes:
-    /// - address (when derivation data is available)
+    /// - address derived from wallet keychain/index metadata
     /// - keychain kind (`external` / `internal`)
+    /// - derivation index as a typed `AddressIndex`
     ///
     /// Future improvements may include:
     /// - spendability flags
+    /// - freeze/lock state
+    /// - label metadata
     pub fn utxos(&self) -> Vec<WalletUtxoInfo> {
         debug!("wallet_service: utxos start");
 
@@ -54,10 +59,26 @@ impl WalletService {
                 confirmation_height,
                 address,
                 keychain,
+                derivation_index: Some(AddressIndex::from(utxo.derivation_index)),
             });
         }
 
-        debug!("wallet_service: utxos count={}", result.len());
+        debug!(
+            total = result.len(),
+            external = result
+                .iter()
+                .filter(|u| u.keychain == WalletKeychain::External)
+                .count(),
+            internal = result
+                .iter()
+                .filter(|u| u.keychain == WalletKeychain::Internal)
+                .count(),
+            with_derivation_index = result
+                .iter()
+                .filter(|u| u.derivation_index.is_some())
+                .count(),
+            "wallet_service: utxos collected"
+        );
         result
     }
 
@@ -156,6 +177,13 @@ mod tests {
                     WalletKeychain::External | WalletKeychain::Internal
                 ),
                 "unexpected keychain"
+            );
+            if let Some(index) = u.derivation_index {
+                assert_eq!(index.as_u32(), u32::from(index));
+            }
+            assert!(
+                u.derivation_index.is_some(),
+                "wallet utxo projection should preserve derivation index"
             );
         }
     }

@@ -23,6 +23,7 @@ The desktop app does not implement wallet logic itself. It renders wallet state,
 Current routed screens:
 
 - Overview
+- Receive
 - UTXOs
 - Send
 - Transactions
@@ -31,6 +32,9 @@ Current desktop capabilities:
 
 - load and switch wallets through a shared wallet provider
 - show wallet status and backend health
+- generate the next receive address for the active wallet
+- display receive-address keychain and derivation-index metadata
+- copy the raw receive address and Bitcoin URI from a dedicated receive surface
 - inspect UTXOs and carry selected outpoints into send flows
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
 - sign and publish PSBTs
@@ -62,6 +66,24 @@ flowchart TD
 ```
 
 That shared downstream pipeline is the important product fact. The forms differ, but preview, signing, and publishing are intentionally unified.
+
+## Receive Flow
+
+Receive is now a dedicated first-class screen rather than an implicit wallet helper.
+
+```mermaid
+flowchart LR
+    A["Receive Route"] --> B["Generate address action"]
+    B --> C["feature/receive api.ts"]
+    C --> D["Tauri get_receive_address"]
+    D --> E["wallet_api address()"]
+    E --> F["WalletReceiveAddressDto"]
+    F --> G["Receive card"]
+    G --> H["Copy address"]
+    G --> I["Copy bitcoin URI"]
+```
+
+The receive page is intentionally simple: it asks Rust for the next wallet-controlled address, then renders the canonical address string plus wallet metadata returned by the backend.
 
 ## Transaction Intent Layer
 
@@ -105,7 +127,6 @@ The app is still a first version.
 
 Notable current limits:
 
-- no dedicated Receive page
 - no settings or wallet import management UI
 - no query library; data loading is handled with local `useEffect`/`useState` patterns
 - no generalized component library yet

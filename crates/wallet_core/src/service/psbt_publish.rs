@@ -1,7 +1,7 @@
 use tracing::{debug, info};
 
-use crate::model::WalletFinalizedTxInfo;
-use crate::service::common_tx::{extract_finalized_tx, finalized_tx_broadcast_info};
+use crate::model::WalletBroadcastCandidateInfo;
+use crate::service::common_tx::{extract_finalized_tx, finalized_tx_broadcast_candidate_info};
 use crate::types::PsbtBase64;
 use crate::WalletCoreResult;
 
@@ -13,24 +13,22 @@ impl WalletService {
     pub fn finalize_psbt_for_broadcast(
         &self,
         psbt_base64: &PsbtBase64,
-    ) -> WalletCoreResult<WalletFinalizedTxInfo> {
+    ) -> WalletCoreResult<WalletBroadcastCandidateInfo> {
         debug!("wallet_service: finalize_psbt_for_broadcast start");
 
         let psbt = psbt_base64.to_psbt()?;
         let tx = extract_finalized_tx(&psbt)?;
-        let (txid, tx_hex, replaceable) = finalized_tx_broadcast_info(&tx);
+        let candidate = finalized_tx_broadcast_candidate_info(&tx, None);
 
         info!(
-            "wallet_service: finalize_psbt_for_broadcast prepared finalized transaction txid={} hex_len={}",
-            txid,
-            tx_hex.as_str().len()
+            "wallet_service: finalize_psbt_for_broadcast prepared finalized transaction txid={} hex_len={} replaceable={} vsize={:?}",
+            candidate.txid,
+            candidate.tx_hex.as_str().len(),
+            candidate.replaceable,
+            candidate.vsize.map(|v| v.as_u64())
         );
 
-        Ok(WalletFinalizedTxInfo {
-            txid,
-            tx_hex,
-            replaceable,
-        })
+        Ok(candidate)
     }
 }
 
@@ -129,6 +127,11 @@ mod tests {
         assert_eq!(finalized.txid, expected_txid);
         assert!(finalized.replaceable);
         assert!(!finalized.tx_hex.as_str().is_empty());
+        assert_eq!(finalized.fee, None);
+        assert_eq!(finalized.fee_rate, None);
+        assert!(finalized.vsize.unwrap().as_u64() > 0);
+        assert_eq!(finalized.ancestor_count, None);
+        assert_eq!(finalized.descendant_count, None);
     }
 
     #[test]

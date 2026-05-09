@@ -8,13 +8,16 @@ import { UtxosHeader } from "../features/utxos/components/UtxosHeader";
 import { UtxosStateView } from "../features/utxos/components/UtxosStateView";
 import { UtxosTable } from "../features/utxos/components/UtxosTable";
 import {
+  buildUtxoSelectionPreview,
   buildUtxoSelectionSummary,
+  filterUtxos,
   getUtxoValueSat,
   getValidSelectedOutpoints,
   selectAllVisibleOutpoints,
   toggleSelectedOutpoint,
 } from "../features/utxos/lib";
 import type {
+  UtxoFilterStatus,
   UtxoOutpoint,
   UtxosPageNavigationActionState,
   UtxosSummary,
@@ -28,6 +31,7 @@ export function UtxosPage() {
   const [selectedOutpoints, setSelectedOutpoints] = useState<UtxoOutpoint[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<UtxoFilterStatus>("all");
 
   useEffect(() => {
     let cancelled = false;
@@ -108,9 +112,30 @@ export function UtxosPage() {
     };
   }, [utxos]);
 
+  const visibleUtxos = useMemo(
+    () =>
+      filterUtxos(utxos, {
+        status: filterStatus,
+      }),
+    [utxos, filterStatus]
+  );
+
+  const hasWalletUtxos = utxos.length > 0;
+  const hasVisibleUtxos = visibleUtxos.length > 0;
+  const activeFilterLabel = filterStatus === "all" ? "All" : filterStatus;
+
+  const filterCounts = useMemo<Record<UtxoFilterStatus, number>>(
+    () => ({
+      all: utxos.length,
+      confirmed: utxos.filter((utxo) => utxo.confirmed).length,
+      pending: utxos.filter((utxo) => !utxo.confirmed).length,
+    }),
+    [utxos]
+  );
+
   const validSelectedOutpoints = useMemo(
-    () => getValidSelectedOutpoints(utxos, selectedOutpoints),
-    [utxos, selectedOutpoints]
+    () => getValidSelectedOutpoints(visibleUtxos, selectedOutpoints),
+    [visibleUtxos, selectedOutpoints]
   );
 
   const selectionSummary = useMemo(
@@ -118,12 +143,17 @@ export function UtxosPage() {
     [utxos, validSelectedOutpoints]
   );
 
+  const selectionPreview = useMemo(
+    () => buildUtxoSelectionPreview(visibleUtxos, validSelectedOutpoints),
+    [visibleUtxos, validSelectedOutpoints]
+  );
+
   const handleToggleOutpoint = (outpoint: UtxoOutpoint) => {
     setSelectedOutpoints((current) => toggleSelectedOutpoint(current, outpoint));
   };
 
   const handleSelectAllVisible = () => {
-    setSelectedOutpoints(selectAllVisibleOutpoints(utxos));
+    setSelectedOutpoints(selectAllVisibleOutpoints(visibleUtxos));
   };
 
   const handleClearSelection = () => {
@@ -149,22 +179,65 @@ export function UtxosPage() {
     <section className="utxos-page">
       <UtxosHeader walletName={selectedWalletName} summary={summary} />
 
-      <UtxosStateView loading={loading} error={error} hasData={utxos.length > 0} />
+      <UtxosStateView loading={loading} error={error} hasData={hasWalletUtxos} />
 
-      {utxos.length > 0 && (
+      {hasWalletUtxos && (
+        <div
+          className="utxos-filter-bar"
+          data-active-filter={filterStatus}
+          data-visible-count={visibleUtxos.length}
+        >
+          <div className="utxos-filter-bar__left">
+            <span className="utxos-filter-bar__label">
+              Filter
+              <strong>{activeFilterLabel}</strong>
+            </span>
+            <div
+              className="utxos-filter-bar__buttons"
+              role="group"
+              aria-label="UTXO status filters"
+            >
+              {(["all", "confirmed", "pending"] as UtxoFilterStatus[]).map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={filterStatus === status}
+                  title={`Show ${status} UTXOs`}
+                  data-filter={status}
+                  className={
+                    filterStatus === status
+                      ? "utxos-filter-bar__button is-active"
+                      : "utxos-filter-bar__button"
+                  }
+                  onClick={() => setFilterStatus(status)}
+                >
+                  <span>{status}</span>
+                  <strong>{filterCounts[status].toLocaleString()}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
+          <span className="utxos-filter-bar__meta">
+            Showing <strong>{visibleUtxos.length.toLocaleString()}</strong> /{" "}
+            {utxos.length.toLocaleString()}
+          </span>
+        </div>
+      )}
+
+      {hasVisibleUtxos ? (
         <>
           <UtxoSelectionSummary
-            selectedCount={selectionSummary.selectedCount}
-            selectedValueSat={selectionSummary.selectedValueSat}
+            selectedCount={selectionPreview.selectedCount}
+            selectedValueSat={selectionPreview.selectedValueSat}
             confirmedCount={selectionSummary.confirmedCount}
             unconfirmedCount={selectionSummary.unconfirmedCount}
             onClearSelection={handleClearSelection}
           />
 
           <UtxoActionsBar
-            selectedCount={selectionSummary.selectedCount}
-            selectedValueSat={selectionSummary.selectedValueSat}
-            disabled={loading || selectionSummary.selectedCount === 0}
+            selectedCount={selectionPreview.selectedCount}
+            selectedValueSat={selectionPreview.selectedValueSat}
+            disabled={loading || selectionPreview.selectedCount === 0}
             onSendFixedSelected={() => navigateToSendWithMode("fixed")}
             onSendMaxSelected={() => navigateToSendWithMode("send_max")}
             onSweepSelected={() => navigateToSendWithMode("sweep")}
@@ -173,14 +246,25 @@ export function UtxosPage() {
           />
 
           <UtxosTable
-            utxos={utxos}
+            utxos={visibleUtxos}
             selectedOutpoints={validSelectedOutpoints}
             onToggleOutpoint={handleToggleOutpoint}
             onSelectAllVisible={handleSelectAllVisible}
             onClearSelection={handleClearSelection}
           />
         </>
-      )}
+      ) : hasWalletUtxos ? (
+        <div className="utxos-filter-empty">
+          <strong>No UTXOs match the current filter</strong>
+          <span>
+            Switch back to All or choose another status filter to view wallet
+            outputs.
+          </span>
+          <button type="button" onClick={() => setFilterStatus("all")}>
+            Show all UTXOs
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

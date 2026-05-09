@@ -2,14 +2,16 @@
 
 This document describes the main flows exposed through `WalletApi`.
 
+Internally, these flows are implemented with canonical request DTOs. `WalletApi` convenience methods are thin wrappers that build those request objects and hand them to the service layer.
+
 ## Wallet Registry
 
 Registry methods use `service/registry.rs` and `wallet_storage`:
 
-- `import_wallet(file_path)` imports a wallet JSON file into storage.
+- `import_wallet(file_path)` imports a wallet JSON file into storage via `ImportWalletRequestDto`.
 - `list_wallets()` returns wallet names, networks, and watch-only flags.
-- `get_wallet(name)` returns descriptors, sync backend, broadcast backend, and watch-only status.
-- `delete_wallet(name)` removes the stored wallet record.
+- `get_wallet(name)` returns descriptors, sync backend, broadcast backend, and watch-only status via `GetWalletRequestDto`.
+- `delete_wallet(name)` removes the stored wallet record via `DeleteWalletRequestDto`.
 
 Backend configuration is parsed when a wallet is loaded. Invalid stored backend metadata is surfaced as `WalletApiError::InvalidInput`.
 
@@ -17,9 +19,11 @@ Backend configuration is parsed when a wallet is loaded. Invalid stored backend 
 
 Wallet state methods use `service/wallet.rs`.
 
-`sync_wallet(name)` loads the wallet configuration, opens or creates the runtime wallet store, and calls `WalletSyncService::sync`. It returns `()` on success.
+`sync(name)` loads the wallet configuration, opens or creates the runtime wallet store, and calls `WalletSyncService::sync`. It returns `()` on success.
 
-`address(name)` loads the runtime wallet and derives the next receive address.
+`address(name)` loads the runtime wallet and derives the next receive address via `WalletAddressRequestDto`. The response includes `address`, `keychain`, and optional derivation `index`.
+
+`backend_health(name)` checks configured backend reachability and reports tip visibility without mutating wallet state.
 
 `balance(name)` returns the current persisted wallet balance in satoshis. It does not perform a network sync.
 
@@ -29,26 +33,32 @@ Wallet state methods use `service/wallet.rs`.
 
 Inspection methods use `service/inspect.rs`.
 
-`txs(name)` returns `Vec<WalletTxDto>` from current synced wallet state.
+`txs(name)` returns `Vec<WalletTxDto>` from current synced wallet state via `WalletTransactionsRequestDto`.
 
-`utxos(name)` returns `Vec<WalletUtxoDto>` from current synced wallet state.
+`utxos(name)` returns `Vec<WalletUtxoDto>` from current synced wallet state via `WalletUtxosRequestDto`.
 
-These methods intentionally avoid network calls. Run `sync_wallet(name)` first when the caller needs fresh chain state.
+These methods intentionally avoid network calls. Run `sync(name)` first when the caller needs fresh chain state.
 
 ## PSBT Preview
 
 Preview methods use `service/psbt.rs` and return transaction details before signing or broadcasting.
 
+Each preview or publish workflow has a canonical request DTO inside `model.rs`, even when `WalletApi` still exposes an ergonomic convenience signature.
+
 Fixed amount:
 
-- `create_psbt(name, to, amount_sat, fee_rate_sat_per_vb)`
-- `create_psbt_with_coin_control(name, to, amount_sat, fee_rate_sat_per_vb, coin_control)`
+- `create_psbt(name, to, amount_sat, fee_rate_sat_per_vb, replaceable, confirmed_only)`
+- `create_psbt_with_coin_control(name, to, amount_sat, fee_rate_sat_per_vb, replaceable, coin_control)`
+
+Both normalize into `CreatePsbtRequestDto`.
 
 Send-max and sweep:
 
-- `create_send_max_psbt(name, to, fee_rate_sat_per_vb)`
-- `create_send_max_psbt_with_coin_control(name, to, fee_rate_sat_per_vb, coin_control)`
-- `create_sweep_psbt(name, to, fee_rate_sat_per_vb, coin_control)`
+- `create_send_max_psbt(name, to, fee_rate_sat_per_vb, replaceable)`
+- `create_send_max_psbt_with_coin_control(name, to, fee_rate_sat_per_vb, replaceable, coin_control)`
+- `create_sweep_psbt(name, to, fee_rate_sat_per_vb, replaceable, coin_control)`
+
+These normalize into `SendMaxRequestDto` and `SweepRequestDto`.
 
 Maintenance:
 
@@ -56,7 +66,9 @@ Maintenance:
 - `bump_fee_psbt(name, txid, fee_rate_sat_per_vb)`
 - `cpfp_psbt(name, parent_txid, selected_outpoint, fee_rate_sat_per_vb)`
 
-Preview DTOs expose selected inputs, input and output counts, fee, fee rate, change amount when applicable, txid, estimated virtual size, and replaceability.
+These normalize into `ConsolidationRequestDto`, `BumpFeeRequestDto`, and `CpfpRequestDto`.
+
+Preview DTOs expose selected inputs, input and output counts, fee, fee rate, change amount when applicable, txid, estimated virtual size, and replaceability. Replacement-aware previews can also expose `original_txid` and replacement lineage metadata.
 
 ## One-Shot Publish
 
@@ -72,6 +84,8 @@ One-shot methods compose preview, signing, and publication:
 - `cpfp`
 
 These methods are convenience paths for software-signing wallets. They build the relevant PSBT, sign it, publish the finalized transaction through the configured broadcast backend, and return `TxBroadcastResultDto`.
+
+Internally, signing and publishing use `SignPsbtRequestDto` and `PublishPsbtRequestDto`.
 
 Watch-only wallets can create preview PSBTs but cannot sign through the software-signing API path.
 

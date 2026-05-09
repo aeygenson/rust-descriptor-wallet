@@ -1,6 +1,9 @@
-
-
-import type { WalletUtxoDto } from "../../shared/types/dtos";
+import type {
+  WalletCoinControlDto,
+  WalletConsolidationDto,
+  WalletInputSelectionModeDto,
+  WalletUtxoDto,
+} from "../../shared/types/dtos";
 import type {
   CoinControlSelection,
   CoinControlUtxoOption,
@@ -41,18 +44,18 @@ export function normalizeSelectedOutpoints(outpoints: string[]): string[] {
 
 export function getValidSelectedOutpoints(
   selectedOutpoints: string[],
-  availableUtxos: CoinControlUtxoOption[]
+  availableUtxos: CoinControlUtxoOption[],
 ): string[] {
   const availableSet = new Set(availableUtxos.map((utxo) => utxo.outpoint));
 
   return normalizeSelectedOutpoints(selectedOutpoints).filter((outpoint) =>
-    availableSet.has(outpoint)
+    availableSet.has(outpoint),
   );
 }
 
 export function sumSelectedInputValue(
   utxos: CoinControlUtxoOption[],
-  selectedOutpoints: string[]
+  selectedOutpoints: string[],
 ): number {
   const selectedSet = new Set(normalizeSelectedOutpoints(selectedOutpoints));
 
@@ -68,10 +71,13 @@ export function sumSelectedInputValue(
 
 export function buildSelectedCoinControl(
   selectedOutpoints: string[],
-  availableUtxos: CoinControlUtxoOption[]
+  availableUtxos: CoinControlUtxoOption[],
 ): CoinControlSelection {
   return {
-    includeOutpoints: getValidSelectedOutpoints(selectedOutpoints, availableUtxos),
+    includeOutpoints: getValidSelectedOutpoints(
+      selectedOutpoints,
+      availableUtxos,
+    ),
     excludeOutpoints: [],
     confirmedOnly: true,
     selectionMode: "strict-manual",
@@ -80,7 +86,7 @@ export function buildSelectedCoinControl(
 
 export function buildSelectedConsolidation(
   selectedOutpoints: string[],
-  availableUtxos: CoinControlUtxoOption[]
+  availableUtxos: CoinControlUtxoOption[],
 ): ConsolidationSelection {
   return {
     ...buildSelectedCoinControl(selectedOutpoints, availableUtxos),
@@ -88,25 +94,69 @@ export function buildSelectedConsolidation(
   };
 }
 
-export function mapUtxosForCoinControl(utxos: WalletUtxoDto[]): CoinControlUtxoOption[] {
+export function toWalletInputSelectionModeDto(
+  selectionMode: CoinControlSelection["selectionMode"],
+): WalletInputSelectionModeDto | null {
+  if (!selectionMode) {
+    return null;
+  }
+
+  return selectionMode;
+}
+
+export function toWalletCoinControlDto(
+  selection: CoinControlSelection | null | undefined,
+): WalletCoinControlDto | null {
+  if (!selection) {
+    return null;
+  }
+
+  return {
+    include_outpoints: normalizeSelectedOutpoints(selection.includeOutpoints),
+    exclude_outpoints: normalizeSelectedOutpoints(selection.excludeOutpoints),
+    confirmed_only: selection.confirmedOnly,
+    selection_mode: toWalletInputSelectionModeDto(selection.selectionMode),
+  };
+}
+
+export function toWalletConsolidationDto(
+  selection: ConsolidationSelection,
+): WalletConsolidationDto {
+  return {
+    include_outpoints: normalizeSelectedOutpoints(selection.includeOutpoints),
+    exclude_outpoints: normalizeSelectedOutpoints(selection.excludeOutpoints),
+    confirmed_only: selection.confirmedOnly,
+    max_input_count: selection.maxInputCount ?? null,
+    min_input_count: selection.minInputCount ?? null,
+    min_utxo_value_sat: selection.minUtxoValueSat ?? null,
+    max_utxo_value_sat: selection.maxUtxoValueSat ?? null,
+    max_fee_pct_of_input_value: selection.maxFeePctOfInputValue ?? null,
+    strategy: selection.strategy ?? null,
+    selection_mode: toWalletInputSelectionModeDto(selection.selectionMode),
+  };
+}
+
+export function mapUtxosForCoinControl(
+  utxos: WalletUtxoDto[],
+): CoinControlUtxoOption[] {
   return utxos.map(toCoinControlUtxoOption);
 }
 
-export function toCoinControlUtxoOption(utxo: WalletUtxoDto): CoinControlUtxoOption {
+export function toCoinControlUtxoOption(
+  utxo: WalletUtxoDto,
+): CoinControlUtxoOption {
   return {
     outpoint: String(utxo.outpoint),
-    valueSat: parseNumberOrZero(utxo.value),
+    valueSat: parseNumberOrZero(utxo.value_sat),
     label: String(utxo.outpoint),
     address: utxo.address ?? null,
     confirmations: parseNullableNumber(utxo.confirmation_height),
     confirmed: parseNullableBoolean(utxo.confirmed),
   };
 }
-
-
 export function findOutpointsForTxid(
   utxos: CoinControlUtxoOption[],
-  txid: string | null | undefined
+  txid: string | null | undefined,
 ): string[] {
   if (!txid) return [];
 
@@ -118,7 +168,7 @@ export function findOutpointsForTxid(
 export function pickDtoNumber(
   source: Record<string, unknown>,
   snakeCaseKey: string,
-  camelCaseKey: string
+  camelCaseKey: string,
 ): number | null {
   const value = source[snakeCaseKey] ?? source[camelCaseKey];
 
@@ -137,7 +187,7 @@ export function pickDtoNumber(
 export function pickDtoString(
   source: Record<string, unknown>,
   snakeCaseKey: string,
-  camelCaseKey: string
+  camelCaseKey: string,
 ): string | null {
   const value = source[snakeCaseKey] ?? source[camelCaseKey];
   return typeof value === "string" ? value : null;

@@ -2,7 +2,7 @@
 
 `wallet_core` is the domain engine of the wallet workspace.
 
-It owns descriptor-backed runtime wallet behavior, typed domain models, transaction construction, PSBT signing/finalization, UTXO and transaction inspection, coin-control policy, send-max, sweep, consolidation, RBF, and CPFP.
+It owns descriptor-backed runtime wallet behavior, typed domain models, transaction construction, PSBT signing/finalization, receive-address metadata, UTXO and transaction inspection, coin-control policy, send-max, sweep, consolidation, RBF, and CPFP.
 
 ## Public Boundary
 
@@ -51,12 +51,14 @@ Service modules:
 
 - wallet loading and BDK file-store persistence
 - receive-address derivation
+- receive-address keychain and derivation-index metadata
 - balance, transaction, and UTXO inspection from local wallet state
 - destination address and network validation during PSBT creation
 - positive amount and fee-rate validation
 - selected input validation
 - transaction builder setup
 - fee, change, selected input, output count, replaceability, and vsize summary fields
+- replacement lineage metadata for RBF previews
 - PSBT signing and finalized transaction extraction
 - RBF and CPFP eligibility checks
 
@@ -81,6 +83,6 @@ These helpers are domain-level validation tools. Higher layers should still pref
 
 ## Testing Model
 
-Unit tests in `wallet_core` validate typed conversions, selection helpers, transaction summaries, PSBT signing/finalization, RBF helpers, CPFP planning, and consolidation constraints.
+Unit tests in `wallet_core` validate typed conversions, address/index metadata, selection helpers, transaction summaries, PSBT signing/finalization, RBF helpers, CPFP planning, and consolidation constraints.
 
 End-to-end behavior with real regtest infrastructure is covered from `wallet_api` integration tests, which call into `wallet_core` through the production API boundary.

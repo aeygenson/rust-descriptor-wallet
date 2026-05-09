@@ -1,11 +1,12 @@
+use std::path::PathBuf;
+
+use clap::{Parser, Subcommand};
+
 fn parse_consolidation_strategy(
     s: &str,
 ) -> Result<wallet_api::model::WalletConsolidationStrategyDto, String> {
     s.parse()
 }
-use std::path::PathBuf;
-
-use clap::{Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(name = "wallet")]
@@ -81,6 +82,7 @@ pub enum Commands {
         name: String,
     },
     /// Create a PSBT without signing or broadcasting it.
+    #[command(alias = "create")]
     CreatePsbt {
         #[arg(long)]
         /// Wallet name.
@@ -107,6 +109,7 @@ pub enum Commands {
         confirmed_only: bool,
     },
     /// Create a PSBT using explicit coin control.
+    #[command(alias = "create-cc")]
     CreatePsbtWithCoinControl {
         #[arg(long)]
         /// Wallet name.
@@ -145,6 +148,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a send-max PSBT without signing or broadcasting it.
+    #[command(alias = "create-send-max")]
     CreateSendMaxPsbt {
         #[arg(long)]
         /// Wallet name.
@@ -163,6 +167,7 @@ pub enum Commands {
         replaceable: bool,
     },
     /// Create a send-max PSBT using explicit coin control.
+    #[command(alias = "create-send-max-cc")]
     CreateSendMaxPsbtWithCoinControl {
         #[arg(long)]
         /// Wallet name.
@@ -197,6 +202,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a sweep PSBT using explicit coin control.
+    #[command(alias = "create-sweep")]
     SweepPsbt {
         #[arg(long)]
         /// Wallet name.
@@ -231,6 +237,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a sweep transaction using explicit coin control.
+    #[command(alias = "send-sweep")]
     Sweep {
         #[arg(long)]
         /// Wallet name.
@@ -265,6 +272,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a wallet-internal consolidation PSBT.
+    #[command(alias = "create-consolidate")]
     CreateConsolidationPsbt {
         #[arg(long)]
         /// Wallet name.
@@ -319,7 +327,8 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a wallet-internal consolidation transaction.
-    ConsolidatePsbt {
+    #[command(alias = "send-consolidate")]
+    Consolidate {
         #[arg(long)]
         /// Wallet name.
         name: String,
@@ -393,6 +402,7 @@ pub enum Commands {
         psbt_base64: String,
     },
     /// Build a replacement PSBT for an existing RBF transaction.
+    #[command(alias = "rbf-psbt")]
     BumpFeePsbt {
         #[arg(long)]
         /// Wallet name.
@@ -407,6 +417,7 @@ pub enum Commands {
         fee_rate: u64,
     },
     /// Build, sign, and broadcast a replacement transaction.
+    #[command(alias = "rbf")]
     BumpFee {
         #[arg(long)]
         /// Wallet name.
@@ -421,6 +432,7 @@ pub enum Commands {
         fee_rate: u64,
     },
     /// Create, sign, and broadcast a transaction in one step.
+    #[command(alias = "send")]
     SendPsbt {
         #[arg(long)]
         /// Wallet name.
@@ -447,6 +459,7 @@ pub enum Commands {
         confirmed_only: bool,
     },
     /// Create, sign, and broadcast a transaction using coin control.
+    #[command(alias = "send-cc")]
     SendPsbtWithCoinControl {
         #[arg(long)]
         /// Wallet name.
@@ -485,6 +498,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create, sign, and broadcast a send-max transaction in one step.
+    #[command(alias = "send-max")]
     SendMaxPsbt {
         #[arg(long)]
         /// Wallet name.
@@ -503,6 +517,7 @@ pub enum Commands {
         replaceable: bool,
     },
     /// Create, sign, and broadcast a send-max transaction using coin control.
+    #[command(alias = "send-max-cc")]
     SendMaxPsbtWithCoinControl {
         #[arg(long)]
         /// Wallet name.
@@ -537,6 +552,7 @@ pub enum Commands {
         selection_mode: Option<wallet_api::model::WalletInputSelectionModeDto>,
     },
     /// Create a CPFP (Child-Pays-For-Parent) PSBT to accelerate a stuck transaction.
+    #[command(alias = "cpfp-create")]
     CpfpPsbt {
         #[arg(long)]
         /// Wallet name.

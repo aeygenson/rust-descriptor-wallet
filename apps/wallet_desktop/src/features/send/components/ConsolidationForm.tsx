@@ -16,12 +16,20 @@ export function ConsolidationForm({
 
   const feeRate = Number(form.feeRateSatPerVb);
   const hasEnoughUtxos = selectedUtxoCount >= 2;
+  const estimatedSavings = Math.max(selectedUtxoCount - 1, 0);
 
-  const canSubmit =
-    !disabled &&
-    hasEnoughUtxos &&
-    Number.isFinite(feeRate) &&
-    feeRate > 0;
+  const hasValidFeeRate = Number.isFinite(feeRate) && feeRate > 0;
+  const canSubmit = !disabled && hasEnoughUtxos && hasValidFeeRate;
+
+  const selectedInputsLabel = `${selectedUtxoCount.toLocaleString()} input${
+    selectedUtxoCount === 1 ? "" : "s"
+  }`;
+  const estimatedSavingsLabel = `${estimatedSavings.toLocaleString()} input${
+    estimatedSavings === 1 ? "" : "s"
+  }`;
+  const submitTitle = canSubmit
+    ? "Preview a consolidation PSBT using the selected UTXOs"
+    : "Select at least two UTXOs and enter a positive fee rate";
 
   return (
     <section className="send-card">
@@ -35,7 +43,9 @@ export function ConsolidationForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (!canSubmit) return;
+          if (!canSubmit) {
+            return;
+          }
 
           onSubmit({
             ...form,
@@ -52,6 +62,7 @@ export function ConsolidationForm({
             value={form.feeRateSatPerVb}
             disabled={disabled}
             placeholder="e.g. 5"
+            aria-invalid={form.feeRateSatPerVb.length > 0 && !hasValidFeeRate}
             onChange={(e) =>
               setForm((prev) => ({
                 ...prev,
@@ -59,6 +70,11 @@ export function ConsolidationForm({
               }))
             }
           />
+          {form.feeRateSatPerVb.length > 0 && !hasValidFeeRate ? (
+            <span className="field__error">
+              Enter a positive fee rate in sat/vB.
+            </span>
+          ) : null}
         </div>
 
         <div className="send-form-options">
@@ -77,17 +93,30 @@ export function ConsolidationForm({
 
         <div className="send-helper-text">
           {!hasEnoughUtxos && (
-            <span>Select at least two UTXOs to enable consolidation.</span>
+            <span>
+              Select at least two UTXOs to enable consolidation.
+            </span>
           )}
           {hasEnoughUtxos && (
             <span>
-              {selectedUtxoCount} input(s) selected. Consolidation creates a new wallet-controlled output.
+              {selectedInputsLabel} selected. Consolidation creates a new
+              wallet-controlled output and can reduce future transaction size by
+              approximately {estimatedSavingsLabel}.
             </span>
           )}
         </div>
 
+        {hasEnoughUtxos ? (
+          <div className="send-helper-text">
+            <span>
+              Recommended use cases: wallet cleanup, reducing future fees,
+              preparing for cold storage batching, and simplifying coin control.
+            </span>
+          </div>
+        ) : null}
+
         <div className="send-form-actions">
-          <button type="submit" disabled={!canSubmit}>
+          <button type="submit" disabled={!canSubmit} title={submitTitle}>
             Preview consolidation
           </button>
         </div>

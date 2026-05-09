@@ -1,7 +1,9 @@
 use bitcoin::Network;
 use tracing::{debug, info};
 
-use crate::model::{WalletBackendHealthDto, WalletStatusDto};
+use crate::model::{
+    WalletAddressRequestDto, WalletBackendHealthDto, WalletReceiveAddressDto, WalletStatusDto,
+};
 use crate::{WalletApiError, WalletApiResult};
 
 use wallet_core::{
@@ -85,13 +87,24 @@ fn parse_network(s: &str) -> WalletApiResult<Network> {
     }
 }
 
-pub async fn address(storage: &WalletStorage, name: &str) -> WalletApiResult<String> {
+pub async fn address(
+    storage: &WalletStorage,
+    request: WalletAddressRequestDto,
+) -> WalletApiResult<WalletReceiveAddressDto> {
+    let WalletAddressRequestDto { name } = request;
+
     debug!("api wallet: address start name={}", name);
-    let config = load_wallet_config(storage, name).await?;
+    let config = load_wallet_config(storage, &name).await?;
     let mut wallet = WalletService::load_or_create(&config)?;
     let address = wallet.next_receive_address()?;
-    info!("api wallet: address success name={}", name);
-    Ok(address)
+    let dto = WalletReceiveAddressDto::from(address);
+    info!(
+        "api wallet: address success name={} keychain={} index={:?}",
+        name,
+        dto.keychain,
+        dto.index
+    );
+    Ok(dto)
 }
 
 pub async fn sync(storage: &WalletStorage, name: &str) -> WalletApiResult<()> {

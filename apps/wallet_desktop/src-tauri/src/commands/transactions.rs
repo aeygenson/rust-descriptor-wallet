@@ -1,12 +1,22 @@
 use tauri::{command, State};
-use wallet_api::{model::WalletTxDto, WalletApi};
+use wallet_api::{
+    model::{WalletTransactionsRequestDto, WalletTxDto},
+    service, WalletApi,
+};
 
 #[command]
 pub async fn list_transactions(
     api: State<'_, WalletApi>,
     wallet_name: String,
 ) -> Result<Vec<WalletTxDto>, String> {
-    let txs = api.txs(&wallet_name).await.map_err(|err| err.to_string())?;
+    let txs = service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: wallet_name.clone(),
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
 
     // Debug: ensure inputs/outputs are present for parent/child graph
     log::debug!(

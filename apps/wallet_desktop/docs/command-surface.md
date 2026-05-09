@@ -17,10 +17,12 @@ Registered commands:
 - `get_wallet_status`
 - `sync_wallet`
 - `backend_health`
+- `get_receive_address`
 
 Frontend wrappers:
 
 - [src/features/wallet/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/wallet/api.ts)
+- [src/features/receive/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/receive/api.ts)
 
 ## UTXO Commands
 
@@ -93,7 +95,7 @@ Frontend wrappers:
 
 The implemented frontend does not pass flat positional parameters.
 
-Instead, most commands receive a `request` object with camelCase fields on the TypeScript side. The Rust send-model layer decodes those into the DTO shapes expected by `wallet_api`.
+Instead, most commands receive a `request` object with camelCase fields on the TypeScript side. The Rust send-model layer decodes those into the canonical request DTO shapes expected by `wallet_api`.
 
 Examples:
 
@@ -106,9 +108,12 @@ Examples:
 - nested `coinControl`
 - nested `consolidation`
 
+The receive-address command is the main exception here. `get_receive_address` takes a single `walletName` argument and returns `WalletReceiveAddressDto`.
+
 ## Important Boundary Rules
 
 - command handlers call `wallet_api`; they do not reimplement wallet logic
+- send command handlers now mostly call `wallet_api::service::*` through canonical request DTOs, not handwritten argument lists
 - frontend code should use feature `api.ts` files, not raw `invoke` in components
 - backend validation errors are surfaced as strings today
 
@@ -116,7 +121,6 @@ Examples:
 
 The current app does not expose:
 
-- dedicated receive-address commands in the UI layer
 - transaction-details-by-id command
 - wallet import/create/delete commands
 - settings/configuration mutation commands

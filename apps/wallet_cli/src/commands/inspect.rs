@@ -36,8 +36,10 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
             .map(|height| height.to_string())
             .unwrap_or_else(|| "unconfirmed".to_string());
 
+        let parent_txids = parent_txids_from_inputs(&tx.inputs);
+
         println!(
-            "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | fee_rate={:<10} | rbf={} | confirmed={} | height={} | inputs={} | wallet_outputs={}",
+            "txid={} | dir={:<8} | net={:>8} sats | fee={:<10} | fee_rate={:<10} | rbf={} | confirmed={} | height={} | inputs={} | parents={} | wallet_outputs={}",
             tx.txid,
             tx.direction,
             tx.net_value,
@@ -47,6 +49,7 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
             tx.confirmed,
             height,
             tx.inputs.len(),
+            parent_txids.len(),
             tx.outputs.len()
         );
 
@@ -57,7 +60,6 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
             }
         }
 
-        let parent_txids = parent_txids_from_inputs(&tx.inputs);
         if !parent_txids.is_empty() {
             println!("  parents:");
             for parent_txid in parent_txids {
@@ -71,12 +73,12 @@ pub async fn txs(api: &WalletApi, name: &str) -> Result<()> {
                 let address = output.address.as_deref().unwrap_or("unknown");
                 let keychain = output.keychain.as_deref().unwrap_or("unknown");
                 println!(
-                    "  - outpoint={} | value={} sats | addr={} | mine={} | keychain={}",
+                    "  - outpoint={} | value={} sats | mine={} | keychain={} | address={}",
                     output.outpoint,
                     output.value_sat,
-                    address,
                     output.is_mine,
-                    keychain
+                    keychain,
+                    address
                 );
             }
         }
@@ -96,19 +98,27 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
     }
 
     info!(
-        "cli inspect: utxos fetched count={} for wallet {}",
+        "cli inspect: utxos fetched count={} with_derivation_index={} for wallet {}",
         utxos.len(),
+        utxos.iter().filter(|utxo| utxo.derivation_index.is_some()).count(),
         name
     );
 
     for utxo in utxos {
         let address = utxo.address.as_deref().unwrap_or("unknown");
+
+        let derivation_index = utxo
+            .derivation_index
+            .map(|index| index.to_string())
+            .unwrap_or_else(|| "n/a".to_string());
+
         println!(
-            "outpoint={} | value={} sats | confirmed={} | keychain={} | address={}",
+            "outpoint={} | value={} sats | confirmed={} | keychain={} | index={} | address={}",
             utxo.outpoint,
             utxo.value,
             utxo.confirmed,
             utxo.keychain,
+            derivation_index,
             address
         );
     }

@@ -1,5 +1,8 @@
 use wallet_api::model::{
-    WalletCoinControlDto, WalletConsolidationDto, WalletConsolidationStrategyDto,
+    BumpFeeRequestDto, ConsolidationRequestDto, CpfpRequestDto,
+    CreatePsbtRequestDto, PublishPsbtRequestDto, SendMaxRequestDto,
+    SignPsbtRequestDto, SweepRequestDto, WalletCoinControlDto,
+    WalletConsolidationDto, WalletConsolidationStrategyDto,
     WalletInputSelectionModeDto,
 };
 
@@ -14,16 +17,24 @@ pub struct CreatePsbtRequest {
     pub confirmed_only: bool,
 }
 
-impl CreatePsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, u64, bool, bool) {
-        (
-            self.wallet_name,
-            self.address,
-            self.amount_sat,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.confirmed_only,
-        )
+
+impl From<CreatePsbtRequest> for CreatePsbtRequestDto {
+    fn from(request: CreatePsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            amount_sat: request.amount_sat,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: if request.confirmed_only {
+                Some(WalletCoinControlDto {
+                    confirmed_only: true,
+                    ..Default::default()
+                })
+            } else {
+                None
+            },
+        }
     }
 }
 
@@ -59,17 +70,17 @@ pub struct CreatePsbtWithCoinControlRequest {
     pub coin_control: CoinControlRequest,
 }
 
-impl CreatePsbtWithCoinControlRequest {
-    pub fn into_parts(self) -> (String, String, u64, u64, bool, bool, WalletCoinControlDto) {
-        (
-            self.wallet_name,
-            self.address,
-            self.amount_sat,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.confirmed_only,
-            self.coin_control.into(),
-        )
+
+impl From<CreatePsbtWithCoinControlRequest> for CreatePsbtRequestDto {
+    fn from(request: CreatePsbtWithCoinControlRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            amount_sat: request.amount_sat,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: Some(request.coin_control.into()),
+        }
     }
 }
 
@@ -100,9 +111,16 @@ pub struct CreateSendMaxPsbtRequest {
     pub base: SendMaxRequestBase,
 }
 
-impl CreateSendMaxPsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool) {
-        self.base.into_parts()
+
+impl From<CreateSendMaxPsbtRequest> for SendMaxRequestDto {
+    fn from(request: CreateSendMaxPsbtRequest) -> Self {
+        Self {
+            name: request.base.wallet_name,
+            to_address: request.base.address,
+            fee_rate_sat_per_vb: request.base.fee_rate_sat_vb,
+            replaceable: request.base.replaceable,
+            coin_control: None,
+        }
     }
 }
 
@@ -116,15 +134,16 @@ pub struct CreateSendMaxPsbtWithCoinControlRequest {
     pub coin_control: CoinControlRequest,
 }
 
-impl CreateSendMaxPsbtWithCoinControlRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool, WalletCoinControlDto) {
-        (
-            self.wallet_name,
-            self.address,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.coin_control.into(),
-        )
+
+impl From<CreateSendMaxPsbtWithCoinControlRequest> for SendMaxRequestDto {
+    fn from(request: CreateSendMaxPsbtWithCoinControlRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: Some(request.coin_control.into()),
+        }
     }
 }
 
@@ -157,9 +176,16 @@ pub struct CreateSweepPsbtRequest {
     pub base: SweepRequestBase,
 }
 
-impl CreateSweepPsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool, WalletCoinControlDto) {
-        self.base.into_parts()
+
+impl From<CreateSweepPsbtRequest> for SweepRequestDto {
+    fn from(request: CreateSweepPsbtRequest) -> Self {
+        Self {
+            name: request.base.wallet_name,
+            to_address: request.base.address,
+            fee_rate_sat_per_vb: request.base.fee_rate_sat_vb,
+            replaceable: request.base.replaceable,
+            coin_control: request.base.coin_control.into(),
+        }
     }
 }
 
@@ -204,14 +230,15 @@ pub struct CreateConsolidationPsbtRequest {
     pub consolidation: ConsolidationRequest,
 }
 
-impl CreateConsolidationPsbtRequest {
-    pub fn into_parts(self) -> (String, u64, bool, WalletConsolidationDto) {
-        (
-            self.wallet_name,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.consolidation.into(),
-        )
+
+impl From<CreateConsolidationPsbtRequest> for ConsolidationRequestDto {
+    fn from(request: CreateConsolidationPsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            consolidation: request.consolidation.into(),
+        }
     }
 }
 
@@ -222,9 +249,13 @@ pub struct SignPsbtRequest {
     pub psbt_base64: String,
 }
 
-impl SignPsbtRequest {
-    pub fn into_parts(self) -> (String, String) {
-        (self.wallet_name, self.psbt_base64)
+
+impl From<SignPsbtRequest> for SignPsbtRequestDto {
+    fn from(request: SignPsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            psbt_base64: request.psbt_base64,
+        }
     }
 }
 
@@ -235,9 +266,13 @@ pub struct PublishPsbtRequest {
     pub psbt_base64: String,
 }
 
-impl PublishPsbtRequest {
-    pub fn into_parts(self) -> (String, String) {
-        (self.wallet_name, self.psbt_base64)
+
+impl From<PublishPsbtRequest> for PublishPsbtRequestDto {
+    fn from(request: PublishPsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            psbt_base64: request.psbt_base64,
+        }
     }
 }
 
@@ -252,16 +287,23 @@ pub struct SendPsbtRequest {
     pub confirmed_only: bool,
 }
 
-impl SendPsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, u64, bool, bool) {
-        (
-            self.wallet_name,
-            self.address,
-            self.amount_sat,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.confirmed_only,
-        )
+impl From<SendPsbtRequest> for CreatePsbtRequestDto {
+    fn from(request: SendPsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            amount_sat: request.amount_sat,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: if request.confirmed_only {
+                Some(WalletCoinControlDto {
+                    confirmed_only: true,
+                    ..Default::default()
+                })
+            } else {
+                None
+            },
+        }
     }
 }
 
@@ -277,17 +319,19 @@ pub struct SendPsbtWithCoinControlRequest {
     pub coin_control: CoinControlRequest,
 }
 
-impl SendPsbtWithCoinControlRequest {
-    pub fn into_parts(self) -> (String, String, u64, u64, bool, bool, WalletCoinControlDto) {
-        (
-            self.wallet_name,
-            self.address,
-            self.amount_sat,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.confirmed_only,
-            self.coin_control.into(),
-        )
+impl From<SendPsbtWithCoinControlRequest> for CreatePsbtRequestDto {
+    fn from(request: SendPsbtWithCoinControlRequest) -> Self {
+        let mut coin_control: WalletCoinControlDto = request.coin_control.into();
+        coin_control.confirmed_only = request.confirmed_only;
+
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            amount_sat: request.amount_sat,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: Some(coin_control),
+        }
     }
 }
 
@@ -298,9 +342,15 @@ pub struct SendMaxPsbtRequest {
     pub base: SendMaxRequestBase,
 }
 
-impl SendMaxPsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool) {
-        self.base.into_parts()
+impl From<SendMaxPsbtRequest> for SendMaxRequestDto {
+    fn from(request: SendMaxPsbtRequest) -> Self {
+        Self {
+            name: request.base.wallet_name,
+            to_address: request.base.address,
+            fee_rate_sat_per_vb: request.base.fee_rate_sat_vb,
+            replaceable: request.base.replaceable,
+            coin_control: None,
+        }
     }
 }
 
@@ -314,15 +364,15 @@ pub struct SendMaxPsbtWithCoinControlRequest {
     pub coin_control: CoinControlRequest,
 }
 
-impl SendMaxPsbtWithCoinControlRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool, WalletCoinControlDto) {
-        (
-            self.wallet_name,
-            self.address,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.coin_control.into(),
-        )
+impl From<SendMaxPsbtWithCoinControlRequest> for SendMaxRequestDto {
+    fn from(request: SendMaxPsbtWithCoinControlRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            to_address: request.address,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            coin_control: Some(request.coin_control.into()),
+        }
     }
 }
 
@@ -333,9 +383,15 @@ pub struct SweepPsbtRequest {
     pub base: SweepRequestBase,
 }
 
-impl SweepPsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64, bool, WalletCoinControlDto) {
-        self.base.into_parts()
+impl From<SweepPsbtRequest> for SweepRequestDto {
+    fn from(request: SweepPsbtRequest) -> Self {
+        Self {
+            name: request.base.wallet_name,
+            to_address: request.base.address,
+            fee_rate_sat_per_vb: request.base.fee_rate_sat_vb,
+            replaceable: request.base.replaceable,
+            coin_control: request.base.coin_control.into(),
+        }
     }
 }
 
@@ -348,14 +404,14 @@ pub struct ConsolidatePsbtRequest {
     pub consolidation: ConsolidationRequest,
 }
 
-impl ConsolidatePsbtRequest {
-    pub fn into_parts(self) -> (String, u64, bool, WalletConsolidationDto) {
-        (
-            self.wallet_name,
-            self.fee_rate_sat_vb,
-            self.replaceable,
-            self.consolidation.into(),
-        )
+impl From<ConsolidatePsbtRequest> for ConsolidationRequestDto {
+    fn from(request: ConsolidatePsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+            replaceable: request.replaceable,
+            consolidation: request.consolidation.into(),
+        }
     }
 }
 
@@ -367,9 +423,13 @@ pub struct BumpFeePsbtRequest {
     pub fee_rate_sat_vb: u64,
 }
 
-impl BumpFeePsbtRequest {
-    pub fn into_parts(self) -> (String, String, u64) {
-        (self.wallet_name, self.txid, self.fee_rate_sat_vb)
+impl From<BumpFeePsbtRequest> for BumpFeeRequestDto {
+    fn from(request: BumpFeePsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            txid: request.txid,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+        }
     }
 }
 
@@ -381,9 +441,13 @@ pub struct BumpFeeRequest {
     pub fee_rate_sat_vb: u64,
 }
 
-impl BumpFeeRequest {
-    pub fn into_parts(self) -> (String, String, u64) {
-        (self.wallet_name, self.txid, self.fee_rate_sat_vb)
+impl From<BumpFeeRequest> for BumpFeeRequestDto {
+    fn from(request: BumpFeeRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            txid: request.txid,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+        }
     }
 }
 
@@ -396,14 +460,14 @@ pub struct CpfpPsbtRequest {
     pub fee_rate_sat_vb: u64,
 }
 
-impl CpfpPsbtRequest {
-    pub fn into_parts(self) -> (String, String, String, u64) {
-        (
-            self.wallet_name,
-            self.parent_txid,
-            self.selected_outpoint,
-            self.fee_rate_sat_vb,
-        )
+impl From<CpfpPsbtRequest> for CpfpRequestDto {
+    fn from(request: CpfpPsbtRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            parent_txid: request.parent_txid,
+            selected_outpoint: request.selected_outpoint,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+        }
     }
 }
 
@@ -416,13 +480,13 @@ pub struct CpfpRequest {
     pub fee_rate_sat_vb: u64,
 }
 
-impl CpfpRequest {
-    pub fn into_parts(self) -> (String, String, String, u64) {
-        (
-            self.wallet_name,
-            self.parent_txid,
-            self.selected_outpoint,
-            self.fee_rate_sat_vb,
-        )
+impl From<CpfpRequest> for CpfpRequestDto {
+    fn from(request: CpfpRequest) -> Self {
+        Self {
+            name: request.wallet_name,
+            parent_txid: request.parent_txid,
+            selected_outpoint: request.selected_outpoint,
+            fee_rate_sat_per_vb: request.fee_rate_sat_vb,
+        }
     }
 }

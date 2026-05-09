@@ -1,7 +1,7 @@
 pub(crate) use crate::{
     types::{
-        AmountSat, BlockHeight, FeeRateSatPerVb, PsbtBase64, TxDirection, TxHex, VSize,
-        WalletKeychain, WalletOutPoint, WalletTxid,
+        AddressIndex, AmountSat, BlockHeight, FeeRateSatPerVb, PsbtBase64, TxDirection, TxHex,
+        VSize, WalletKeychain, WalletOutPoint, WalletTxid,
     },
     WalletCoreResult,
 };
@@ -71,6 +71,23 @@ pub struct WalletUtxoInfo {
     pub confirmation_height: Option<BlockHeight>,
     pub address: Option<String>,
     pub keychain: WalletKeychain,
+    pub derivation_index: Option<AddressIndex>,
+}
+
+/// Core wallet receive-address model used inside wallet_core.
+///
+/// This represents a generated or discovered wallet address and is intentionally
+/// independent from API/CLI/desktop DTO formatting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalletReceiveAddressInfo {
+    /// Address string encoded for the wallet network.
+    pub address: String,
+
+    /// Keychain this address belongs to.
+    pub keychain: WalletKeychain,
+
+    /// Derivation index when known.
+    pub index: Option<AddressIndex>,
 }
 
 /// Shared typed input-selection configuration used inside wallet-core.
@@ -195,6 +212,50 @@ impl WalletCoinControlResolutionInfo {
     }
 }
 
+/// Core model describing the final input-selection result.
+///
+/// This is richer than a plain list of outpoints and is intended for workflow
+/// explainability, transaction previews, tests, and future API/GUI diagnostics.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct WalletSelectionResult {
+    /// Final selected input outpoints in deterministic order.
+    pub selected_outpoints: Vec<WalletOutPoint>,
+
+    /// Number of inputs selected automatically by wallet policy.
+    pub auto_selected_count: usize,
+
+    /// Number of inputs selected explicitly by the caller/user.
+    pub manual_selected_count: usize,
+
+    /// Number of explicit or policy-derived exclusions applied during selection.
+    pub excluded_count: usize,
+
+    /// Strategy used for deterministic candidate ordering, when applicable.
+    pub strategy_used: Option<WalletConsolidationStrategy>,
+}
+
+impl WalletSelectionResult {
+    /// Returns true when no inputs were selected.
+    pub fn is_empty(&self) -> bool {
+        self.selected_outpoints.is_empty()
+    }
+
+    /// Returns total selected input count.
+    pub fn selected_count(&self) -> usize {
+        self.selected_outpoints.len()
+    }
+
+    /// Returns true when the result contains at least one explicit/manual input.
+    pub fn has_manual_inputs(&self) -> bool {
+        self.manual_selected_count > 0
+    }
+
+    /// Returns true when the result contains at least one automatically selected input.
+    pub fn has_auto_inputs(&self) -> bool {
+        self.auto_selected_count > 0
+    }
+}
+
 /// Domain mode describing how manual input selection should interact with
 /// automatic candidate selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -270,6 +331,9 @@ pub struct WalletPsbtInfo {
 
     /// Original transaction id (used for fee bump flows).
     pub original_txid: Option<WalletTxid>,
+
+    /// Replacement/RBF lineage metadata when this PSBT replaces another transaction.
+    pub replacement: Option<WalletReplacementInfo>,
 
     /// Destination address the wallet is paying to.
     pub to_address: String,
@@ -356,6 +420,7 @@ impl WalletPsbtInfo {
             psbt_base64: PsbtBase64::from(psbt.to_string()),
             txid,
             original_txid: None,
+            replacement: None,
             to_address: String::new(),
             amount_sat: AmountSat::default(),
             fee_sat: AmountSat::default(),
@@ -388,10 +453,11 @@ impl WalletPsbtInfo {
 }
 
 /// Domain status representing PSBT signing progress.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PsbtSigningStatus {
-    /// The signing attempt did not change the PSBT.
-    Unchanged,
+    /// The PSBT has not been signed or the signing attempt did not modify it.
+    #[default]
+    Unsigned,
     /// The PSBT was updated but is not yet fully finalized.
     PartiallySigned,
     /// The PSBT is finalized and ready for extraction/broadcast.
@@ -402,7 +468,7 @@ impl PsbtSigningStatus {
     /// Convert signing status into a stable string representation for DTO/API layers.
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Unchanged => "unchanged",
+            Self::Unsigned => "unsigned",
             Self::PartiallySigned => "partially_signed",
             Self::Finalized => "finalized",
         }
@@ -440,7 +506,7 @@ impl WalletSignedPsbtInfo {
         match (self.modified, self.finalized) {
             (_, true) => PsbtSigningStatus::Finalized,
             (true, false) => PsbtSigningStatus::PartiallySigned,
-            (false, false) => PsbtSigningStatus::Unchanged,
+            (false, false) => PsbtSigningStatus::Unsigned,
         }
     }
 }
@@ -463,6 +529,75 @@ pub struct WalletFinalizedTxInfo {
     /// Whether the transaction is replaceable via RBF.
     pub replaceable: bool,
 }
+
+/// Core model describing a transaction candidate ready for broadcast analysis.
+///
+/// This extends `WalletFinalizedTxInfo` with fee and mempool-policy-oriented
+/// metadata while still avoiding any actual broadcast side effects.
+#[derive(Debug, Clone)]
+pub struct WalletBroadcastCandidateInfo {
+    /// Transaction id of the broadcast candidate.
+    pub txid: WalletTxid,
+
+    /// Raw transaction hex ready for broadcast.
+    pub tx_hex: TxHex,
+
+    /// Whether the transaction is replaceable via RBF.
+    pub replaceable: bool,
+
+    /// Transaction fee in satoshis when known.
+    pub fee: Option<AmountSat>,
+
+    /// Fee rate in sat/vB when known.
+    pub fee_rate: Option<FeeRateSatPerVb>,
+
+    /// Virtual size when known.
+    pub vsize: Option<VSize>,
+
+    /// Number of known unconfirmed ancestors, when available from a backend.
+    pub ancestor_count: Option<u32>,
+
+    /// Number of known unconfirmed descendants, when available from a backend.
+    pub descendant_count: Option<u32>,
+}
+
+/// Core model describing RBF/replacement transaction lineage.
+///
+/// This is intentionally independent from a particular backend and can be
+/// populated from wallet history, mempool data, or API-level tracking later.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WalletReplacementInfo {
+    /// Transaction id that was replaced.
+    pub replaced_txid: WalletTxid,
+
+    /// Transaction id of the replacement transaction.
+    pub replacement_txid: WalletTxid,
+
+    /// Depth of this replacement within a replacement chain.
+    pub replacement_depth: u32,
+
+    /// Ordered replacement chain known to the wallet/API.
+    pub replacement_chain: Vec<WalletTxid>,
+}
+
+/// Core model describing backend capabilities available to wallet workflows.
+///
+/// This is a capability description only; it does not perform health checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WalletBackendCapabilities {
+    /// Backend can synchronize wallet chain data.
+    pub can_sync: bool,
+
+    /// Backend can broadcast transactions.
+    pub can_broadcast: bool,
+
+    /// Backend can provide fee estimates.
+    pub supports_fee_estimates: bool,
+
+    /// Backend can expose mempool/package-related information.
+    pub supports_mempool: bool,
+}
+
 /// Core model describing the build plan for a CPFP (Child Pays For Parent)
 /// child transaction before the PSBT is created.
 ///

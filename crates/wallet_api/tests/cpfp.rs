@@ -3,6 +3,134 @@ mod common;
 use common::*;
 use serial_test::serial;
 use wallet_api::factory::build_default_api;
+use wallet_api::model::{
+    CpfpRequestDto, CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto,
+    WalletAddressRequestDto, WalletTransactionsRequestDto, WalletUtxosRequestDto,
+};
+use wallet_api::service;
+
+async fn wallet_address(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
+    service::wallet::address(
+        &api.storage,
+        WalletAddressRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_txs(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletTxDto>> {
+    service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_utxos(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletUtxoDto>> {
+    service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn send_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let coin_control = if confirmed_only {
+        Some(wallet_api::model::WalletCoinControlDto {
+            confirmed_only: true,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let created = service::psbt::create(
+        &api.storage,
+        CreatePsbtRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await?;
+
+    let signed = sign_psbt(api, name, &created.psbt_base64).await?;
+    publish_psbt(api, name, &signed.psbt_base64).await
+}
+
+async fn cpfp_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    parent_txid: &str,
+    selected_outpoint: &str,
+    fee_rate_sat_per_vb: u64,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletCpfpPsbtDto> {
+    service::psbt::cpfp_psbt(
+        &api.storage,
+        CpfpRequestDto {
+            name: name.to_string(),
+            parent_txid: parent_txid.to_string(),
+            selected_outpoint: selected_outpoint.to_string(),
+            fee_rate_sat_per_vb,
+        },
+    )
+    .await
+}
+
+async fn sign_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    psbt_base64: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletSignedPsbtDto> {
+    service::psbt::sign(
+        &api.storage,
+        SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: psbt_base64.to_string(),
+        },
+    )
+    .await
+}
+
+async fn publish_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    psbt_base64: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    service::psbt::publish(
+        &api.storage,
+        PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: psbt_base64.to_string(),
+        },
+    )
+    .await
+}
 
 #[tokio::test(flavor = "current_thread")]
 #[serial]
@@ -18,8 +146,8 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
     let balance_before = api.balance(wallet_name).await?;
 
     if balance_before < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
+        let refill_addr = wallet_address(&api, wallet_name).await?;
+        let refill_addr = parse_regtest_address(&refill_addr.address)?;
         env.fund_sats(&refill_addr, 100_000)?;
         env.mine(1)?;
         api.sync(wallet_name).await?;
@@ -27,10 +155,17 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
     }
 
     // Create an unconfirmed parent transaction by self-sending.
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
@@ -45,15 +180,13 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
     api.sync(wallet_name).await?;
     let balance_before_cpfp = api.balance(wallet_name).await?;
     // Select one of the parent's unconfirmed wallet-owned outputs for CPFP.
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let selected = utxos
         .iter()
         .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
         .expect("expected at least one parent output to be available for CPFP");
 
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
-        .await?;
+    let cpfp = cpfp_psbt(&api, wallet_name, &parent.txid, &selected.outpoint, 5).await?;
 
     assert!(
         !cpfp.psbt_base64.is_empty(),
@@ -64,6 +197,7 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
         "expected CPFP child txid to be present"
     );
     assert_eq!(cpfp.parent_txid, parent.txid);
+    assert_ne!(cpfp.txid, cpfp.parent_txid);
     assert_eq!(
         cpfp.selected_outpoint, selected.outpoint,
         "expected CPFP to use the explicitly requested outpoint"
@@ -119,8 +253,8 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
     let balance_before = api.balance(wallet_name).await?;
 
     if balance_before < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
+        let refill_addr = wallet_address(&api, wallet_name).await?;
+        let refill_addr = parse_regtest_address(&refill_addr.address)?;
         env.fund_sats(&refill_addr, 100_000)?;
         env.mine(1)?;
         api.sync(wallet_name).await?;
@@ -128,10 +262,17 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
 
     // Create an unconfirmed self-send parent transaction that should produce at least
     // an external recipient output and an internal change output.
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
@@ -144,7 +285,7 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
     );
 
     api.sync(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let parent_outputs: Vec<_> = utxos
         .iter()
         .filter(|u| outpoint_txid(&u.outpoint) == parent.txid)
@@ -162,9 +303,7 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
         .expect("expected a requested parent output")
         .to_owned();
 
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &requested.outpoint, 5)
-        .await?;
+    let cpfp = cpfp_psbt(&api, wallet_name, &parent.txid, &requested.outpoint, 5).await?;
 
     assert_eq!(cpfp.parent_txid, parent.txid);
     assert_eq!(
@@ -195,18 +334,25 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
     let initial_balance = api.balance(wallet_name).await?;
 
     if initial_balance < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
+        let refill_addr = wallet_address(&api, wallet_name).await?;
+        let refill_addr = parse_regtest_address(&refill_addr.address)?;
         env.fund_sats(&refill_addr, 100_000)?;
         env.mine(1)?;
         api.sync(wallet_name).await?;
     }
 
     // Create a low-fee unconfirmed parent transaction.
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
@@ -219,16 +365,14 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
     );
 
     api.sync(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let selected = utxos
         .iter()
         .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
         .expect("expected at least one parent output to be available for CPFP");
 
     // Build, sign, and publish the CPFP child transaction.
-    let cpfp = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
-        .await?;
+    let cpfp = cpfp_psbt(&api, wallet_name, &parent.txid, &selected.outpoint, 5).await?;
     assert!(
         !cpfp.psbt_base64.is_empty(),
         "expected CPFP PSBT payload to be present"
@@ -243,8 +387,9 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
     );
     assert_eq!(cpfp.input_value_sat, selected.value);
 
-    let signed = api.sign_psbt(wallet_name, &cpfp.psbt_base64).await?;
-    let published = api.publish_psbt(wallet_name, &signed.psbt_base64).await?;
+    let signed = sign_psbt(&api, wallet_name, &cpfp.psbt_base64).await?;
+    assert_eq!(signed.signing_status, "finalized");
+    let published = publish_psbt(&api, wallet_name, &signed.psbt_base64).await?;
 
     assert_eq!(
         published.txid, cpfp.txid,
@@ -263,7 +408,7 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
 
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let parent_tx = txs
         .iter()
         .find(|tx| tx.txid == parent.txid)
@@ -295,7 +440,7 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
         "expected CPFP child transaction to leave mempool after confirmation"
     );
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let parent_tx = txs
         .iter()
         .find(|tx| tx.txid == parent.txid)
@@ -331,24 +476,31 @@ async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
     let balance = api.balance(wallet_name).await?;
 
     if balance < 50_000 {
-        let refill_addr = api.address(wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr)?;
+        let refill_addr = wallet_address(&api, wallet_name).await?;
+        let refill_addr = parse_regtest_address(&refill_addr.address)?;
         env.fund_sats(&refill_addr, 100_000)?;
         env.mine(1)?;
         api.sync(wallet_name).await?;
     }
 
     // Create a parent transaction and then confirm it.
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
     );
     api.sync(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let selected = utxos
         .iter()
         .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
@@ -365,8 +517,7 @@ async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
     );
 
     // CPFP should fail for a confirmed parent.
-    let err = api
-        .cpfp_psbt(wallet_name, &parent.txid, &selected.outpoint, 5)
+    let err = cpfp_psbt(&api, wallet_name, &parent.txid, &selected.outpoint, 5)
         .await
         .expect_err("expected CPFP PSBT creation to fail for confirmed parent");
 
@@ -393,15 +544,15 @@ async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
     // Use a deterministic fake txid that should not exist on regtest.
     let missing_parent_txid = "0000000000000000000000000000000000000000000000000000000000000001";
 
-    let err = api
-        .cpfp_psbt(
-            wallet_name,
-            missing_parent_txid,
-            "0000000000000000000000000000000000000000000000000000000000000001:0",
-            5,
-        )
-        .await
-        .expect_err("expected CPFP PSBT creation to fail for missing parent transaction");
+    let err = cpfp_psbt(
+        &api,
+        wallet_name,
+        missing_parent_txid,
+        "0000000000000000000000000000000000000000000000000000000000000001:0",
+        5,
+    )
+    .await
+    .expect_err("expected CPFP PSBT creation to fail for missing parent transaction");
 
     let msg = err.to_string();
     assert!(

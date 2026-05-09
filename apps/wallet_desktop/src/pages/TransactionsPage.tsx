@@ -24,17 +24,24 @@ import type {
 } from "../features/transactions/types";
 import {
   formatBooleanLabel,
-  formatConfirmationHeight,
+  formatConfirmationState,
+  formatConfirmationStateClass,
   formatDirectionClass,
   formatDirectionLabel,
   formatFeeRate,
   formatSats,
+  formatSignedBtc,
   formatSignedSats,
+  fullTxid,
+  shortTxid,
 } from "../features/transactions/format";
 import {
   canTransactionBeRbfBumped,
   canTransactionUseCpfp,
   getCpfpOutpoints,
+  getTransactionConfirmationState,
+  getTransactionDisplayDirection,
+  getTransactionNetAmountSat,
   isConfirmedTransaction,
   isPendingTransaction,
   isReceivedTransaction,
@@ -71,13 +78,17 @@ export function TransactionsPage() {
     variant: "info" | "success" | "error";
   } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [rbfSignedPsbt, setRbfSignedPsbt] = useState<WalletSignedPsbtDto | null>(null);
-  const [rbfBroadcastResult, setRbfBroadcastResult] = useState<TxBroadcastResultDto | null>(null);
+  const [rbfSignedPsbt, setRbfSignedPsbt] =
+    useState<WalletSignedPsbtDto | null>(null);
+  const [rbfBroadcastResult, setRbfBroadcastResult] =
+    useState<TxBroadcastResultDto | null>(null);
   const [rbfActionLoading, setRbfActionLoading] = useState(false);
   const [cpfpTx, setCpfpTx] = useState<WalletTxDto | null>(null);
   const [cpfpPsbtDto, setCpfpPsbtDto] = useState<WalletCpfpPsbtDto | null>(null);
-  const [cpfpSignedPsbt, setCpfpSignedPsbt] = useState<WalletSignedPsbtDto | null>(null);
-  const [cpfpBroadcastResult, setCpfpBroadcastResult] = useState<TxBroadcastResultDto | null>(null);
+  const [cpfpSignedPsbt, setCpfpSignedPsbt] =
+    useState<WalletSignedPsbtDto | null>(null);
+  const [cpfpBroadcastResult, setCpfpBroadcastResult] =
+    useState<TxBroadcastResultDto | null>(null);
   const [cpfpLoading, setCpfpLoading] = useState(false);
   const [cpfpActionLoading, setCpfpActionLoading] = useState(false);
   const [transactionFilter, setTransactionFilter] = useState<TransactionFilter>("all");
@@ -171,7 +182,10 @@ export function TransactionsPage() {
   const handleOpenTxById = (txid: string) => {
     const tx = transactionsWithGraph.find((item) => item.txid === txid);
     if (!tx) {
-      showActionMessage("Related transaction is not loaded in the current wallet history", "error");
+      showActionMessage(
+        "Related transaction is not loaded in the current wallet history",
+        "error",
+      );
       return;
     }
 
@@ -243,7 +257,9 @@ export function TransactionsPage() {
       setRbfPsbt(result);
       setRbfSignedPsbt(null);
       setRbfBroadcastResult(null);
-      showActionMessage("Replacement PSBT created. Review, sign, and broadcast it next.");
+      showActionMessage(
+        "Replacement PSBT created. Review, sign, and broadcast it next.",
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setActionError(msg);
@@ -261,12 +277,14 @@ export function TransactionsPage() {
         walletName: input.walletName,
         parentTxid: input.parentTxid,
         selectedOutpoint: input.selectedOutpoint,
-        feeRateSatPerVb: input.feeRateSatVb,
+        feeRateSatPerVb: input.feeRateSatPerVb,
       });
       setCpfpPsbtDto(result);
       setCpfpSignedPsbt(null);
       setCpfpBroadcastResult(null);
-      showActionMessage("CPFP PSBT created. Review, sign, and broadcast it next.");
+      showActionMessage(
+        "CPFP PSBT created. Review, sign, and broadcast it next.",
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       setActionError(msg);
@@ -433,25 +451,33 @@ export function TransactionsPage() {
 
         <div className="transactions-summary">
           <div className="transactions-summary-card">
-            <span className="transactions-summary-card__icon" aria-hidden="true">▧</span>
+            <span className="transactions-summary-card__icon" aria-hidden="true">
+              ▧
+            </span>
             <span className="transactions-summary-card__label">Total</span>
             <strong className="transactions-summary-card__value">{totalTransactions}</strong>
           </div>
 
           <div className="transactions-summary-card">
-            <span className="transactions-summary-card__icon" aria-hidden="true">↓</span>
+            <span className="transactions-summary-card__icon" aria-hidden="true">
+              ↓
+            </span>
             <span className="transactions-summary-card__label">Incoming</span>
             <strong className="transactions-summary-card__value">{incomingCount}</strong>
           </div>
 
           <div className="transactions-summary-card">
-            <span className="transactions-summary-card__icon" aria-hidden="true">↑</span>
+            <span className="transactions-summary-card__icon" aria-hidden="true">
+              ↑
+            </span>
             <span className="transactions-summary-card__label">Outgoing</span>
             <strong className="transactions-summary-card__value">{outgoingCount}</strong>
           </div>
 
           <div className="transactions-summary-card">
-            <span className="transactions-summary-card__icon" aria-hidden="true">⟲</span>
+            <span className="transactions-summary-card__icon" aria-hidden="true">
+              ⟲
+            </span>
             <span className="transactions-summary-card__label">Replaceable</span>
             <strong className="transactions-summary-card__value">{replaceableCount}</strong>
           </div>
@@ -523,7 +549,9 @@ export function TransactionsPage() {
           <h2>Child Pays For Parent / CPFP</h2>
           {cpfpOutpoints.length === 0 && (
             <div className="transactions-action-error">
-              CPFP needs a spendable wallet-owned output from this parent transaction. No selectable wallet-owned outputs are currently exposed for this transaction.
+              CPFP needs a spendable wallet-owned output from this parent
+              transaction. No selectable wallet-owned outputs are currently
+              exposed for this transaction.
             </div>
           )}
           <CpfpPanel
@@ -550,7 +578,9 @@ export function TransactionsPage() {
 
       {!loading && !error && filteredTransactions.length === 0 && (
         <div className="transactions-state">
-          {transactionsWithGraph.length === 0 ? "No transactions found." : "No transactions match this filter."}
+          {transactionsWithGraph.length === 0
+            ? "No transactions found."
+            : "No transactions match this filter."}
         </div>
       )}
 
@@ -577,44 +607,63 @@ export function TransactionsPage() {
               </thead>
               <tbody>
                 {filteredTransactions.map((tx, index) => {
+                  const confirmationState = getTransactionConfirmationState(tx);
+                  const displayDirection = getTransactionDisplayDirection(tx);
+                  const netAmountSat = getTransactionNetAmountSat(tx);
+                  const intent = resolveTransactionIntent(tx, storedTransactionIntents);
                   return (
-                    <tr key={`${tx.txid}-${index}`}>
+                    <tr
+                      key={`${tx.txid}-${index}`}
+                      data-confirmation-state={confirmationState}
+                      data-pending={isPendingTransaction(tx)}
+                    >
                       <td>
                         <span className="transactions-row-index">{index + 1}</span>
                       </td>
                       <td>
                         <div className="transactions-txid-cell">
-                          <span className="transactions-txid" title={tx.txid}>
-                            {tx.txid}
-                          </span>
+                          <button
+                            type="button"
+                            className="transactions-txid transactions-txid-button"
+                            title={fullTxid(tx.txid)}
+                            aria-label={`Open details for transaction ${tx.txid}`}
+                            onClick={() => handleDetails(tx)}
+                          >
+                            {shortTxid(tx.txid)}
+                          </button>
                           {renderGraphBadges(tx, transactionsWithGraph)}
                         </div>
                       </td>
                       <td>
                         <span
-                          className={`transactions-direction transactions-direction--${formatDirectionClass(tx.direction)}`}
+                          className={`transactions-direction transactions-direction--${formatDirectionClass(displayDirection)}`}
                         >
-                          {formatDirectionLabel(tx.direction)}
+                          {formatDirectionLabel(displayDirection)}
                         </span>
                       </td>
                       <td>
-                        <TransactionIntentBadge
-                          intent={resolveTransactionIntent(tx, storedTransactionIntents)}
-                        />
+                        <TransactionIntentBadge intent={intent} />
                       </td>
                       <td
                         className={
-                          tx.net_value > 0
+                          tx.net_value_sat > 0
                             ? "transactions-value transactions-value--positive"
-                            : tx.net_value < 0
+                            : tx.net_value_sat < 0
                               ? "transactions-value transactions-value--negative"
                               : "transactions-value"
                         }
                       >
-                        {formatSignedSats(tx.net_value)}
+                        <div>{formatSignedSats(tx.net_value_sat)}</div>
+                        <div className="transactions-muted">
+                          {formatSignedBtc(netAmountSat)}
+                        </div>
                       </td>
-                      <td className="transactions-value">{formatSats(tx.fee)}</td>
-                      <td className="transactions-value">{formatFeeRate(tx.fee_rate_sat_per_vb)}</td>
+                      <td className="transactions-value">
+                        {formatSats(tx.fee_sat)}
+                      </td>
+                      <td className="transactions-value">
+                        {formatFeeRate(tx.fee_rate_sat_per_vb)}
+                      </td>
                       <td>
                         <span
                           className={
@@ -628,16 +677,15 @@ export function TransactionsPage() {
                       </td>
                       <td>
                         <span
-                          className={
-                            tx.confirmed
-                              ? "transactions-badge transactions-badge--confirmed"
-                              : "transactions-badge transactions-badge--pending"
-                          }
+                          className={formatConfirmationStateClass(confirmationState)}
+                          title={formatConfirmationState(confirmationState)}
                         >
-                          {tx.confirmed ? "confirmed" : "pending"}
+                          {formatConfirmationState(confirmationState)}
                         </span>
                       </td>
-                      <td>{formatConfirmationHeight(tx.confirmation_height)}</td>
+                      <td title={formatConfirmationState(confirmationState)}>
+                        {tx.confirmation_height ?? "—"}
+                      </td>
                       <td>
                         <TransactionRelationCell
                           txids={tx.parent_txids ?? []}

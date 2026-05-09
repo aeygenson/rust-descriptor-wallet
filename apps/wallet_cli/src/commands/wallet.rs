@@ -1,7 +1,8 @@
 use anyhow::Result;
 use std::path::Path;
 use wallet_api::model::{
-    WalletBackendHealthDto, WalletDetailsDto, WalletStatusDto, WalletSummaryDto,
+    WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressDto, WalletStatusDto,
+    WalletSummaryDto,
 };
 use wallet_api::WalletApi;
 
@@ -62,8 +63,17 @@ pub async fn backend_health(api: &WalletApi, name: &str) -> Result<()> {
 }
 
 pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
-    let addr = api.address(name).await?;
-    println!("{addr}");
+    let addr: WalletReceiveAddressDto = api.address(name).await?;
+
+    println!("address={}", addr.address);
+    println!("keychain={}", addr.keychain);
+    println!(
+        "index={}",
+        addr.index
+            .map(|index| index.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+
     Ok(())
 }
 

@@ -8,8 +8,8 @@ use bdk_wallet::{bitcoin::FeeRate, Wallet};
 use bitcoin::Sequence;
 use bitcoin::Txid;
 
-use crate::model::{TxDirection, WalletSignedPsbtInfo};
-use crate::types::{FeeRateSatPerVb, PsbtBase64, TxHex, WalletTxid};
+use crate::model::{TxDirection, WalletBroadcastCandidateInfo, WalletSignedPsbtInfo};
+use crate::types::{AmountSat, FeeRateSatPerVb, PsbtBase64, TxHex, VSize, WalletTxid};
 use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a PSBT from its encoded string representation.
@@ -42,6 +42,31 @@ pub fn finalized_tx_broadcast_info(tx: &Transaction) -> (WalletTxid, TxHex, bool
     let tx_hex = TxHex::from(serialize_hex(tx));
     let replaceable = is_rbf_enabled(tx);
     (txid, tx_hex, replaceable)
+}
+
+/// Build a rich broadcast-candidate model from a transaction and optional fee metadata.
+///
+/// This performs no network calls and does not broadcast. Ancestor/descendant counts
+/// are intentionally left empty here because they require backend/mempool data.
+pub fn finalized_tx_broadcast_candidate_info(
+    tx: &Transaction,
+    fee_sat: Option<AmountSat>,
+) -> WalletBroadcastCandidateInfo {
+    let (txid, tx_hex, replaceable) = finalized_tx_broadcast_info(tx);
+    let vsize = VSize::from(tx.weight().to_vbytes_ceil());
+    let fee_rate = fee_sat
+        .map(|fee| fee_rate_sat_per_vb_from_fee_and_vsize(fee.as_u64(), vsize.as_u64()));
+
+    WalletBroadcastCandidateInfo {
+        txid,
+        tx_hex,
+        replaceable,
+        fee: fee_sat,
+        fee_rate,
+        vsize: Some(vsize),
+        ancestor_count: None,
+        descendant_count: None,
+    }
 }
 
 /// Build signed-PSBT metadata from a PSBT plus its original encoded form.
@@ -187,6 +212,36 @@ mod tests {
         assert_eq!(txid, WalletTxid::from(tx.compute_txid()));
         assert!(!tx_hex.as_str().is_empty());
         assert_eq!(replaceable, is_rbf_enabled(&tx));
+    }
+
+    #[test]
+    fn finalized_tx_broadcast_candidate_info_adds_fee_and_vsize_metadata() {
+        let tx = build_tx_with_sequence(RBF_SEQUENCE);
+        let candidate = finalized_tx_broadcast_candidate_info(&tx, Some(AmountSat::from(250)));
+
+        assert_eq!(candidate.txid, WalletTxid::from(tx.compute_txid()));
+        assert!(!candidate.tx_hex.as_str().is_empty());
+        assert!(candidate.replaceable);
+        assert_eq!(candidate.fee, Some(AmountSat::from(250)));
+        assert!(candidate.fee_rate.is_some());
+        assert!(candidate.vsize.unwrap().as_u64() > 0);
+        assert_eq!(candidate.ancestor_count, None);
+        assert_eq!(candidate.descendant_count, None);
+    }
+
+    #[test]
+    fn finalized_tx_broadcast_candidate_info_allows_unknown_fee_metadata() {
+        let tx = build_tx_with_sequence(Sequence::MAX);
+        let candidate = finalized_tx_broadcast_candidate_info(&tx, None);
+
+        assert_eq!(candidate.txid, WalletTxid::from(tx.compute_txid()));
+        assert!(!candidate.tx_hex.as_str().is_empty());
+        assert!(!candidate.replaceable);
+        assert_eq!(candidate.fee, None);
+        assert_eq!(candidate.fee_rate, None);
+        assert!(candidate.vsize.unwrap().as_u64() > 0);
+        assert_eq!(candidate.ancestor_count, None);
+        assert_eq!(candidate.descendant_count, None);
     }
 
     #[test]

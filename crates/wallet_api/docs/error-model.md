@@ -24,6 +24,8 @@ Input and request errors:
 - `InvalidFeeRate`
 - `InvalidDestinationAddress`
 - `DestinationNetworkMismatch`
+- `SelectionFailed`
+- `NotImplemented`
 
 Wallet and state lookup:
 
@@ -73,7 +75,7 @@ Low-level fallback:
 
 - `Core`
 
-Most important `wallet_core` errors are mapped into specific API errors. The `Core` variant remains as a fallback for lower-level failures that do not yet have a more stable API category.
+Most important `wallet_core` errors are mapped into specific API errors. `Core` remains as a compatibility fallback, but the current mapping is much more explicit than earlier versions.
 
 ## Coin Control And Consolidation Mapping
 
@@ -82,14 +84,17 @@ Coin-control and consolidation policy errors are intentionally mapped to `Invali
 Examples:
 
 - malformed outpoint
+- malformed txid, vsize, percent, block height, or PSBT wrapper value
 - selected outpoint not found
 - selected outpoint not spendable
 - selected outpoint not confirmed while `confirmed_only` is set
 - include/exclude conflict
 - strict manual selection cannot fund the transaction
+- strict manual selection violated by caller request
 - consolidation has too few eligible inputs
 - consolidation fee exceeds the requested ceiling
 - consolidation filters leave no eligible UTXOs
+- invalid internal state surfaced as a caller-correctable request problem
 
 This keeps CLI and UI behavior predictable: the caller can fix the request and retry.
 
@@ -120,13 +125,24 @@ RBF errors are surfaced with transaction-specific variants:
 
 CPFP build errors use `CpfpBuildFailed` unless they are better represented by another domain-specific variant.
 
+## Mapping Depth
+
+The API now maps most typed `wallet_core` validation errors directly instead of collapsing them into `Core`.
+
+Examples:
+
+- `InvalidOutpoint`, `InvalidTxid`, `InvalidVsize`, `InvalidBlockHeight`, `InvalidPercent`, `InvalidPsbtBase64`, and `InvalidTxHex` map to caller-visible request or PSBT errors
+- `CoinControlStrictModeViolation` maps to a request/policy failure
+- typed selection failures can map to `SelectionFailed`
+
 ## Caller Guidance
 
 Callers should:
 
 - display `InvalidInput` as a user-correctable request error
+- display `SelectionFailed` as a request/policy mismatch rather than infrastructure failure
 - display backend and broadcast errors as operational failures
 - keep preview failures visible instead of silently changing the request
 - avoid parsing error strings for control flow when a structured variant exists
 
-The integration tests assert the important caller-visible cases, including invalid outpoint conversion to `WalletApiError::InvalidInput`.
+The integration tests assert the important caller-visible cases, including invalid outpoint conversion, consolidation constraint failures, and replacement-related preview errors.

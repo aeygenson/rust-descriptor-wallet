@@ -8,16 +8,26 @@ const initialForm: SendMaxFormState = {
   replaceable: true,
 };
 
-export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
+export function SendMaxForm({
+  disabled = false,
+  onSubmit,
+}: SendMaxFormProps) {
   const [form, setForm] = useState<SendMaxFormState>(initialForm);
 
   const feeRate = Number(form.feeRateSatPerVb);
+  const normalizedFeeRateSatPerVb = String(feeRate);
+  const normalizedAddress = form.toAddress.trim();
 
-  const canSubmit =
-    !disabled &&
-    form.toAddress.trim().length > 0 &&
-    Number.isFinite(feeRate) &&
-    feeRate > 0;
+  const hasAddress = normalizedAddress.length > 0;
+  const hasValidFeeRate = Number.isFinite(feeRate) && feeRate > 0;
+
+  const estimatedSpendAll = hasAddress && hasValidFeeRate;
+
+  const canSubmit = !disabled && hasAddress && hasValidFeeRate;
+
+  const submitTitle = canSubmit
+    ? "Preview an unsigned Send Max PSBT"
+    : "Enter recipient address and positive fee rate";
 
   return (
     <section className="send-card">
@@ -31,12 +41,14 @@ export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (!canSubmit) return;
+          if (!canSubmit) {
+            return;
+          }
 
           onSubmit({
             ...form,
-            toAddress: form.toAddress.trim(),
-            feeRateSatPerVb: String(Number(form.feeRateSatPerVb)),
+            toAddress: normalizedAddress,
+            feeRateSatPerVb: normalizedFeeRateSatPerVb,
           });
         }}
         className="send-form-grid"
@@ -48,6 +60,7 @@ export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
             value={form.toAddress}
             disabled={disabled}
             placeholder="bc1..."
+            aria-invalid={form.toAddress.length > 0 && !hasAddress}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, toAddress: e.target.value }))
             }
@@ -62,6 +75,7 @@ export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
             value={form.feeRateSatPerVb}
             disabled={disabled}
             placeholder="e.g. 5"
+            aria-invalid={form.feeRateSatPerVb.length > 0 && !hasValidFeeRate}
             onChange={(e) =>
               setForm((prev) => ({
                 ...prev,
@@ -69,6 +83,11 @@ export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
               }))
             }
           />
+          {form.feeRateSatPerVb.length > 0 && !hasValidFeeRate ? (
+            <span className="field__error">
+              Enter a positive fee rate in sat/vB.
+            </span>
+          ) : null}
         </div>
 
         <div className="send-form-options">
@@ -78,15 +97,35 @@ export function SendMaxForm({ disabled = false, onSubmit }: SendMaxFormProps) {
               checked={form.replaceable}
               disabled={disabled}
               onChange={(e) =>
-                setForm((prev) => ({ ...prev, replaceable: e.target.checked }))
+                setForm((prev) => ({
+                  ...prev,
+                  replaceable: e.target.checked,
+                }))
               }
             />
             <span>Enable RBF (replace-by-fee)</span>
           </label>
         </div>
 
+        <div className="send-helper-text">
+          <span>
+            Send Max spends the available wallet funds minus network fees.
+            Preview the PSBT first to verify the final output amount, selected
+            inputs, change behavior, and RBF status before signing.
+          </span>
+        </div>
+
+        {estimatedSpendAll ? (
+          <div className="send-helper-text">
+            <span>
+              The backend will automatically calculate the maximum spendable
+              amount after subtracting estimated mining fees.
+            </span>
+          </div>
+        ) : null}
+
         <div className="send-form-actions">
-          <button type="submit" disabled={!canSubmit}>
+          <button type="submit" disabled={!canSubmit} title={submitTitle}>
             Preview transaction
           </button>
         </div>

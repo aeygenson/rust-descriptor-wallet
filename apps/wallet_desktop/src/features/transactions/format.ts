@@ -1,4 +1,5 @@
 import type {
+  TransactionConfirmationState,
   TransactionIntent,
   WalletTxDirection,
 } from "./types";
@@ -14,6 +15,16 @@ export function formatSats(value: number | null | undefined): string {
 export function formatSignedSats(value: number): string {
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toLocaleString()} sats`;
+}
+
+export function formatBtcFromSats(
+  valueSat: number | null | undefined,
+): string {
+  if (valueSat === null || valueSat === undefined) {
+    return "—";
+  }
+
+  return `${(valueSat / 100_000_000).toFixed(8)} BTC`;
 }
 
 export function formatFeeRate(value: number | null | undefined): string {
@@ -43,7 +54,7 @@ export function formatVsize(value: number | null | undefined): string {
 }
 
 export function formatConfirmationHeight(
-  value: number | null | undefined
+  value: number | null | undefined,
 ): string {
   if (value === null || value === undefined) {
     return "pending";
@@ -52,12 +63,33 @@ export function formatConfirmationHeight(
   return value.toLocaleString();
 }
 
+export function formatConfirmationState(
+  state: TransactionConfirmationState,
+): string {
+  switch (state) {
+    case "pending":
+      return "Pending";
+    case "confirmed":
+      return "Confirmed";
+    case "finalized":
+      return "Finalized";
+    default:
+      return "Unknown";
+  }
+}
+
+export function formatConfirmationStateClass(
+  state: TransactionConfirmationState,
+): string {
+  return `transactions-confirmation transactions-confirmation--${state}`;
+}
+
 export function formatOwnershipLabel(isMine: boolean): string {
   return isMine ? "wallet" : "external";
 }
 
 export function formatTransactionIntentLabel(
-  intent: TransactionIntent
+  intent: TransactionIntent,
 ): string {
   switch (intent) {
     case "fixed":
@@ -79,12 +111,14 @@ export function formatTransactionIntentLabel(
 }
 
 export function formatTransactionIntentClass(
-  intent: TransactionIntent
+  intent: TransactionIntent,
 ): string {
   return `transactions-intent transactions-intent--${intent}`;
 }
 
-export function formatDirectionLabel(direction: WalletTxDirection | string): string {
+export function formatDirectionLabel(
+  direction: WalletTxDirection | string,
+): string {
   switch (direction) {
     case "received":
       return "Received";
@@ -97,7 +131,9 @@ export function formatDirectionLabel(direction: WalletTxDirection | string): str
   }
 }
 
-export function formatDirectionClass(direction: WalletTxDirection | string): string {
+export function formatDirectionClass(
+  direction: WalletTxDirection | string,
+): string {
   switch (direction) {
     case "received":
       return "received";
@@ -110,6 +146,58 @@ export function formatDirectionClass(direction: WalletTxDirection | string): str
   }
 }
 
+export function formatSignedBtc(
+  valueSat: number | null | undefined,
+): string {
+  if (valueSat === null || valueSat === undefined) {
+    return "—";
+  }
+
+  const btc = valueSat / 100_000_000;
+  const sign = btc > 0 ? "+" : "";
+
+  return `${sign}${btc.toFixed(8)} BTC`;
+}
+
+export function formatRelativeFeeRate(
+  current: number | null | undefined,
+  baseline: number | null | undefined,
+): string {
+  if (
+    current === null ||
+    current === undefined ||
+    baseline === null ||
+    baseline === undefined
+  ) {
+    return "—";
+  }
+
+  const delta = current - baseline;
+  const sign = delta > 0 ? "+" : "";
+
+  return `${sign}${delta.toFixed(2)} sat/vB`;
+}
+
+export function formatRelativeFeeRatePercent(
+  current: number | null | undefined,
+  baseline: number | null | undefined,
+): string {
+  if (
+    current === null ||
+    current === undefined ||
+    baseline === null ||
+    baseline === undefined ||
+    baseline === 0
+  ) {
+    return "—";
+  }
+
+  const deltaPercent = ((current - baseline) / baseline) * 100;
+  const sign = deltaPercent > 0 ? "+" : "";
+
+  return `${sign}${deltaPercent.toFixed(0)}%`;
+}
+
 export function shortTxid(txid: string): string {
   if (txid.length <= 16) {
     return txid;
@@ -118,8 +206,19 @@ export function shortTxid(txid: string): string {
   return `${txid.slice(0, 8)}…${txid.slice(-8)}`;
 }
 
-export function shortOutpoint(outpoint: string): string {
+export function fullTxid(txid: string | null | undefined): string {
+  return txid ?? "—";
+}
+
+export function shortOutpoint(
+  outpoint: string | null | undefined,
+): string {
+  if (!outpoint) {
+    return "—";
+  }
+
   const separatorIndex = outpoint.lastIndexOf(":");
+
   if (separatorIndex === -1) {
     return shortTxid(outpoint);
   }
@@ -127,4 +226,10 @@ export function shortOutpoint(outpoint: string): string {
   const txid = outpoint.slice(0, separatorIndex);
   const vout = outpoint.slice(separatorIndex + 1);
   return `${shortTxid(txid)}:${vout}`;
+}
+
+export function fullOutpoint(
+  outpoint: string | null | undefined,
+): string {
+  return outpoint ?? "—";
 }

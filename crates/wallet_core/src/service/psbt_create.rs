@@ -233,7 +233,8 @@ impl WalletService {
                     strategy: None,
                 };
 
-                select_inputs(&wallet_utxos, &cfg)?
+                let selection_result = select_inputs(&wallet_utxos, &cfg)?;
+                selection_result.selected_outpoints
             }
             _ => Vec::new(),
         };
@@ -488,6 +489,7 @@ impl WalletService {
             psbt_base64,
             txid: WalletTxid::from(psbt.unsigned_tx.compute_txid()),
             original_txid: None,
+            replacement: None,
             to_address: to_address.to_string(),
             amount_sat: effective_amount_sat,
             fee_sat: AmountSat::from(fee_sat),

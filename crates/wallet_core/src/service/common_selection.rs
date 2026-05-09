@@ -3,7 +3,9 @@ use std::cmp::Ordering;
 use bdk_wallet::LocalOutput;
 
 use crate::error::WalletCoreError;
-use crate::model::{WalletConsolidationStrategy, WalletInputSelectionMode};
+use crate::model::{
+    WalletConsolidationStrategy, WalletInputSelectionMode, WalletSelectionResult,
+};
 use crate::types::WalletOutPoint;
 use crate::WalletCoreResult;
 
@@ -98,6 +100,31 @@ pub fn sort_local_outputs_by_strategy(
     strategy: WalletConsolidationStrategy,
 ) {
     candidates.sort_by(|a, b| compare_local_outputs_by_strategy(a, b, strategy));
+}
+
+/// Build a rich selection-result model from deterministic selected outpoints
+/// and selection metadata.
+///
+/// This helper keeps selection-result accounting centralized while allowing
+/// existing workflows to continue returning a plain outpoint vector until they
+/// are migrated to richer preview/diagnostic models.
+pub fn build_selection_result(
+    selected_outpoints: Vec<WalletOutPoint>,
+    manual_selected_count: usize,
+    excluded_count: usize,
+    strategy_used: Option<WalletConsolidationStrategy>,
+) -> WalletSelectionResult {
+    let selected_count = selected_outpoints.len();
+    let manual_selected_count = manual_selected_count.min(selected_count);
+    let auto_selected_count = selected_count - manual_selected_count;
+
+    WalletSelectionResult {
+        selected_outpoints,
+        auto_selected_count,
+        manual_selected_count,
+        excluded_count,
+        strategy_used,
+    }
 }
 
 /// Validate the number of selected inputs against the requested minimum.
@@ -337,6 +364,52 @@ mod tests {
     }
 
     #[test]
+    fn build_selection_result_derives_auto_selected_count() {
+        let first = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000001:0",
+        )
+        .unwrap();
+        let second = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000002:0",
+        )
+        .unwrap();
+
+        let result = build_selection_result(
+            vec![first, second],
+            1,
+            3,
+            Some(WalletConsolidationStrategy::SmallestFirst),
+        );
+
+        assert_eq!(result.selected_count(), 2);
+        assert_eq!(result.manual_selected_count, 1);
+        assert_eq!(result.auto_selected_count, 1);
+        assert_eq!(result.excluded_count, 3);
+        assert_eq!(result.strategy_used, Some(WalletConsolidationStrategy::SmallestFirst));
+        assert!(result.has_manual_inputs());
+        assert!(result.has_auto_inputs());
+    }
+
+    #[test]
+    fn build_selection_result_clamps_manual_selected_count() {
+        let first = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000001:0",
+        )
+        .unwrap();
+
+        let result = build_selection_result(
+            vec![first],
+            5,
+            0,
+            Some(WalletConsolidationStrategy::SmallestFirst),
+        );
+
+        assert_eq!(result.selected_count(), 1);
+        assert_eq!(result.manual_selected_count, 1);
+        assert_eq!(result.auto_selected_count, 0);
+    }
+
+    #[test]
     fn validate_selected_input_count_rejects_empty_selection() {
         let result = validate_selected_input_count(0, None);
         assert!(matches!(result, Err(WalletCoreError::SelectionFailed(_))));
@@ -351,6 +424,18 @@ mod tests {
     #[test]
     fn validate_selected_input_count_accepts_sufficient_selection() {
         let result = validate_selected_input_count(2, Some(2));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_selected_input_count_bounds_rejects_too_many_inputs() {
+        let result = validate_selected_input_count_bounds(3, None, Some(2));
+        assert!(matches!(result, Err(WalletCoreError::SelectionFailed(_))));
+    }
+
+    #[test]
+    fn validate_selected_input_count_bounds_accepts_min_and_max() {
+        let result = validate_selected_input_count_bounds(2, Some(1), Some(3));
         assert!(result.is_ok());
     }
 }

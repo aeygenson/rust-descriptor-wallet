@@ -1,9 +1,10 @@
-
-
 import { describe, expect, it } from "vitest";
 import type { WalletTxDto } from "../../shared/types/dtos";
 import {
   attachTransactionGraph,
+  buildTransactionIndex,
+  getKnownChildTxids,
+  getKnownParentTxids,
   getParentTxidFromOutpoint,
   isCpfpChildCandidate,
   isRateBumpedByChild,
@@ -16,8 +17,8 @@ function tx(overrides: Partial<WalletTxDto>): WalletTxDto {
     confirmation_height: overrides.confirmation_height ?? null,
     direction: overrides.direction ?? "sent",
     replaceable: overrides.replaceable ?? false,
-    net_value: overrides.net_value ?? 0,
-    fee: overrides.fee ?? null,
+    net_value_sat: overrides.net_value_sat ?? 0,
+    fee_sat: overrides.fee_sat ?? null,
     fee_rate_sat_per_vb: overrides.fee_rate_sat_per_vb ?? null,
     inputs: overrides.inputs ?? [],
     outputs: overrides.outputs ?? [],
@@ -30,6 +31,8 @@ describe("transaction graph helpers", () => {
   it("extracts parent txid from txid:vout outpoints", () => {
     expect(getParentTxidFromOutpoint("abc123:0")).toBe("abc123");
     expect(getParentTxidFromOutpoint("")).toBeNull();
+    expect(getParentTxidFromOutpoint(null)).toBeNull();
+    expect(getParentTxidFromOutpoint(undefined)).toBeNull();
   });
 
   it("attaches parent and child txids from transaction inputs", () => {
@@ -72,6 +75,46 @@ describe("transaction graph helpers", () => {
     const [, childWithGraph] = attachTransactionGraph([parent, child]);
 
     expect(childWithGraph.parent_txids).toEqual(["parent"]);
+  });
+
+  it("preserves unknown parent references when attaching graph metadata", () => {
+    const child = tx({
+      txid: "child",
+      inputs: [{ previous_outpoint: "missing-parent:0" }],
+    });
+
+    const [childWithGraph] = attachTransactionGraph([child]);
+
+    expect(childWithGraph.parent_txids).toEqual(["missing-parent"]);
+    expect(childWithGraph.child_txids).toEqual([]);
+  });
+
+  it("builds transaction index by txid", () => {
+    const first = tx({ txid: "first" });
+    const second = tx({ txid: "second" });
+
+    const index = buildTransactionIndex([first, second]);
+
+    expect(index.get("first")).toBe(first);
+    expect(index.get("second")).toBe(second);
+    expect(index.has("missing")).toBe(false);
+  });
+
+  it("returns known parent and child txids", () => {
+    const parent = tx({ txid: "parent" });
+    const child = tx({
+      txid: "child",
+      inputs: [
+        { previous_outpoint: "parent:0" },
+        { previous_outpoint: "missing-parent:0" },
+      ],
+    });
+
+    const transactions = [parent, child];
+
+    expect(getKnownParentTxids(child, transactions)).toEqual(["parent"]);
+    expect(getKnownChildTxids(parent, transactions)).toEqual(["child"]);
+    expect(getKnownChildTxids(child, transactions)).toEqual([]);
   });
 
   it("detects CPFP child and rate-bumped parent by fee-rate relationship", () => {

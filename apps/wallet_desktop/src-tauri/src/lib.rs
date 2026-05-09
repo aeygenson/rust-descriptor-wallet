@@ -27,6 +27,7 @@ pub fn run() {
             commands::wallet::get_wallet_status,
             commands::wallet::sync_wallet,
             commands::wallet::backend_health,
+            commands::wallet::get_receive_address,
             commands::utxos::list_utxos,
             commands::transactions::list_transactions,
             commands::send::create_psbt,

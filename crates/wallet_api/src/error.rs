@@ -73,6 +73,12 @@ pub enum WalletApiError {
     #[error("fee bump build failed: {0}")]
     FeeBumpBuildFailed(String),
 
+    #[error("selection failed: {0}")]
+    SelectionFailed(String),
+
+    #[error("unsupported operation: {0}")]
+    NotImplemented(String),
+
     #[error("cpfp build failed: {0}")]
     CpfpBuildFailed(String),
 
@@ -220,6 +226,30 @@ impl From<WalletCoreError> for WalletApiError {
             WalletCoreError::InvalidConfig(s) => {
                 WalletApiError::InvalidInput(s)
             }
+            WalletCoreError::InvalidState(s) => {
+                WalletApiError::InvalidInput(s)
+            }
+            WalletCoreError::InvalidTxid(s) => {
+                WalletApiError::InvalidInput(format!("invalid txid: {}", s))
+            }
+            WalletCoreError::InvalidOutpoint(s) => {
+                WalletApiError::InvalidInput(format!("invalid outpoint: {}", s))
+            }
+            WalletCoreError::InvalidVsize(s) => {
+                WalletApiError::InvalidInput(format!("invalid vsize: {}", s))
+            }
+            WalletCoreError::InvalidBlockHeight(s) => {
+                WalletApiError::InvalidInput(format!("invalid block height: {}", s))
+            }
+            WalletCoreError::InvalidPercent(s) => {
+                WalletApiError::InvalidInput(format!("invalid percent: {}", s))
+            }
+            WalletCoreError::InvalidPsbtBase64(s) => {
+                WalletApiError::InvalidInput(format!("invalid psbt base64: {}", s))
+            }
+            WalletCoreError::InvalidTxHex(s) => {
+                WalletApiError::InvalidInput(format!("invalid transaction hex: {}", s))
+            }
             WalletCoreError::CoinControlOutpointNotFound(s) => {
                 WalletApiError::InvalidInput(format!("coin control outpoint not found: {}", s))
             }
@@ -237,6 +267,19 @@ impl From<WalletCoreError> for WalletApiError {
             }
             WalletCoreError::CoinControlInvalidOutpoint(s) => {
                 WalletApiError::InvalidInput(format!("invalid coin control outpoint: {}", s))
+            }
+            WalletCoreError::CoinControlStrictModeViolation => {
+                WalletApiError::InvalidInput(
+                    "coin control strict manual mode requires explicit selected inputs".to_string(),
+                )
+            }
+            WalletCoreError::SelectionFailed(s) => {
+                WalletApiError::SelectionFailed(s)
+            }
+            WalletCoreError::SendMaxAmountTooSmall => {
+                WalletApiError::InvalidInput(
+                    "send max amount is too small after fees".to_string(),
+                )
             }
             WalletCoreError::CoinControlInsufficientSelectedFunds { selected_sat, required_sat, fee_estimate_sat } => {
                 WalletApiError::InvalidInput(format!(
@@ -280,7 +323,147 @@ impl From<WalletCoreError> for WalletApiError {
                     "consolidation error: no eligible UTXOs remain after applying the current filters and strategy".to_string(),
                 )
             }
-            other => WalletApiError::Core(other),
+            WalletCoreError::CpfpEmptyParentTxid => {
+                WalletApiError::InvalidInput("cpfp parent txid is empty".to_string())
+            }
+            WalletCoreError::CpfpNoCandidateUtxo(txid) => {
+                WalletApiError::InvalidInput(format!(
+                    "cpfp error: no candidate child UTXO found for parent {}",
+                    txid
+                ))
+            }
+            WalletCoreError::CpfpParentNotFound(txid) => {
+                WalletApiError::TransactionNotFound(txid)
+            }
+            WalletCoreError::CpfpParentAlreadyConfirmed(txid) => {
+                WalletApiError::TransactionAlreadyConfirmed(txid)
+            }
+            WalletCoreError::CpfpInsufficientValue(reason) => {
+                WalletApiError::InvalidInput(format!("cpfp insufficient value: {}", reason))
+            }
+            WalletCoreError::TransactionFeeUnavailable { txid, reason } => {
+                WalletApiError::InvalidInput(format!(
+                    "transaction fee unavailable for {}: {}",
+                    txid, reason
+                ))
+            }
+            WalletCoreError::TransactionVsizeUnavailable(txid) => {
+                WalletApiError::InvalidInput(format!(
+                    "transaction vsize unavailable for {}",
+                    txid
+                ))
+            }
+            WalletCoreError::Store(s) => {
+                WalletApiError::InvalidInput(format!("wallet persistence error: {}", s))
+            }
+            WalletCoreError::StoreWithDump(s) => {
+                WalletApiError::InvalidInput(format!("wallet persistence error: {}", s))
+            }
+            WalletCoreError::Load(s) => {
+                WalletApiError::InvalidInput(format!("wallet persistence load error: {}", s))
+            }
+            WalletCoreError::Create(s) => {
+                WalletApiError::InvalidInput(format!("wallet persistence create error: {}", s))
+            }
+            WalletCoreError::Persist(s) => {
+                WalletApiError::InvalidInput(format!("wallet persistence save error: {}", s))
+            }
+            WalletCoreError::NotImplemented(s) => {
+                WalletApiError::NotImplemented(s)
+            }
+        }
+    }
+}
+
+impl WalletApiError {
+    pub fn category(&self) -> &'static str {
+        match self {
+            Self::Core(core) => core.category().as_str(),
+            Self::Storage(_) => "persistence",
+            Self::BroadcastTransport(_)
+            | Self::Sync(_)
+            | Self::InvalidBackend(_)
+            | Self::BackendUnavailable(_)
+            | Self::BackendHealth(_) => "backend",
+            Self::BroadcastFailed(_)
+            | Self::BroadcastMempoolConflict(_)
+            | Self::BroadcastAlreadyConfirmed(_)
+            | Self::BroadcastMissingInputs(_)
+            | Self::BroadcastInsufficientFee(_) => "broadcast",
+            Self::InvalidInput(_)
+            | Self::InvalidAmount
+            | Self::InvalidFeeRate
+            | Self::InvalidDestinationAddress(_)
+            | Self::DestinationNetworkMismatch(_)
+            | Self::SelectionFailed(_) => "validation",
+            Self::TransactionNotFound(_)
+            | Self::TransactionAlreadyConfirmed(_)
+            | Self::TransactionNotReplaceable(_) => "transaction",
+            Self::FeeRateTooLowForBump { .. }
+            | Self::FeeBumpBuildFailed(_)
+            | Self::FeeCalculationFailedWithReason(_)
+            | Self::FeeCalculationFailed => "fee",
+            Self::CpfpBuildFailed(_) => "cpfp",
+            Self::PsbtBuildFailed(_)
+            | Self::InvalidPsbtEncoding(_)
+            | Self::InvalidPsbtStructure(_)
+            | Self::InvalidPsbtSemantic(_)
+            | Self::InvalidPsbt(_)
+            | Self::SignPsbtFailed(_)
+            | Self::WatchOnlyCannotSign
+            | Self::PsbtNotFinalized
+            | Self::SendNotFinalized
+            | Self::ExtractTxFailed(_) => "psbt",
+            Self::NotFound(_) => "not-found",
+            Self::NotImplemented(_) => "unsupported",
+        }
+    }
+
+    pub fn recovery(&self) -> &'static str {
+        match self {
+            Self::Core(core) => core.recovery().as_str(),
+            Self::BroadcastTransport(_)
+            | Self::Sync(_)
+            | Self::BackendUnavailable(_)
+            | Self::BackendHealth(_)
+            | Self::Storage(_) => "retry",
+            Self::TransactionNotFound(_)
+            | Self::BroadcastMissingInputs(_) => "refresh-state",
+            Self::InvalidInput(_)
+            | Self::InvalidAmount
+            | Self::InvalidFeeRate
+            | Self::InvalidDestinationAddress(_)
+            | Self::DestinationNetworkMismatch(_)
+            | Self::FeeRateTooLowForBump { .. }
+            | Self::TransactionAlreadyConfirmed(_)
+            | Self::TransactionNotReplaceable(_)
+            | Self::PsbtNotFinalized
+            | Self::SendNotFinalized
+            | Self::SelectionFailed(_) => "user-action",
+            Self::WatchOnlyCannotSign | Self::InvalidBackend(_) => "fix-configuration",
+            Self::NotImplemented(_) => "unsupported",
+            _ => "fatal",
+        }
+    }
+
+    pub fn severity(&self) -> &'static str {
+        match self {
+            Self::Core(core) => core.severity().as_str(),
+            Self::InvalidInput(_)
+            | Self::InvalidAmount
+            | Self::InvalidFeeRate
+            | Self::InvalidDestinationAddress(_)
+            | Self::DestinationNetworkMismatch(_)
+            | Self::SelectionFailed(_)
+            | Self::NotImplemented(_) => "info",
+            Self::BroadcastTransport(_)
+            | Self::Sync(_)
+            | Self::BackendUnavailable(_)
+            | Self::BackendHealth(_)
+            | Self::Storage(_)
+            | Self::TransactionNotFound(_)
+            | Self::BroadcastMissingInputs(_) => "warning",
+            _ => "error",
         }
     }
 }

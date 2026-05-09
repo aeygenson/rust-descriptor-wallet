@@ -1,12 +1,17 @@
 import type { WalletUtxoDto } from "../../shared/types/dtos";
-import type { UtxoOutpoint, UtxoSelectionSummary } from "./types";
+import type {
+  UtxoFilterState,
+  UtxoOutpoint,
+  UtxoSelectionPreview,
+  UtxoSelectionSummary,
+} from "./types";
 
 export function getUtxoOutpoint(utxo: WalletUtxoDto): UtxoOutpoint {
   return String(utxo.outpoint);
 }
 
 export function getUtxoValueSat(utxo: WalletUtxoDto): number {
-  const value = Number(utxo.value ?? 0);
+  const value = Number(utxo.value_sat ?? 0);
   return Number.isFinite(value) ? value : 0;
 }
 
@@ -52,6 +57,49 @@ export function filterConfirmedUtxos(utxos: WalletUtxoDto[]): WalletUtxoDto[] {
   return utxos.filter(isUtxoConfirmed);
 }
 
+export function filterUtxos(
+  utxos: WalletUtxoDto[],
+  filter: UtxoFilterState
+): WalletUtxoDto[] {
+  const search = filter.search?.trim().toLowerCase() ?? "";
+
+  return utxos.filter((utxo) => {
+    const valueSat = getUtxoValueSat(utxo);
+    const confirmed = isUtxoConfirmed(utxo);
+    const outpoint = getUtxoOutpoint(utxo).toLowerCase();
+
+    if (filter.status === "confirmed" && !confirmed) {
+      return false;
+    }
+
+    if (filter.status === "pending" && confirmed) {
+      return false;
+    }
+
+    if (
+      filter.minValueSat !== null &&
+      filter.minValueSat !== undefined &&
+      valueSat < filter.minValueSat
+    ) {
+      return false;
+    }
+
+    if (
+      filter.maxValueSat !== null &&
+      filter.maxValueSat !== undefined &&
+      valueSat > filter.maxValueSat
+    ) {
+      return false;
+    }
+
+    if (search && !outpoint.includes(search)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
 export function buildUtxoSelectionSummary(
   utxos: WalletUtxoDto[],
   selectedOutpoints: UtxoOutpoint[]
@@ -82,6 +130,21 @@ export function buildUtxoSelectionSummary(
   return summary;
 }
 
+export function buildUtxoSelectionPreview(
+  utxos: WalletUtxoDto[],
+  selectedOutpoints: UtxoOutpoint[]
+): UtxoSelectionPreview {
+  const selectedOutpointsNormalized = getValidSelectedOutpoints(utxos, selectedOutpoints);
+  const selectedSummary = buildUtxoSelectionSummary(utxos, selectedOutpointsNormalized);
+
+  return {
+    selectedOutpoints: selectedOutpointsNormalized,
+    selectedValueSat: selectedSummary.selectedValueSat,
+    selectedCount: selectedSummary.selectedCount,
+    confirmedOnly: selectedSummary.unconfirmedCount === 0,
+  };
+}
+
 export function getValidSelectedOutpoints(
   utxos: WalletUtxoDto[],
   selectedOutpoints: UtxoOutpoint[]
@@ -94,6 +157,17 @@ export function getValidSelectedOutpoints(
     seen.add(outpoint);
     return true;
   });
+}
+
+export function getConfirmedSelectedOutpoints(
+  utxos: WalletUtxoDto[],
+  selectedOutpoints: UtxoOutpoint[]
+): UtxoOutpoint[] {
+  const confirmedSet = new Set(filterConfirmedUtxos(utxos).map(getUtxoOutpoint));
+
+  return getValidSelectedOutpoints(utxos, selectedOutpoints).filter((outpoint) =>
+    confirmedSet.has(outpoint)
+  );
 }
 
 export function toggleSelectedOutpoint(
@@ -115,7 +189,7 @@ export function areAllVisibleUtxosSelected(
 ): boolean {
   if (utxos.length === 0) return false;
 
-  const selectedSet = new Set(selectedOutpoints);
+  const selectedSet = new Set(normalizeSelectedOutpoints(selectedOutpoints));
   return utxos.every((utxo) => selectedSet.has(getUtxoOutpoint(utxo)));
 }
 
@@ -125,6 +199,6 @@ export function areSomeVisibleUtxosSelected(
 ): boolean {
   if (utxos.length === 0) return false;
 
-  const selectedSet = new Set(selectedOutpoints);
+  const selectedSet = new Set(normalizeSelectedOutpoints(selectedOutpoints));
   return utxos.some((utxo) => selectedSet.has(getUtxoOutpoint(utxo)));
 }

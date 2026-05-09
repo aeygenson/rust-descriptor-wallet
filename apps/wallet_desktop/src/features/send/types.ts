@@ -134,7 +134,10 @@ export type CreateSweepPsbtInput = {
   coinControl: CoinControlSelection;
 };
 
-export type ConsolidationStrategy = "largest-first" | "smallest-first" | "oldest-first";
+export type ConsolidationStrategy =
+  | "largest-first"
+  | "smallest-first"
+  | "oldest-first";
 
 export type ConsolidationSelection = CoinControlSelection & {
   maxInputCount?: number | null;
@@ -161,6 +164,7 @@ export type BumpFeePsbtInput = {
 export type CpfpPsbtInput = {
   walletName: string;
   parentTxid: string;
+  selectedOutpoint: string;
   feeRateSatPerVb: number;
 };
 
@@ -196,13 +200,25 @@ export type SendFlowState =
   | { type: "preview"; psbt: WalletPsbtDto }
   | { type: "error"; message: string };
 
+// Helper for wallet-scoped send forms
+export function requireWalletName(walletName: string): string {
+  const trimmed = walletName.trim();
+
+  if (!trimmed) {
+    throw new Error("Wallet name is required");
+  }
+
+  return trimmed;
+}
+
 // Helper to convert form → backend input
 export function toCreatePsbtInput(
   form: FixedSendFormState,
-  walletName: string
+  walletName: string,
 ): CreatePsbtInput {
   const amountSat = Number(form.amountSat);
   const feeRateSatPerVb = Number(form.feeRateSatPerVb);
+  const normalizedWalletName = requireWalletName(walletName);
 
   if (!form.toAddress.trim()) {
     throw new Error("Address is required");
@@ -217,7 +233,7 @@ export function toCreatePsbtInput(
   }
 
   return {
-    walletName,
+    walletName: normalizedWalletName,
     toAddress: form.toAddress.trim(),
     amountSat,
     feeRateSatPerVb,
@@ -228,9 +244,10 @@ export function toCreatePsbtInput(
 
 export function toCreateSendMaxPsbtInput(
   form: SendMaxFormState,
-  walletName: string
+  walletName: string,
 ): CreateSendMaxPsbtInput {
   const feeRateSatPerVb = Number(form.feeRateSatPerVb);
+  const normalizedWalletName = requireWalletName(walletName);
 
   if (!form.toAddress.trim()) {
     throw new Error("Address is required");
@@ -241,7 +258,7 @@ export function toCreateSendMaxPsbtInput(
   }
 
   return {
-    walletName,
+    walletName: normalizedWalletName,
     toAddress: form.toAddress.trim(),
     feeRateSatPerVb,
     replaceable: form.replaceable,
@@ -251,9 +268,10 @@ export function toCreateSendMaxPsbtInput(
 export function toCreateSweepPsbtInput(
   form: SweepFormState,
   walletName: string,
-  coinControl: CoinControlSelection
+  coinControl: CoinControlSelection,
 ): CreateSweepPsbtInput {
   const feeRateSatPerVb = Number(form.feeRateSatPerVb);
+  const normalizedWalletName = requireWalletName(walletName);
 
   if (!form.toAddress.trim()) {
     throw new Error("Address is required");
@@ -268,7 +286,7 @@ export function toCreateSweepPsbtInput(
   }
 
   return {
-    walletName,
+    walletName: normalizedWalletName,
     toAddress: form.toAddress.trim(),
     feeRateSatPerVb,
     replaceable: form.replaceable,
@@ -279,9 +297,10 @@ export function toCreateSweepPsbtInput(
 export function toCreateConsolidationPsbtInput(
   form: ConsolidationFormState,
   walletName: string,
-  consolidation: ConsolidationSelection
+  consolidation: ConsolidationSelection,
 ): CreateConsolidationPsbtInput {
   const feeRateSatPerVb = Number(form.feeRateSatPerVb);
+  const normalizedWalletName = requireWalletName(walletName);
 
   if (!Number.isFinite(feeRateSatPerVb) || feeRateSatPerVb <= 0) {
     throw new Error("Invalid fee rate");
@@ -292,7 +311,7 @@ export function toCreateConsolidationPsbtInput(
   }
 
   return {
-    walletName,
+    walletName: normalizedWalletName,
     feeRateSatPerVb,
     replaceable: form.replaceable,
     consolidation,

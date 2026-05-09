@@ -1,6 +1,11 @@
 use tauri::{command, State};
 use wallet_api::{
-    model::{WalletBackendHealthDto, WalletStatusDto, WalletSummaryDto},
+    model::{
+        WalletBackendHealthDto,
+        WalletReceiveAddressDto,
+        WalletStatusDto,
+        WalletSummaryDto,
+    },
     WalletApi,
 };
 /// Returns a simple string to verify that the Rust backend is connected.
@@ -14,34 +19,48 @@ pub async fn list_wallets(api: State<'_, WalletApi>) -> Result<Vec<WalletSummary
     api.list_wallets().await.map_err(|err| err.to_string())
 }
 
+#[allow(non_snake_case)]
 #[command]
 pub async fn get_wallet_status(
     api: State<'_, WalletApi>,
-    wallet_name: String,
+    walletName: String,
 ) -> Result<WalletStatusDto, String> {
-    api.status(&wallet_name)
+    api.status(&walletName)
         .await
         .map_err(|err| err.to_string())
 }
+#[allow(non_snake_case)]
 #[command]
 pub async fn sync_wallet(
     api: State<'_, WalletApi>,
-    wallet_name: String,
+    walletName: String,
 ) -> Result<WalletStatusDto, String> {
-    api.sync(&wallet_name)
+    api.sync(&walletName)
         .await
         .map_err(|err| err.to_string())?;
-    api.status(&wallet_name)
+    api.status(&walletName)
         .await
         .map_err(|err| err.to_string())
 }
 
+#[allow(non_snake_case)]
 #[command]
 pub async fn backend_health(
     api: State<'_, WalletApi>,
-    wallet_name: String,
+    walletName: String,
 ) -> Result<WalletBackendHealthDto, String> {
-    api.backend_health(&wallet_name)
+    api.backend_health(&walletName)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn get_receive_address(
+    api: State<'_, WalletApi>,
+    walletName: String,
+) -> Result<WalletReceiveAddressDto, String> {
+    api.address(&walletName)
         .await
         .map_err(|err| err.to_string())
 }

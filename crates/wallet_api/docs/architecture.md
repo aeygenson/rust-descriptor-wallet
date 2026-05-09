@@ -19,28 +19,33 @@ crates/wallet_api/
 │       ├── registry.rs
 │       └── wallet.rs
 └── tests/
+    ├── common/
+    ├── consolidation.rs
+    ├── cpfp.rs
+    ├── psbt_coin_control.rs
+    ├── rbf.rs
     ├── regtest_flow.rs
-    └── support/
-        └── mod.rs
+    ├── send_max.rs
+    └── sweep.rs
 ```
 
 ## Module Responsibilities
 
-`api.rs` exposes the public `WalletApi` facade. It keeps caller methods small and delegates to service modules.
+`api.rs` exposes the public `WalletApi` facade. It keeps caller methods small, normalizes convenience arguments into canonical request DTOs, and delegates to service modules.
 
-`model.rs` defines caller-facing DTOs, backend DTOs, selection-mode DTOs, and conversion helpers into wallet-core request types.
+`model.rs` defines caller-facing DTOs, canonical request DTOs, backend DTOs, selection-mode DTOs, and conversion helpers into wallet-core request types.
 
 `error.rs` defines `WalletApiError` and maps `wallet_core`, `wallet_sync`, and `wallet_storage` failures into API-level categories.
 
 `factory.rs` builds a default `WalletApi` with shared `WalletCore`, `WalletStorage`, and `WalletSyncService` dependencies.
 
-`service/registry.rs` handles imported wallet metadata through `wallet_storage`.
+`service/registry.rs` handles imported wallet metadata through `wallet_storage` using canonical request DTOs such as `ImportWalletRequestDto`, `DeleteWalletRequestDto`, and `GetWalletRequestDto`.
 
-`service/wallet.rs` loads stored wallet configuration, converts backend settings into `WalletConfig`, and handles address, sync, balance, and status operations.
+`service/wallet.rs` loads stored wallet configuration, converts backend settings into `WalletConfig`, and handles address, sync, backend-health, balance, and status operations through canonical wallet-state request DTOs.
 
-`service/inspect.rs` loads wallet state and returns transaction or UTXO DTOs. It does not perform network calls; callers should run `sync_wallet` first when they need fresh chain data.
+`service/inspect.rs` loads wallet state and returns transaction or UTXO DTOs. It does not perform network calls; callers should run `sync` first when they need fresh chain data. Inspection reads are keyed by canonical request DTOs such as `WalletTransactionsRequestDto` and `WalletUtxosRequestDto`.
 
-`service/psbt.rs` owns transaction orchestration: fixed sends, coin control, send-max, sweep, consolidation, signing, publishing, RBF, and CPFP.
+`service/psbt.rs` owns transaction orchestration: fixed sends, coin control, send-max, sweep, consolidation, signing, publishing, RBF, and CPFP. All entry points are request-DTO based, which keeps PSBT orchestration signatures stable as features evolve.
 
 ## Request Flow
 
@@ -48,7 +53,8 @@ Typical request flow:
 
 ```text
 caller
-  -> WalletApi method
+  -> WalletApi method or direct request DTO
+  -> canonical request DTO
   -> DTO parsing and validation
   -> service module
   -> wallet_storage / wallet_sync / wallet_core
@@ -73,4 +79,4 @@ The regtest integration tests run the API through a single-threaded test harness
 
 `wallet_storage` owns persisted wallet metadata.
 
-`wallet_cli` and future `wallet_desktop` should remain thin callers over this API.
+`wallet_cli` and `wallet_desktop` should remain thin callers over this API.

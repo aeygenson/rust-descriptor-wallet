@@ -1,8 +1,11 @@
 use serde::{Deserialize, Serialize};
 use wallet_core::error::WalletCoreError;
 use wallet_core::model::{
-    WalletCoinControlInfo, WalletConsolidationInfo, WalletCpfpPsbtInfo, WalletInputSelectionConfig,
-    WalletInputSelectionMode, WalletPsbtInfo, WalletSignedPsbtInfo, WalletTxInfo, WalletUtxoInfo,
+    WalletBackendCapabilities, WalletBroadcastCandidateInfo, WalletCoinControlInfo,
+    WalletConsolidationInfo, WalletConsolidationStrategy, WalletCpfpPsbtInfo,
+    WalletInputSelectionConfig, WalletInputSelectionMode, WalletPsbtInfo,
+    WalletReceiveAddressInfo, WalletReplacementInfo, WalletSelectionResult, WalletSignedPsbtInfo,
+    WalletTxInfo, WalletUtxoInfo,
 };
 use wallet_core::types::WalletOutPoint;
 
@@ -100,6 +103,7 @@ pub struct WalletUtxoDto {
     pub confirmation_height: Option<u32>,
     pub address: Option<String>,
     pub keychain: String,
+    pub derivation_index: Option<u32>,
 }
 
 // Conversion from core model
@@ -112,6 +116,7 @@ impl From<WalletUtxoInfo> for WalletUtxoDto {
             confirmation_height: value.confirmation_height.map(|h| h.as_u32()),
             address: value.address,
             keychain: value.keychain.as_str().to_string(),
+            derivation_index: value.derivation_index.map(|index| index.as_u32()),
         }
     }
 }
@@ -222,6 +227,48 @@ impl WalletCoinControlDto {
     }
 }
 
+/// Canonical request DTO for creating a standard payment PSBT.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePsbtRequestDto {
+    pub name: String,
+    pub to_address: String,
+    pub amount_sat: u64,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub coin_control: Option<WalletCoinControlDto>,
+}
+
+/// Canonical request DTO for creating and broadcasting a standard payment.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendRequestDto {
+    pub name: String,
+    pub to_address: String,
+    pub amount_sat: u64,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub coin_control: Option<WalletCoinControlDto>,
+}
+
+/// Canonical request DTO for send-max PSBT and broadcast flows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SendMaxRequestDto {
+    pub name: String,
+    pub to_address: String,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub coin_control: Option<WalletCoinControlDto>,
+}
+
+/// Canonical request DTO for sweep PSBT and broadcast flows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SweepRequestDto {
+    pub name: String,
+    pub to_address: String,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub coin_control: WalletCoinControlDto,
+}
+
 /// DTO strategy used when automatically selecting UTXOs for consolidation.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
@@ -307,6 +354,46 @@ impl WalletConsolidationDto {
     }
 }
 
+/// Canonical request DTO for consolidation PSBT and broadcast flows.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsolidationRequestDto {
+    pub name: String,
+    pub fee_rate_sat_per_vb: u64,
+    pub replaceable: bool,
+    pub consolidation: WalletConsolidationDto,
+}
+
+/// Canonical request DTO for signing a PSBT.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignPsbtRequestDto {
+    pub name: String,
+    pub psbt_base64: String,
+}
+
+/// Canonical request DTO for publishing a finalized PSBT.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PublishPsbtRequestDto {
+    pub name: String,
+    pub psbt_base64: String,
+}
+
+/// Canonical request DTO for creating an RBF replacement PSBT.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BumpFeeRequestDto {
+    pub name: String,
+    pub txid: String,
+    pub fee_rate_sat_per_vb: u64,
+}
+
+/// Canonical request DTO for creating a CPFP child PSBT.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CpfpRequestDto {
+    pub name: String,
+    pub parent_txid: String,
+    pub selected_outpoint: String,
+    pub fee_rate_sat_per_vb: u64,
+}
+
 fn parse_outpoints(
     outpoints: Vec<String>,
     field_name: &str,
@@ -321,12 +408,173 @@ fn parse_outpoints(
         .collect()
 }
 
+/// Canonical request DTO for reading wallet transactions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletTransactionsRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for reading wallet UTXOs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletUtxosRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for revealing the next receive address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletAddressRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for importing a wallet from a JSON file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportWalletRequestDto {
+    pub file_path: String,
+}
+
+/// Canonical request DTO for deleting a wallet.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteWalletRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for retrieving wallet details.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetWalletRequestDto {
+    pub name: String,
+}
+
+/// API DTO for a generated or discovered receive address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletReceiveAddressDto {
+    pub address: String,
+    pub keychain: String,
+    pub index: Option<u32>,
+}
+
+impl From<WalletReceiveAddressInfo> for WalletReceiveAddressDto {
+    fn from(info: WalletReceiveAddressInfo) -> Self {
+        Self {
+            address: info.address,
+            keychain: info.keychain.as_str().to_string(),
+            index: info.index.map(|i| i.as_u32()),
+        }
+    }
+}
+
+/// API DTO for rich input-selection metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletSelectionResultDto {
+    pub selected_outpoints: Vec<String>,
+    pub auto_selected_count: usize,
+    pub manual_selected_count: usize,
+    pub excluded_count: usize,
+    pub strategy_used: Option<String>,
+}
+
+impl From<WalletSelectionResult> for WalletSelectionResultDto {
+    fn from(info: WalletSelectionResult) -> Self {
+        Self {
+            selected_outpoints: info
+                .selected_outpoints
+                .into_iter()
+                .map(|op| op.to_string())
+                .collect(),
+            auto_selected_count: info.auto_selected_count,
+            manual_selected_count: info.manual_selected_count,
+            excluded_count: info.excluded_count,
+            strategy_used: info.strategy_used.map(consolidation_strategy_to_string),
+        }
+    }
+}
+
+fn consolidation_strategy_to_string(strategy: WalletConsolidationStrategy) -> String {
+    match strategy {
+        WalletConsolidationStrategy::SmallestFirst => "smallest-first".to_string(),
+        WalletConsolidationStrategy::LargestFirst => "largest-first".to_string(),
+        WalletConsolidationStrategy::OldestFirst => "oldest-first".to_string(),
+    }
+}
+
+/// API DTO for backend capability metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletBackendCapabilitiesDto {
+    pub can_sync: bool,
+    pub can_broadcast: bool,
+    pub supports_fee_estimates: bool,
+    pub supports_mempool: bool,
+}
+
+impl From<WalletBackendCapabilities> for WalletBackendCapabilitiesDto {
+    fn from(info: WalletBackendCapabilities) -> Self {
+        Self {
+            can_sync: info.can_sync,
+            can_broadcast: info.can_broadcast,
+            supports_fee_estimates: info.supports_fee_estimates,
+            supports_mempool: info.supports_mempool,
+        }
+    }
+}
+
+/// API DTO for richer broadcast candidate analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletBroadcastCandidateDto {
+    pub txid: String,
+    pub tx_hex: String,
+    pub replaceable: bool,
+    pub fee: Option<u64>,
+    pub fee_rate_sat_per_vb: Option<u64>,
+    pub vsize: Option<u64>,
+    pub ancestor_count: Option<u32>,
+    pub descendant_count: Option<u32>,
+}
+
+impl From<WalletBroadcastCandidateInfo> for WalletBroadcastCandidateDto {
+    fn from(info: WalletBroadcastCandidateInfo) -> Self {
+        Self {
+            txid: info.txid.to_string(),
+            tx_hex: info.tx_hex.to_string(),
+            replaceable: info.replaceable,
+            fee: info.fee.map(|f| f.as_u64()),
+            fee_rate_sat_per_vb: info.fee_rate.map(|f| f.as_u64()),
+            vsize: info.vsize.map(|v| v.as_u64()),
+            ancestor_count: info.ancestor_count,
+            descendant_count: info.descendant_count,
+        }
+    }
+}
+
+/// API DTO for RBF/replacement transaction lineage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletReplacementDto {
+    pub replaced_txid: String,
+    pub replacement_txid: String,
+    pub replacement_depth: u32,
+    pub replacement_chain: Vec<String>,
+}
+
+impl From<WalletReplacementInfo> for WalletReplacementDto {
+    fn from(info: WalletReplacementInfo) -> Self {
+        Self {
+            replaced_txid: info.replaced_txid.to_string(),
+            replacement_txid: info.replacement_txid.to_string(),
+            replacement_depth: info.replacement_depth,
+            replacement_chain: info
+                .replacement_chain
+                .into_iter()
+                .map(|txid| txid.to_string())
+                .collect(),
+        }
+    }
+}
+
 /// PSBT information for unsigned transaction creation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletPsbtDto {
     pub psbt_base64: String,
     pub txid: String,
     pub original_txid: Option<String>,
+    pub replacement: Option<WalletReplacementDto>,
     pub to_address: String,
     pub amount_sat: u64,
     pub fee_sat: u64,
@@ -347,6 +595,7 @@ impl From<WalletPsbtInfo> for WalletPsbtDto {
             psbt_base64: value.psbt_base64.to_string(),
             txid: value.txid.to_string(),
             original_txid: value.original_txid.map(|txid| txid.to_string()),
+            replacement: value.replacement.map(Into::into),
             to_address: value.to_address,
             amount_sat: value.amount_sat.as_u64(),
             fee_sat: value.fee_sat.as_u64(),
@@ -430,7 +679,7 @@ pub struct TxBroadcastResultDto {
     pub replaceable: Option<bool>,
 }
 
-/// Import wallet request (from JSON or CLI)
+/// Full wallet import payload (the JSON file content used by storage import/export flows).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportWalletDto {
     pub name: String,

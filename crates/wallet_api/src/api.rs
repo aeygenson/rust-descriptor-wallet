@@ -6,9 +6,13 @@ use crate::service::{inspect, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
-    TxBroadcastResultDto, WalletBackendHealthDto, WalletCoinControlDto, WalletConsolidationDto,
-    WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto, WalletSignedPsbtDto, WalletStatusDto,
-    WalletSummaryDto, WalletTxDto, WalletUtxoDto,
+    BumpFeeRequestDto, ConsolidationRequestDto, CpfpRequestDto, CreatePsbtRequestDto,
+    DeleteWalletRequestDto, GetWalletRequestDto, ImportWalletRequestDto, PublishPsbtRequestDto,
+    SendMaxRequestDto, SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto,
+    WalletAddressRequestDto, WalletBackendHealthDto, WalletCoinControlDto,
+    WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto,
+    WalletReceiveAddressDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
+    WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
 };
 
 use wallet_core::WalletCore;
@@ -18,7 +22,7 @@ use wallet_sync::WalletSyncService;
 #[derive(Debug)]
 pub struct WalletApi {
     core: Arc<WalletCore>,
-    storage: WalletStorage,
+    pub  storage: WalletStorage,
     sync: WalletSyncService,
 }
 
@@ -48,19 +52,43 @@ impl WalletApi {
     }
 
     pub async fn get_wallet(&self, name: &str) -> WalletApiResult<WalletDetailsDto> {
-        registry::get_wallet(&self.storage, name).await
+        registry::get_wallet(
+            &self.storage,
+            GetWalletRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn import_wallet(&self, file_path: &str) -> WalletApiResult<()> {
-        registry::import_wallet(&self.storage, file_path).await
+        registry::import_wallet(
+            &self.storage,
+            ImportWalletRequestDto {
+                file_path: file_path.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn delete_wallet(&self, name: &str) -> WalletApiResult<()> {
-        registry::delete_wallet(&self.storage, name).await
+        registry::delete_wallet(
+            &self.storage,
+            DeleteWalletRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
     }
 
-    pub async fn address(&self, name: &str) -> WalletApiResult<String> {
-        wallet::address(&self.storage, name).await
+    pub async fn address(&self, name: &str) -> WalletApiResult<WalletReceiveAddressDto> {
+        wallet::address(
+            &self.storage,
+            WalletAddressRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn sync(&self, name: &str) -> WalletApiResult<()> {
@@ -81,11 +109,23 @@ impl WalletApi {
     /// spendable outputs, allowing the UI to inspect parent/child relationships
     /// and derive CPFP candidate outpoints without guessing.
     pub async fn txs(&self, name: &str) -> WalletApiResult<Vec<WalletTxDto>> {
-        inspect::txs(&self.storage, name).await
+        inspect::txs(
+            &self.storage,
+            WalletTransactionsRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn utxos(&self, name: &str) -> WalletApiResult<Vec<WalletUtxoDto>> {
-        inspect::utxos(&self.storage, name).await
+        inspect::utxos(
+            &self.storage,
+            WalletUtxosRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn create_psbt(
@@ -107,14 +147,25 @@ impl WalletApi {
             confirmed_only,
         );
 
+        let coin_control = if confirmed_only {
+            Some(WalletCoinControlDto {
+                confirmed_only: true,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
         psbt::create(
             &self.storage,
-            name,
-            to_address,
-            amount_sat,
-            fee_rate_sat_per_vb,
-            replaceable,
-            confirmed_only,
+            CreatePsbtRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
+                amount_sat,
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control,
+            },
         )
         .await
     }
@@ -139,14 +190,16 @@ impl WalletApi {
             coin_control.selection_mode,
         );
 
-        psbt::create_with_coin_control(
+        psbt::create(
             &self.storage,
-            name,
-            to_address,
-            amount_sat,
-            fee_rate_sat_per_vb,
-            replaceable,
-            coin_control,
+            CreatePsbtRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
+                amount_sat,
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control: Some(coin_control),
+            },
         )
         .await
     }
@@ -165,10 +218,13 @@ impl WalletApi {
 
         psbt::create_send_max(
             &self.storage,
-            name,
-            to_address,
-            fee_rate_sat_per_vb,
-            replaceable,
+            SendMaxRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control: None,
+            },
         )
         .await
     }
@@ -191,13 +247,15 @@ impl WalletApi {
             coin_control.selection_mode,
         );
 
-        psbt::create_send_max_with_coin_control(
+        psbt::create_send_max(
             &self.storage,
-            name,
-            to_address,
-            fee_rate_sat_per_vb,
-            replaceable,
-            coin_control,
+            SendMaxRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control: Some(coin_control),
+            },
         )
         .await
     }
@@ -222,11 +280,13 @@ impl WalletApi {
 
         psbt::create_sweep(
             &self.storage,
-            name,
-            to_address,
-            fee_rate_sat_per_vb,
-            replaceable,
-            coin_control,
+            SweepRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
+                fee_rate_sat_per_vb,
+                replaceable,
+                coin_control,
+            },
         )
         .await
     }
@@ -254,10 +314,12 @@ impl WalletApi {
 
         psbt::create_consolidation(
             &self.storage,
-            name,
-            fee_rate_sat_per_vb,
-            replaceable,
-            consolidation,
+            ConsolidationRequestDto {
+                name: name.to_string(),
+                fee_rate_sat_per_vb,
+                replaceable,
+                consolidation,
+            },
         )
         .await
     }
@@ -280,11 +342,16 @@ impl WalletApi {
         replaceable: bool,
         consolidation: WalletConsolidationDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        let created = self
-            .create_consolidation_psbt(name, fee_rate_sat_per_vb, replaceable, consolidation)
-            .await?;
-
-        self.sign_and_publish(name, &created.psbt_base64).await
+        psbt::consolidate(
+            &self.storage,
+            ConsolidationRequestDto {
+                name: name.to_string(),
+                fee_rate_sat_per_vb,
+                replaceable,
+                consolidation,
+            },
+        )
+        .await
     }
 
     pub async fn consolidate(
@@ -306,17 +373,17 @@ impl WalletApi {
         replaceable: bool,
         coin_control: WalletCoinControlDto,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        let created = self
-            .create_sweep_psbt(
-                name,
-                to_address,
+        psbt::sweep(
+            &self.storage,
+            SweepRequestDto {
+                name: name.to_string(),
+                to_address: to_address.to_string(),
                 fee_rate_sat_per_vb,
                 replaceable,
                 coin_control,
-            )
-            .await?;
-
-        self.sign_and_publish(name, &created.psbt_base64).await
+            },
+        )
+        .await
     }
 
     pub async fn send_consolidation_psbt(
@@ -411,7 +478,14 @@ impl WalletApi {
         name: &str,
         psbt_base64: &str,
     ) -> WalletApiResult<WalletSignedPsbtDto> {
-        psbt::sign(&self.storage, name, psbt_base64).await
+        psbt::sign(
+            &self.storage,
+            SignPsbtRequestDto {
+                name: name.to_string(),
+                psbt_base64: psbt_base64.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn publish_psbt(
@@ -419,7 +493,14 @@ impl WalletApi {
         name: &str,
         psbt_base64: &str,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        psbt::publish(&self.storage, name, psbt_base64).await
+        psbt::publish(
+            &self.storage,
+            PublishPsbtRequestDto {
+                name: name.to_string(),
+                psbt_base64: psbt_base64.to_string(),
+            },
+        )
+        .await
     }
 
     pub async fn bump_fee_psbt(
@@ -428,7 +509,15 @@ impl WalletApi {
         txid: &str,
         fee_rate_sat_per_vb: u64,
     ) -> WalletApiResult<WalletPsbtDto> {
-        psbt::bump_fee_psbt(&self.storage, name, txid, fee_rate_sat_per_vb).await
+        psbt::bump_fee_psbt(
+            &self.storage,
+            BumpFeeRequestDto {
+                name: name.to_string(),
+                txid: txid.to_string(),
+                fee_rate_sat_per_vb,
+            },
+        )
+        .await
     }
 
     pub async fn bump_fee(
@@ -437,7 +526,15 @@ impl WalletApi {
         txid: &str,
         fee_rate_sat_per_vb: u64,
     ) -> WalletApiResult<TxBroadcastResultDto> {
-        psbt::bump_fee(&self.storage, name, txid, fee_rate_sat_per_vb).await
+        psbt::bump_fee(
+            &self.storage,
+            BumpFeeRequestDto {
+                name: name.to_string(),
+                txid: txid.to_string(),
+                fee_rate_sat_per_vb,
+            },
+        )
+        .await
     }
 
     /// Create a CPFP PSBT via the API boundary.
@@ -453,10 +550,12 @@ impl WalletApi {
     ) -> WalletApiResult<WalletCpfpPsbtDto> {
         psbt::cpfp_psbt(
             &self.storage,
-            name,
-            parent_txid,
-            selected_outpoint,
-            fee_rate_sat_per_vb,
+            CpfpRequestDto {
+                name: name.to_string(),
+                parent_txid: parent_txid.to_string(),
+                selected_outpoint: selected_outpoint.to_string(),
+                fee_rate_sat_per_vb,
+            },
         )
         .await
     }
@@ -470,10 +569,12 @@ impl WalletApi {
     ) -> WalletApiResult<TxBroadcastResultDto> {
         psbt::cpfp(
             &self.storage,
-            name,
-            parent_txid,
-            selected_outpoint,
-            fee_rate_sat_per_vb,
+            CpfpRequestDto {
+                name: name.to_string(),
+                parent_txid: parent_txid.to_string(),
+                selected_outpoint: selected_outpoint.to_string(),
+                fee_rate_sat_per_vb,
+            },
         )
         .await
     }

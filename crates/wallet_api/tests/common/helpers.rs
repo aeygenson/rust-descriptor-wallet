@@ -4,7 +4,8 @@ pub use test_support::mempool_contains;
 pub use test_support::wallet::{
     decode_psbt_inputs, outpoint_txid, parse_regtest_address, parse_txid,
 };
-use wallet_api::WalletApi;
+use wallet_api::model::{WalletAddressRequestDto, WalletUtxosRequestDto};
+use wallet_api::{service, WalletApi};
 
 use super::RegtestEnv;
 
@@ -17,35 +18,49 @@ pub async fn ensure_confirmed_wallet_utxos(
 ) -> anyhow::Result<Vec<(String, u64)>> {
     api.sync(wallet_name).await?;
 
-    let mut confirmed: Vec<(String, u64)> = api
-        .utxos(wallet_name)
-        .await?
-        .into_iter()
-        .map(|u| (u.outpoint, u.value, u.confirmed))
-        .filter(|(_, value, confirmed)| *confirmed && *value >= min_value_sat)
-        .map(|(outpoint, value, _)| (outpoint, value))
-        .collect();
+    let mut confirmed: Vec<(String, u64)> = service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: wallet_name.to_string(),
+        },
+    )
+    .await?
+    .into_iter()
+    .map(|u| (u.outpoint, u.value, u.confirmed))
+    .filter(|(_, value, confirmed)| *confirmed && *value >= min_value_sat)
+    .map(|(outpoint, value, _)| (outpoint, value))
+    .collect();
 
     if confirmed.len() < min_count {
         let missing = min_count - confirmed.len();
 
         for _ in 0..missing {
-            let addr = api.address(wallet_name).await?;
-            let addr = parse_regtest_address(&addr)?;
+            let receive_address = service::wallet::address(
+                &api.storage,
+                WalletAddressRequestDto {
+                    name: wallet_name.to_string(),
+                },
+            )
+            .await?;
+            let addr = parse_regtest_address(&receive_address.address)?;
             env.fund_sats(&addr, 100_000)?;
         }
 
         env.mine(1)?;
         api.sync(wallet_name).await?;
 
-        confirmed = api
-            .utxos(wallet_name)
-            .await?
-            .into_iter()
-            .map(|u| (u.outpoint, u.value, u.confirmed))
-            .filter(|(_, value, confirmed)| *confirmed && *value >= min_value_sat)
-            .map(|(outpoint, value, _)| (outpoint, value))
-            .collect();
+        confirmed = service::inspect::utxos(
+            &api.storage,
+            WalletUtxosRequestDto {
+                name: wallet_name.to_string(),
+            },
+        )
+        .await?
+        .into_iter()
+        .map(|u| (u.outpoint, u.value, u.confirmed))
+        .filter(|(_, value, confirmed)| *confirmed && *value >= min_value_sat)
+        .map(|(outpoint, value, _)| (outpoint, value))
+        .collect();
     }
 
     assert!(
@@ -67,18 +82,27 @@ pub async fn fund_exact_confirmed_wallet_utxos(
 ) -> anyhow::Result<(Vec<String>, Vec<(String, u64)>)> {
     api.sync(wallet_name).await?;
 
-    let preexisting_confirmed: Vec<String> = api
-        .utxos(wallet_name)
-        .await?
-        .into_iter()
-        .filter(|u| u.confirmed)
-        .map(|u| u.outpoint)
-        .collect();
+    let preexisting_wallet_outpoints: Vec<String> = service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: wallet_name.to_string(),
+        },
+    )
+    .await?
+    .into_iter()
+    .map(|u| u.outpoint)
+    .collect();
 
     let mut funding_txids = HashSet::new();
     for amount_sat in amounts_sat {
-        let addr = api.address(wallet_name).await?;
-        let addr = parse_regtest_address(&addr)?;
+        let receive_address = service::wallet::address(
+            &api.storage,
+            WalletAddressRequestDto {
+                name: wallet_name.to_string(),
+            },
+        )
+        .await?;
+        let addr = parse_regtest_address(&receive_address.address)?;
         let txid = env.fund_sats(&addr, *amount_sat)?;
         funding_txids.insert(txid.to_string());
     }
@@ -86,13 +110,17 @@ pub async fn fund_exact_confirmed_wallet_utxos(
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let funded: Vec<(String, u64)> = api
-        .utxos(wallet_name)
-        .await?
-        .into_iter()
-        .filter(|u| u.confirmed && funding_txids.contains(outpoint_txid(&u.outpoint)))
-        .map(|u| (u.outpoint, u.value))
-        .collect();
+    let funded: Vec<(String, u64)> = service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: wallet_name.to_string(),
+        },
+    )
+    .await?
+    .into_iter()
+    .filter(|u| u.confirmed && funding_txids.contains(outpoint_txid(&u.outpoint)))
+    .map(|u| (u.outpoint, u.value))
+    .collect();
 
     assert_eq!(
         funded.len(),
@@ -102,5 +130,5 @@ pub async fn fund_exact_confirmed_wallet_utxos(
         funded.len()
     );
 
-    Ok((preexisting_confirmed, funded))
+    Ok((preexisting_wallet_outpoints, funded))
 }

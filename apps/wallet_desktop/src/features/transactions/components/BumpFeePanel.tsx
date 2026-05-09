@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { BumpFeePanelProps } from "../types";
-import { shortTxid, formatFeeRate } from "../format";
+import {
+  fullTxid,
+  shortTxid,
+  formatFeeRate,
+  formatRelativeFeeRate,
+  formatRelativeFeeRatePercent,
+} from "../format";
 import {
   clampNumber,
   parsePositiveFeeRate,
@@ -21,7 +27,10 @@ export function BumpFeePanel({
 
   const currentFeeRate = tx.fee_rate_sat_per_vb ?? null;
 
-  const suggested = useMemo(() => suggestNextFeeRate(currentFeeRate), [currentFeeRate]);
+  const suggested = useMemo(
+    () => suggestNextFeeRate(currentFeeRate),
+    [currentFeeRate],
+  );
 
   useEffect(() => {
     // initialize input with suggestion when tx changes
@@ -43,7 +52,15 @@ export function BumpFeePanel({
   }, [feeRateInput]);
 
   const isHigherThanCurrentFeeRate =
-    parsedFeeRate !== null && (currentFeeRate === null || parsedFeeRate > currentFeeRate);
+    parsedFeeRate !== null &&
+    (currentFeeRate === null || parsedFeeRate > currentFeeRate);
+
+  const feeRateDelta = formatRelativeFeeRate(parsedFeeRate, currentFeeRate);
+  const feeRateDeltaPercent = formatRelativeFeeRatePercent(
+    parsedFeeRate,
+    currentFeeRate,
+  );
+  const txidTitle = fullTxid(tx.txid);
 
   const canSubmit = !loading && isHigherThanCurrentFeeRate;
 
@@ -51,7 +68,7 @@ export function BumpFeePanel({
     <div className="bump-fee">
       <div className="bump-fee__header">
         <div className="bump-fee__title">Bump Fee (RBF)</div>
-        <div className="bump-fee__txid" title={tx.txid}>
+        <div className="bump-fee__txid" title={txidTitle}>
           {shortTxid(tx.txid)}
         </div>
       </div>
@@ -67,6 +84,16 @@ export function BumpFeePanel({
         <div className="bump-fee__row">
           <span className="bump-fee__label">Suggested</span>
           <span className="bump-fee__value">{formatFeeRate(suggested)}</span>
+        </div>
+
+        <div className="bump-fee__row">
+          <span className="bump-fee__label">Delta</span>
+          <span className="bump-fee__value">
+            {feeRateDelta}
+            <span className="bump-fee__value-secondary">
+              {feeRateDeltaPercent}
+            </span>
+          </span>
         </div>
 
         <div className="bump-fee__field">
@@ -86,7 +113,12 @@ export function BumpFeePanel({
             disabled={loading}
           />
           <div className="field__hint">
-            Must be higher than current fee rate for RBF to be accepted.
+            RBF replacement must pay a higher fee rate than the current
+            transaction and remain valid under backend policy.
+          </div>
+          <div className="field__hint">
+            A replacement PSBT is created first so you can inspect it before
+            signing and broadcasting.
           </div>
           {parsedFeeRate !== null && !isHigherThanCurrentFeeRate && (
             <div className="field__error">
@@ -110,8 +142,13 @@ export function BumpFeePanel({
           type="button"
           className="primary-button"
           disabled={!canSubmit}
+          title={
+            canSubmit
+              ? "Create an unsigned RBF replacement PSBT"
+              : "Enter a fee rate higher than the current transaction fee rate"
+          }
           onClick={() => {
-            if (!parsedFeeRate) return;
+            if (parsedFeeRate === null) return;
             onCreatePsbt({
               walletName,
               txid: tx.txid,

@@ -1,14 +1,25 @@
 import {
   formatBooleanLabel,
   formatConfirmationHeight,
+  formatConfirmationState,
+  formatConfirmationStateClass,
   formatDirectionLabel,
   formatFeeRate,
   formatOwnershipLabel,
   formatSats,
+  formatSignedBtc,
   formatSignedSats,
+  fullOutpoint,
+  fullTxid,
+  shortOutpoint,
   shortTxid,
 } from "../format";
-import { extractParentTxids } from "../lib";
+import {
+  extractParentTxids,
+  getTransactionConfirmationState,
+  getTransactionDisplayDirection,
+  getTransactionNetAmountSat,
+} from "../lib";
 import type { TransactionDetailsModalProps } from "../types";
 import { TransactionIntentBadge } from "./TransactionIntentBadge";
 
@@ -18,43 +29,54 @@ export function TransactionDetailsModal({
   onClose,
   onOpenTx,
 }: TransactionDetailsModalProps) {
+  const confirmationState = getTransactionConfirmationState(tx);
+  const netAmountSat = getTransactionNetAmountSat(tx);
+  const parentTxids = extractParentTxids(tx);
+  const childTxids = tx.child_txids ?? [];
+  const hasParents = parentTxids.length > 0;
+  const hasChildren = childTxids.length > 0;
+
   return (
     <div className="transactions-details-overlay" onClick={onClose}>
       <div
         className="transactions-details-panel"
         onClick={(e) => e.stopPropagation()}
-        style={{ position: "relative" }}
       >
         <div className="transactions-details-header">
           <h2>Transaction details</h2>
           <button
             type="button"
+            className="transactions-details-close"
             onClick={onClose}
             aria-label="Close transaction details"
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              background: "transparent",
-              border: "none",
-              color: "#e5e7eb",
-              fontSize: 20,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
           >
             ✕
           </button>
         </div>
 
         <div className="transactions-details-grid">
-          <TransactionDetailsItem label="Txid" value={shortTxid(tx.txid)} title={tx.txid} />
+          <TransactionDetailsItem
+            label="Txid"
+            value={shortTxid(tx.txid)}
+            title={fullTxid(tx.txid)}
+          />
           <TransactionDetailsItem label="Confirmed" value={formatBooleanLabel(tx.confirmed)} />
+          <div className="transactions-details-item">
+            <div className="transactions-details-label">State</div>
+            <div className="transactions-details-value">
+              <span className={formatConfirmationStateClass(confirmationState)}>
+                {formatConfirmationState(confirmationState)}
+              </span>
+            </div>
+          </div>
           <TransactionDetailsItem
             label="Confirmation height"
             value={formatConfirmationHeight(tx.confirmation_height)}
           />
-          <TransactionDetailsItem label="Direction" value={formatDirectionLabel(tx.direction)} />
+          <TransactionDetailsItem
+            label="Direction"
+            value={formatDirectionLabel(getTransactionDisplayDirection(tx))}
+          />
           <div className="transactions-details-item">
             <div className="transactions-details-label">Intent</div>
             <div className="transactions-details-value">
@@ -65,18 +87,24 @@ export function TransactionDetailsModal({
             label="Replaceable"
             value={formatBooleanLabel(tx.replaceable)}
           />
-          <TransactionDetailsItem label="Net value" value={formatSignedSats(tx.net_value)} />
-          <TransactionDetailsItem label="Fee" value={formatSats(tx.fee)} />
-          <TransactionDetailsItem label="Fee rate" value={formatFeeRate(tx.fee_rate_sat_per_vb)} />
+          <TransactionDetailsItem
+            label="Net value"
+            value={`${formatSignedSats(tx.net_value_sat)} · ${formatSignedBtc(netAmountSat)}`}
+          />
+          <TransactionDetailsItem label="Fee" value={formatSats(tx.fee_sat)} />
+          <TransactionDetailsItem
+            label="Fee rate"
+            value={formatFeeRate(tx.fee_rate_sat_per_vb)}
+          />
         </div>
 
         {tx.inputs && tx.inputs.length > 0 && (
-          <div className="transactions-panel-section" style={{ marginTop: 16 }}>
+          <div className="transactions-panel-section transactions-panel-section--spaced">
             <div className="transactions-panel-section-title">Inputs</div>
             {tx.inputs.map((input) => (
               <div key={input.previous_outpoint} className="transactions-panel-row">
-                <span title={input.previous_outpoint}>
-                  {input.previous_outpoint}
+                <span title={fullOutpoint(input.previous_outpoint)}>
+                  {shortOutpoint(input.previous_outpoint)}
                 </span>
               </div>
             ))}
@@ -84,23 +112,29 @@ export function TransactionDetailsModal({
         )}
 
         {tx.outputs && tx.outputs.length > 0 && (
-          <div className="transactions-panel-section" style={{ marginTop: 16 }}>
+          <div className="transactions-panel-section transactions-panel-section--spaced">
             <div className="transactions-panel-section-title">Outputs</div>
             {tx.outputs.map((output) => (
               <div key={output.outpoint} className="transactions-panel-row">
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span title={output.outpoint}>
-                    {output.outpoint}
+                <div className="transactions-output-cell">
+                  <span title={fullOutpoint(output.outpoint)}>
+                    {shortOutpoint(output.outpoint)}
                   </span>
                   {output.address && (
-                    <span style={{ color: "#94a3b8", fontSize: 12 }}>
+                    <span className="transactions-output-address">
                       {output.address}
                     </span>
                   )}
                 </div>
-                <div style={{ textAlign: "right" }}>
+                <div className="transactions-output-value">
                   <strong>{formatSats(output.value_sat)}</strong>
-                  <div style={{ fontSize: 12, color: output.is_mine ? "#22c55e" : "#94a3b8" }}>
+                  <div
+                    className={
+                      output.is_mine
+                        ? "transactions-output-ownership transactions-output-ownership--mine"
+                        : "transactions-output-ownership"
+                    }
+                  >
                     {formatOwnershipLabel(output.is_mine)}
                   </div>
                 </div>
@@ -109,15 +143,15 @@ export function TransactionDetailsModal({
           </div>
         )}
 
-        {tx.inputs && tx.inputs.length > 0 && (
-          <div className="transactions-panel-section" style={{ marginTop: 16 }}>
+        {hasParents && (
+          <div className="transactions-panel-section transactions-panel-section--spaced">
             <div className="transactions-panel-section-title">Parents</div>
-            {extractParentTxids(tx).map((parentTxid) => (
+            {parentTxids.map((parentTxid) => (
               <div key={parentTxid} className="transactions-panel-row">
                 <button
                   type="button"
                   className="transactions-graph-link"
-                  title={parentTxid}
+                  title={fullTxid(parentTxid)}
                   disabled={!onOpenTx}
                   onClick={() => onOpenTx?.(parentTxid)}
                 >
@@ -128,15 +162,15 @@ export function TransactionDetailsModal({
           </div>
         )}
 
-        {tx.child_txids && tx.child_txids.length > 0 && (
-          <div className="transactions-panel-section" style={{ marginTop: 16 }}>
+        {hasChildren && (
+          <div className="transactions-panel-section transactions-panel-section--spaced">
             <div className="transactions-panel-section-title">Children</div>
-            {tx.child_txids.map((child) => (
+            {childTxids.map((child) => (
               <div key={child} className="transactions-panel-row">
                 <button
                   type="button"
                   className="transactions-graph-link"
-                  title={child}
+                  title={fullTxid(child)}
                   disabled={!onOpenTx}
                   onClick={() => onOpenTx?.(child)}
                 >
@@ -157,11 +191,17 @@ type TransactionDetailsItemProps = {
   title?: string;
 };
 
-function TransactionDetailsItem({ label, value, title }: TransactionDetailsItemProps) {
+function TransactionDetailsItem({
+  label,
+  value,
+  title,
+}: TransactionDetailsItemProps) {
   return (
     <div className="transactions-details-item">
       <div className="transactions-details-label">{label}</div>
-      <div className="transactions-details-value" title={title}>{value}</div>
+      <div className="transactions-details-value" title={title}>
+        {value}
+      </div>
     </div>
   );
 }

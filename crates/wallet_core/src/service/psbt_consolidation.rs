@@ -76,7 +76,10 @@ impl WalletService {
             strategy: effective_cfg.selection.strategy,
         };
 
-        let selected_inputs = select_inputs(&wallet_utxos, &selection_cfg)?;
+        let selection_result = select_inputs(&wallet_utxos, &selection_cfg)?;
+        let manual_selected_count = selection_result.manual_selected_count;
+        let auto_selected_count = selection_result.auto_selected_count;
+        let selected_inputs = selection_result.selected_outpoints;
 
         if selected_inputs.len() < 2 {
             return Err(WalletCoreError::ConsolidationTooFewInputs);
@@ -129,12 +132,14 @@ impl WalletService {
         );
 
         debug!(
-            "wallet_service: create_consolidation_psbt selected_inputs={} excluded_inputs={} selected_total_sat={} estimated_fee_sat={} selection_mode={:?}",
+            "wallet_service: create_consolidation_psbt selected_inputs={} manual_selected={} auto_selected={} excluded_inputs={} selected_total_sat={} estimated_fee_sat={} selection_mode={:?}",
             selected_inputs.len(),
+            manual_selected_count,
+            auto_selected_count,
             excluded_inputs.len(),
             selected_total_sat,
             fee_estimate_sat,
-            effective_cfg.selection.selection_mode,
+            selection_mode,
         );
 
         let mut builder = self.wallet.build_tx();
@@ -228,6 +233,7 @@ impl WalletService {
             psbt_base64,
             txid: WalletTxid::from(psbt.unsigned_tx.compute_txid()),
             original_txid: None,
+            replacement: None,
             to_address: change_info.address.to_string(),
             amount_sat: crate::types::AmountSat::from(output_amount_sat),
             fee_sat: crate::types::AmountSat::from(fee_sat),

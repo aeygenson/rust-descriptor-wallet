@@ -51,6 +51,8 @@ Transaction lifecycle:
 - sign
 - publish
 
+Caller-visible output is intentionally structured rather than prose-only. The CLI surfaces receive-address metadata, transaction parent/output inspection data, and richer PSBT preview fields such as selected inputs and replacement lineage.
+
 ---
 
 ## Relationship to Desktop UI

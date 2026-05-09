@@ -15,6 +15,13 @@ export interface UtxoSelectionSummary {
   unconfirmedCount: number;
 }
 
+export interface UtxoSelectionPreview {
+  selectedOutpoints: UtxoOutpoint[];
+  selectedValueSat: number;
+  selectedCount: number;
+  confirmedOnly: boolean;
+}
+
 export interface UtxosSummary {
   totalCount: number;
   totalValue: number;
@@ -54,6 +61,12 @@ export interface UtxoSelectionSummaryProps {
   onClearSelection?: () => void;
 }
 
+export interface UtxoSelectionPreviewProps {
+  preview: UtxoSelectionPreview;
+  disabled?: boolean;
+  onClearSelection?: () => void;
+}
+
 export interface UtxoTableSelectionProps {
   selectedOutpoints: UtxoOutpoint[];
   onToggleOutpoint: (outpoint: UtxoOutpoint) => void;
@@ -69,6 +82,12 @@ export interface UtxosTableProps {
   onClearSelection?: () => void;
 }
 
+export interface UtxoRowActionState {
+  outpoint: UtxoOutpoint;
+  selected: boolean;
+  disabled?: boolean;
+}
+
 export interface UtxosStateViewProps {
   loading: boolean;
   error: string | null;
@@ -81,7 +100,20 @@ export interface UtxosPageNavigationActionState {
   selectedOutpoints: UtxoOutpoint[];
 }
 
-export type UtxoSortKey = "outpoint" | "value" | "status" | "height" | "keychain";
+export type UtxoFilterStatus = "all" | "confirmed" | "pending";
+
+export interface UtxoFilterState {
+  status: UtxoFilterStatus;
+  minValueSat?: number | null;
+  maxValueSat?: number | null;
+  search?: string;
+}
+export type UtxoSortKey =
+  | "outpoint"
+  | "value_sat"
+  | "status"
+  | "height"
+  | "keychain";
 
 export type UtxoSortDirection = "asc" | "desc";
 

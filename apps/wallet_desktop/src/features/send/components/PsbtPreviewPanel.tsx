@@ -1,9 +1,13 @@
 import type { PsbtPreviewPanelProps } from "../types";
 import {
+  formatBtc,
   formatFeeRateSatPerVb,
   formatOptionalSats,
   formatOptionalValue,
+  formatOutpoint,
   formatSelectedInput,
+  formatSelectedInputWithBtc,
+  formatTxid,
   formatVsize,
 } from "../format";
 import { pickDtoNumber, pickDtoString } from "../lib";
@@ -30,7 +34,11 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
     "fee_rate_sat_per_vb",
     "feeRateSatPerVb",
   );
-  const estimatedVsize = pickDtoNumber(psbtRecord, "estimated_vsize", "estimatedVsize");
+  const estimatedVsize = pickDtoNumber(
+    psbtRecord,
+    "estimated_vsize",
+    "estimatedVsize",
+  );
   const changeAmountSat = pickDtoNumber(
     psbtRecord,
     "change_amount_sat",
@@ -43,7 +51,34 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
     : Array.isArray(psbtRecord.selectedInputs)
       ? psbtRecord.selectedInputs
       : [];
-  const psbtBase64 = pickDtoString(psbtRecord, "psbt_base64", "psbtBase64") ?? "";
+  const psbtBase64 =
+    pickDtoString(psbtRecord, "psbt_base64", "psbtBase64") ?? "";
+
+  const amountBtc = formatBtc(amountSat);
+  const feeBtc = formatBtc(feeSat);
+  const changeBtc = formatBtc(changeAmountSat);
+
+  const replacementRecord =
+    typeof psbtRecord.replacement === "object" &&
+    psbtRecord.replacement !== null
+      ? (psbtRecord.replacement as Record<string, unknown>)
+      : null;
+  const replacedTxid = replacementRecord
+    ? pickDtoString(replacementRecord, "replaced_txid", "replacedTxid")
+    : null;
+  const replacementTxid = replacementRecord
+    ? pickDtoString(replacementRecord, "replacement_txid", "replacementTxid")
+    : null;
+  const replacementDepth = replacementRecord
+    ? pickDtoNumber(replacementRecord, "replacement_depth", "replacementDepth")
+    : null;
+  const replacementChain = replacementRecord
+    ? Array.isArray(replacementRecord.replacement_chain)
+      ? replacementRecord.replacement_chain
+      : Array.isArray(replacementRecord.replacementChain)
+        ? replacementRecord.replacementChain
+        : []
+    : [];
 
   return (
     <div className="send-preview">
@@ -55,23 +90,39 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
       </div>
 
       <div className="send-preview-grid">
-        <PreviewItem label="Txid" mono value={formatOptionalValue(txid)} />
+        <PreviewItem
+          label="Txid"
+          mono
+          title={txid ?? undefined}
+          value={txid ? formatTxid(txid) : formatOptionalValue(txid)}
+        />
         <PreviewItem label="To" mono value={formatOptionalValue(toAddress)} />
-
-        <PreviewItem label="Amount" value={formatOptionalSats(amountSat)} />
-        <PreviewItem label="Fee" value={formatOptionalSats(feeSat)} />
+        <PreviewItem
+          label="Amount"
+          value={formatOptionalSats(amountSat)}
+          secondaryValue={amountBtc}
+        />
+        <PreviewItem
+          label="Fee"
+          value={formatOptionalSats(feeSat)}
+          secondaryValue={feeBtc}
+        />
         <PreviewItem
           label="Fee rate"
           value={formatFeeRateSatPerVb(feeRateSatPerVb)}
         />
+        <PreviewItem label="vsize" value={formatVsize(estimatedVsize)} />
         <PreviewItem
-          label="vsize"
-          value={formatVsize(estimatedVsize)}
+          label="Change"
+          value={formatOptionalSats(changeAmountSat)}
+          secondaryValue={changeBtc}
         />
-        <PreviewItem label="Change" value={formatOptionalSats(changeAmountSat)} />
         <PreviewItem
           label="Inputs / Outputs"
-          value={`${formatOptionalValue(inputCount)} / ${formatOptionalValue(outputCount)}`}
+          value={[
+            formatOptionalValue(inputCount),
+            formatOptionalValue(outputCount),
+          ].join(" / ")}
         />
       </div>
 
@@ -82,6 +133,12 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
           <div className="send-preview-inputs">
             {selectedInputs.map((input, index) => {
               const text = formatSelectedInput(input);
+              const displayText =
+                typeof input === "string"
+                  ? formatOutpoint(input)
+                  : formatSelectedInputWithBtc(
+                      typeof input === "number" ? input : null,
+                    );
 
               return (
                 <div
@@ -89,7 +146,7 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
                   className="send-preview-input"
                   title={text}
                 >
-                  {text}
+                  {displayText}
                 </div>
               );
             })}
@@ -101,6 +158,34 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
         )}
       </div>
 
+      {replacementRecord ? (
+        <div className="send-preview-section">
+          <div className="send-preview-section__title">Replacement</div>
+          <div className="send-preview-grid">
+            <PreviewItem
+              label="Replaces"
+              mono
+              title={replacedTxid ?? undefined}
+              value={replacedTxid ? formatTxid(replacedTxid) : "—"}
+            />
+            <PreviewItem
+              label="Replacement txid"
+              mono
+              title={replacementTxid ?? undefined}
+              value={replacementTxid ? formatTxid(replacementTxid) : "—"}
+            />
+            <PreviewItem
+              label="Depth"
+              value={formatOptionalValue(replacementDepth)}
+            />
+            <PreviewItem
+              label="Chain length"
+              value={formatOptionalValue(replacementChain.length)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       <details className="send-preview-raw">
         <summary>Raw PSBT</summary>
         <pre>{psbtBase64}</pre>
@@ -109,19 +194,26 @@ export function PsbtPreviewPanel({ psbt }: PsbtPreviewPanelProps) {
   );
 }
 
+type PreviewItemProps = {
+  label: string;
+  value: string;
+  secondaryValue?: string;
+  mono?: boolean;
+  title?: string;
+};
+
 function PreviewItem({
   label,
   value,
+  secondaryValue,
   mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
+  title,
+}: PreviewItemProps) {
   return (
     <div className="send-preview-item">
       <div className="send-preview-item__label">{label}</div>
       <div
+        title={title}
         className={
           mono
             ? "send-preview-item__value send-preview-item__value--mono"
@@ -129,6 +221,11 @@ function PreviewItem({
         }
       >
         {value}
+        {secondaryValue ? (
+          <span className="send-preview-item__secondary-value">
+            {secondaryValue}
+          </span>
+        ) : null}
       </div>
     </div>
   );

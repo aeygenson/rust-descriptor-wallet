@@ -10,7 +10,7 @@ use bdk_wallet::bitcoin::FeeRate;
 
 use crate::{
     error::WalletCoreError,
-    model::WalletPsbtInfo,
+    model::{WalletPsbtInfo, WalletReplacementInfo},
     types::{AmountSat, FeeRateSatPerVb, WalletTxid},
     WalletCoreResult,
 };
@@ -102,7 +102,14 @@ impl WalletService {
         let estimated_vsize = u64::from(info.estimated_vsize);
         let estimated_fee_sat = requested_fee_rate_sat_per_vb.saturating_mul(estimated_vsize);
 
+        let replacement_txid = info.txid;
         info.original_txid = Some(wallet_txid);
+        info.replacement = Some(WalletReplacementInfo {
+            replaced_txid: wallet_txid,
+            replacement_txid,
+            replacement_depth: 1,
+            replacement_chain: vec![wallet_txid, replacement_txid],
+        });
         info.fee_rate_sat_per_vb = requested_sat_per_vb;
         info.fee_sat = AmountSat::from(estimated_fee_sat);
 
@@ -112,7 +119,7 @@ impl WalletService {
             requested_fee_rate_sat_per_vb = requested_fee_rate_sat_per_vb,
             estimated_vsize = estimated_vsize,
             estimated_fee_sat = estimated_fee_sat,
-            "wallet_core: bump_fee_psbt preview fee fields populated"
+            "wallet_core: bump_fee_psbt preview fee and replacement fields populated"
         );
 
         Ok(info)
@@ -208,28 +215,29 @@ mod tests {
 
         assert_eq!(estimated_fee_sat, u64::MAX);
     }
-}
 
-// INTEGRATION NOTES
-// -----------------
-// Add or confirm the following WalletCoreError variants in your central error enum:
-// - InvalidTxid(String)
-// - TransactionNotFound(String)
-// - TransactionAlreadyConfirmed(String)
-// - TransactionNotReplaceable(String)
-// - InvalidFeeRate
-// - FeeRateTooLowForBump {
-//     txid: String,
-//     original_sat_per_vb: FeeRateSatPerVb,
-//     requested_sat_per_vb: FeeRateSatPerVb,
-//   }
-// - FeeBumpBuildFailed { txid: String, reason: String }
-// - TransactionFeeUnavailable { txid: String, reason: String }
-// - TransactionVsizeUnavailable { txid: String }
-// - PsbtConversionFailed { txid: String, reason: String }
-//
-// Expected model integration points:
-// - FeeRateSatPerVb should expose an accessor returning sat/vB, such as `as_u64()`.
-// - WalletPsbtInfo should expose `from_psbt_minimal(psbt) -> WalletCoreResult<Self>` or equivalent.
-// - If your repository uses a wallet wrapper type instead of `bdk_wallet::Wallet`, adapt the
-//   function receiver accordingly and keep this internal logic unchanged.
+    #[test]
+    fn replacement_info_models_single_step_replacement_chain() {
+        let replaced_txid = WalletTxid::parse(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee",
+        )
+        .unwrap();
+        let replacement_txid = WalletTxid::parse(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .unwrap();
+
+        let replacement = WalletReplacementInfo {
+            replaced_txid,
+            replacement_txid,
+            replacement_depth: 1,
+            replacement_chain: vec![replaced_txid, replacement_txid],
+        };
+
+        assert_eq!(replacement.replaced_txid, replaced_txid);
+        assert_eq!(replacement.replacement_txid, replacement_txid);
+        assert_ne!(replacement.replaced_txid, replacement.replacement_txid);
+        assert_eq!(replacement.replacement_depth, 1);
+        assert_eq!(replacement.replacement_chain, vec![replaced_txid, replacement_txid]);
+    }
+}

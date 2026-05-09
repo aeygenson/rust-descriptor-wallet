@@ -51,12 +51,20 @@ impl WalletCore {
         Ok(())
     }
 
+    /// Returns true when the wallet mode allows local software signing.
+    ///
+    /// This is a pure domain helper for API/UI/workflow layers that need to
+    /// reason about signing capability without duplicating watch-only logic.
+    pub fn can_sign_locally(&self, is_watch_only: bool) -> bool {
+        !is_watch_only
+    }
+
     /// Convenience helper delegating to the model-layer status enum.
     pub fn classify_psbt_signing(&self, modified: bool, finalized: bool) -> PsbtSigningStatus {
         match (modified, finalized) {
             (_, true) => PsbtSigningStatus::Finalized,
             (true, false) => PsbtSigningStatus::PartiallySigned,
-            (false, false) => PsbtSigningStatus::Unchanged,
+            (false, false) => PsbtSigningStatus::Unsigned,
         }
     }
 }
@@ -117,12 +125,20 @@ mod tests {
     }
 
     #[test]
+    fn can_sign_locally_reflects_watch_only_mode() {
+        let core = WalletCore::new();
+
+        assert!(core.can_sign_locally(false));
+        assert!(!core.can_sign_locally(true));
+    }
+
+    #[test]
     fn classify_psbt_signing_states() {
         let core = WalletCore::new();
 
         assert_eq!(
             core.classify_psbt_signing(false, false),
-            PsbtSigningStatus::Unchanged
+            PsbtSigningStatus::Unsigned
         );
 
         assert_eq!(

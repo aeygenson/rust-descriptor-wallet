@@ -3,6 +3,162 @@ mod common;
 use common::*;
 use serial_test::serial;
 use wallet_api::factory::build_default_api;
+use wallet_api::model::{
+    CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto, WalletAddressRequestDto,
+    WalletCoinControlDto, WalletTransactionsRequestDto, WalletUtxosRequestDto,
+};
+use wallet_api::service;
+
+async fn wallet_address(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
+    service::wallet::address(
+        &api.storage,
+        WalletAddressRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_txs(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletTxDto>> {
+    service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_utxos(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletUtxoDto>> {
+    service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn create_psbt_with_coin_control(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletPsbtDto> {
+    service::psbt::create(
+        &api.storage,
+        CreatePsbtRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control: Some(coin_control),
+        },
+    )
+    .await
+}
+
+async fn send_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let coin_control = if confirmed_only {
+        Some(WalletCoinControlDto {
+            confirmed_only: true,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let created = service::psbt::create(
+        &api.storage,
+        CreatePsbtRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await?;
+
+    let signed = service::psbt::sign(
+        &api.storage,
+        SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: created.psbt_base64,
+        },
+    )
+    .await?;
+
+    service::psbt::publish(
+        &api.storage,
+        PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: signed.psbt_base64,
+        },
+    )
+    .await
+}
+
+async fn send_psbt_with_coin_control(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    coin_control: WalletCoinControlDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let created = create_psbt_with_coin_control(
+        api,
+        name,
+        to_address,
+        amount_sat,
+        fee_rate_sat_per_vb,
+        replaceable,
+        coin_control,
+    )
+    .await?;
+
+    let signed = service::psbt::sign(
+        &api.storage,
+        SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: created.psbt_base64,
+        },
+    )
+    .await?;
+
+    service::psbt::publish(
+        &api.storage,
+        PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: signed.psbt_base64,
+        },
+    )
+    .await
+}
 
 #[tokio::test(flavor = "current_thread")]
 #[serial]
@@ -13,28 +169,31 @@ async fn wallet_create_psbt_with_coin_control_uses_requested_utxo() -> anyhow::R
     let api = build_default_api().await?;
     let wallet_name = "regtest-local";
 
+    let destination = wallet_address(&api, wallet_name).await?;
+    assert_eq!(destination.keychain, "external");
+    assert!(destination.index.is_some());
+
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let requested = confirmed
         .into_iter()
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for coin control");
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let psbt = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert_eq!(inputs.len(), 1, "expected exactly one selected input");
@@ -64,22 +223,22 @@ async fn wallet_create_psbt_with_coin_control_uses_all_requested_utxos() -> anyh
         .map(|(outpoint, _)| outpoint.clone())
         .collect();
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            150_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: requested.clone(),
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let psbt = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        150_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: requested.clone(),
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
@@ -108,23 +267,23 @@ async fn wallet_create_psbt_with_coin_control_excludes_requested_utxo() -> anyho
     confirmed.sort_by(|a, b| a.0.cmp(&b.0));
 
     let excluded = confirmed[0].0.clone();
-    let destination = api.address(wallet_name).await?;
+    let destination = wallet_address(&api, wallet_name).await?;
 
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: Vec::new(),
-                exclude_outpoints: vec![excluded.clone()],
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let psbt = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: Vec::new(),
+            exclude_outpoints: vec![excluded.clone()],
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
     assert!(
@@ -153,39 +312,46 @@ async fn wallet_create_psbt_with_coin_control_rejects_unconfirmed_selected_utxo_
 
     api.sync(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
-    let parent = api
-        .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let parent = send_psbt(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        false,
+    )
+    .await?;
     assert!(
         !parent.txid.is_empty(),
         "expected parent txid to be present"
     );
 
     api.sync(wallet_name).await?;
-    let utxos = api.utxos(wallet_name).await?;
+    let utxos = wallet_utxos(&api, wallet_name).await?;
     let selected = utxos
         .iter()
         .find(|u| outpoint_txid(&u.outpoint) == parent.txid)
         .expect("expected at least one unconfirmed wallet-owned output");
 
-    let next_destination = api.address(wallet_name).await?;
-    let err = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &next_destination,
-            5_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![selected.outpoint.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected confirmed-only coin control to reject unconfirmed selected UTXO");
+    let next_destination = wallet_address(&api, wallet_name).await?;
+    let err = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &next_destination.address,
+        5_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![selected.outpoint.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected confirmed-only coin control to reject unconfirmed selected UTXO");
 
     let msg = err.to_string();
     assert!(
@@ -212,22 +378,22 @@ async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::R
         .max_by_key(|(_, value)| *value)
         .expect("expected a confirmed UTXO for coin control send");
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.0.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = send_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.0.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(
         !published.txid.is_empty(),
@@ -235,7 +401,7 @@ async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::R
     );
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     assert!(
         !utxos_after_send.iter().any(|u| u.outpoint == requested.0),
         "expected requested outpoint {} to be spent after coin-control send",
@@ -245,7 +411,7 @@ async fn wallet_send_psbt_with_coin_control_spends_requested_utxo() -> anyhow::R
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)
@@ -269,24 +435,24 @@ async fn wallet_create_psbt_with_coin_control_rejects_invalid_outpoint() -> anyh
 
     api.sync(wallet_name).await?;
 
-    let destination = api.address(wallet_name).await?;
+    let destination = wallet_address(&api, wallet_name).await?;
 
-    let err = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec!["invalid_outpoint".to_string()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: false,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected invalid outpoint to fail");
+    let err = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec!["invalid_outpoint".to_string()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: false,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected invalid outpoint to fail");
 
     assert!(matches!(err, wallet_api::WalletApiError::InvalidInput(_)));
     assert!(!err.to_string().is_empty());
@@ -306,24 +472,24 @@ async fn wallet_create_psbt_with_coin_control_rejects_conflicting_rules() -> any
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let outpoint = confirmed[0].0.clone();
 
-    let destination = api.address(wallet_name).await?;
+    let destination = wallet_address(&api, wallet_name).await?;
 
-    let err = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![outpoint.clone()],
-                exclude_outpoints: vec![outpoint.clone()],
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected conflicting include/exclude to fail");
+    let err = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![outpoint.clone()],
+            exclude_outpoints: vec![outpoint.clone()],
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected conflicting include/exclude to fail");
 
     assert!(!err.to_string().is_empty());
 
@@ -343,23 +509,23 @@ async fn wallet_create_psbt_with_coin_control_rejects_insufficient_selected_inpu
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let requested = confirmed[0].0.clone();
 
-    let destination = api.address(wallet_name).await?;
-    let err = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            500_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await
-        .expect_err("expected insufficient selected inputs to fail");
+    let destination = wallet_address(&api, wallet_name).await?;
+    let err = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        500_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await
+    .expect_err("expected insufficient selected inputs to fail");
 
     let msg = err.to_string();
     assert!(
@@ -389,22 +555,22 @@ async fn wallet_send_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow
         .map(|(outpoint, _)| outpoint.clone())
         .collect();
 
-    let destination = api.address(wallet_name).await?;
-    let published = api
-        .send_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            150_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: requested.clone(),
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let published = send_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        150_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: requested.clone(),
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert!(
         !published.txid.is_empty(),
@@ -412,7 +578,7 @@ async fn wallet_send_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow
     );
 
     api.sync(wallet_name).await?;
-    let utxos_after_send = api.utxos(wallet_name).await?;
+    let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
     for outpoint in &requested {
         assert!(
             !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
@@ -424,7 +590,7 @@ async fn wallet_send_psbt_with_coin_control_uses_all_requested_utxos() -> anyhow
     env.mine(1)?;
     api.sync(wallet_name).await?;
 
-    let txs = api.txs(wallet_name).await?;
+    let txs = wallet_txs(&api, wallet_name).await?;
     let sent_tx = txs
         .iter()
         .find(|tx| tx.txid == published.txid)
@@ -449,27 +615,32 @@ async fn wallet_coin_control_psbt_input_output_consistency() -> anyhow::Result<(
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let requested = confirmed[0].0.clone();
 
-    let destination = api.address(wallet_name).await?;
-    let psbt = api
-        .create_psbt_with_coin_control(
-            wallet_name,
-            &destination,
-            10_000,
-            1,
-            false,
-            wallet_api::model::WalletCoinControlDto {
-                include_outpoints: vec![requested.clone()],
-                exclude_outpoints: Vec::new(),
-                confirmed_only: true,
-                selection_mode: None,
-            },
-        )
-        .await?;
+    let destination = wallet_address(&api, wallet_name).await?;
+    let psbt = create_psbt_with_coin_control(
+        &api,
+        wallet_name,
+        &destination.address,
+        10_000,
+        1,
+        false,
+        WalletCoinControlDto {
+            include_outpoints: vec![requested.clone()],
+            exclude_outpoints: Vec::new(),
+            confirmed_only: true,
+            selection_mode: None,
+        },
+    )
+    .await?;
 
     assert_eq!(psbt.input_count, 1);
     assert_eq!(psbt.selected_inputs.len(), 1);
     assert_eq!(psbt.recipient_count, 1);
     assert!(psbt.output_count >= 1);
+
+    assert!(
+        psbt.replacement.is_none(),
+        "normal coin-control PSBT should not include replacement metadata"
+    );
 
     Ok(())
 }

@@ -43,8 +43,14 @@ import {
   mapUtxosForCoinControl,
   readReplaceableFromForm,
   sumSelectedInputValue,
+  toWalletCoinControlDto,
+  toWalletConsolidationDto,
 } from "../features/send/lib";
-import { formatNullableBoolean } from "../features/send/format";
+import {
+  formatNullableBoolean,
+  formatOutpoint,
+  formatTxid,
+} from "../features/send/format";
 import { saveTransactionIntent } from "../features/transactions/lib";
 import {
   toCreateConsolidationPsbtInput,
@@ -52,7 +58,6 @@ import {
   toCreateSendMaxPsbtInput,
   toCreateSweepPsbtInput,
 } from "../features/send/types";
-
 
 export function SendPage() {
   const { selectedWalletName } = useWallet();
@@ -62,18 +67,25 @@ export function SendPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [psbt, setPsbt] = useState<WalletPsbtDto | null>(null);
-  const [signedPsbt, setSignedPsbt] = useState<WalletSignedPsbtDto | null>(null);
-  const [broadcastResult, setBroadcastResult] = useState<TxBroadcastResultDto | null>(null);
-  const [coinSelectionMode, setCoinSelectionMode] = useState<CoinControlMode>("auto");
-  const [availableUtxos, setAvailableUtxos] = useState<CoinControlUtxoOption[]>([]);
+  const [signedPsbt, setSignedPsbt] =
+    useState<WalletSignedPsbtDto | null>(null);
+  const [broadcastResult, setBroadcastResult] =
+    useState<TxBroadcastResultDto | null>(null);
+  const [coinSelectionMode, setCoinSelectionMode] =
+    useState<CoinControlMode>("auto");
+  const [availableUtxos, setAvailableUtxos] =
+    useState<CoinControlUtxoOption[]>([]);
   const [selectedUtxos, setSelectedUtxos] = useState<string[]>([]);
-  const [lastBroadcastCpfpOutpoints, setLastBroadcastCpfpOutpoints] = useState<string[]>([]);
+  const [lastBroadcastCpfpOutpoints, setLastBroadcastCpfpOutpoints] =
+    useState<string[]>([]);
   const [mode, setMode] = useState<SendMode>("fixed");
 
   const navigationState = location.state as SendPageNavigationState | null;
 
   useEffect(() => {
-    if (!navigationState) return;
+    if (!navigationState) {
+      return;
+    }
 
     if (
       navigationState.mode === "fixed" ||
@@ -117,7 +129,12 @@ export function SendPage() {
         setAvailableUtxos(mappedUtxos);
 
         if (navigationState?.selectedOutpoints?.length) {
-          setSelectedUtxos(getValidSelectedOutpoints(navigationState.selectedOutpoints, mappedUtxos));
+        setSelectedUtxos(
+          getValidSelectedOutpoints(
+            navigationState.selectedOutpoints,
+            mappedUtxos,
+          ),
+        );
           setCoinSelectionMode("manual");
         } else {
           setSelectedUtxos([]);
@@ -127,7 +144,9 @@ export function SendPage() {
         setLastBroadcastCpfpOutpoints([]);
       })
       .catch((e: unknown) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
 
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);
@@ -142,7 +161,9 @@ export function SendPage() {
   }, [selectedWalletName, location.key]);
 
   useEffect(() => {
-    const availableOutpoints = new Set(availableUtxos.map((utxo) => utxo.outpoint));
+    const availableOutpoints = new Set(
+      availableUtxos.map((utxo) => utxo.outpoint),
+    );
 
     setSelectedUtxos((current) =>
       current.filter((outpoint) => availableOutpoints.has(outpoint)),
@@ -182,11 +203,15 @@ export function SendPage() {
     setLastBroadcastCpfpOutpoints([]);
   }, [selectedWalletName]);
 
-  const selectedCoinControl = () => buildSelectedCoinControl(selectedUtxos, availableUtxos);
-  const selectedConsolidation = () => buildSelectedConsolidation(selectedUtxos, availableUtxos);
+  const selectedCoinControl = () =>
+    buildSelectedCoinControl(selectedUtxos, availableUtxos);
+  const selectedConsolidation = () =>
+    buildSelectedConsolidation(selectedUtxos, availableUtxos);
 
   const preparePreview = () => {
-    if (!selectedWalletName) return false;
+    if (!selectedWalletName) {
+      return false;
+    }
 
     setLoading(true);
     setError(null);
@@ -199,14 +224,19 @@ export function SendPage() {
   };
 
   const handleFixedPreview = async (form: FixedSendFormState) => {
-    if (!preparePreview() || !selectedWalletName) return;
+    if (!preparePreview() || !selectedWalletName) {
+      return;
+    }
 
     try {
       const input = {
         ...toCreatePsbtInput(form, selectedWalletName),
         replaceable: readReplaceableFromForm(form),
       };
-      const selectedOutpoints = getValidSelectedOutpoints(selectedUtxos, availableUtxos);
+      const selectedOutpoints = getValidSelectedOutpoints(
+        selectedUtxos,
+        availableUtxos,
+      );
       if (coinSelectionMode === "manual" && selectedOutpoints.length === 0) {
         throw new Error("Select at least one valid UTXO for manual coin control");
       }
@@ -221,23 +251,31 @@ export function SendPage() {
           includeOutpoints: selectedOutpoints,
         });
       }
-      const result =
-        coinSelectionMode === "manual"
-          ? await createPsbtWithCoinControl({
-              walletName: input.walletName,
-              toAddress: input.toAddress,
-              amountSat: input.amountSat,
-              feeRateSatPerVb: input.feeRateSatPerVb,
-              replaceable: input.replaceable,
-              confirmedOnly: Boolean(input.confirmedOnly),
-              coinControl: {
-                includeOutpoints: selectedOutpoints,
-                excludeOutpoints: [],
-                confirmedOnly: Boolean(input.confirmedOnly),
-                selectionMode: "strict-manual",
-              },
-            })
-          : await createPsbt(input);
+      let result;
+      if (coinSelectionMode === "manual") {
+        const manualCoinControl = toWalletCoinControlDto({
+          includeOutpoints: selectedOutpoints,
+          excludeOutpoints: [],
+          confirmedOnly: Boolean(input.confirmedOnly),
+          selectionMode: "strict-manual",
+        });
+        result = await createPsbtWithCoinControl({
+          walletName: input.walletName,
+          toAddress: input.toAddress,
+          amountSat: input.amountSat,
+          feeRateSatPerVb: input.feeRateSatPerVb,
+          replaceable: input.replaceable,
+          confirmedOnly: Boolean(input.confirmedOnly),
+          coinControl: {
+            includeOutpoints: manualCoinControl?.include_outpoints ?? [],
+            excludeOutpoints: manualCoinControl?.exclude_outpoints ?? [],
+            confirmedOnly: manualCoinControl?.confirmed_only ?? true,
+            selectionMode: manualCoinControl?.selection_mode ?? "strict-manual",
+          },
+        });
+      } else {
+        result = await createPsbt(input);
+      }
       setPsbt(result);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -248,23 +286,36 @@ export function SendPage() {
   };
 
   const handleSendMaxPreview = async (form: SendMaxFormState) => {
-    if (!preparePreview() || !selectedWalletName) return;
+    if (!preparePreview() || !selectedWalletName) {
+      return;
+    }
 
     try {
       const input = toCreateSendMaxPsbtInput(form, selectedWalletName);
-      const selectedOutpoints = getValidSelectedOutpoints(selectedUtxos, availableUtxos);
-      const result =
-        coinSelectionMode === "manual" && selectedOutpoints.length > 0
-          ? await createSendMaxPsbtWithCoinControl({
-              ...input,
-              coinControl: {
-                includeOutpoints: selectedOutpoints,
-                excludeOutpoints: [],
-                confirmedOnly: true,
-                selectionMode: "strict-manual",
-              },
-            })
-          : await createSendMaxPsbt(input);
+      const selectedOutpoints = getValidSelectedOutpoints(
+        selectedUtxos,
+        availableUtxos,
+      );
+      let result;
+      if (coinSelectionMode === "manual" && selectedOutpoints.length > 0) {
+        const manualCoinControl = toWalletCoinControlDto({
+          includeOutpoints: selectedOutpoints,
+          excludeOutpoints: [],
+          confirmedOnly: true,
+          selectionMode: "strict-manual",
+        });
+        result = await createSendMaxPsbtWithCoinControl({
+          ...input,
+          coinControl: {
+            includeOutpoints: manualCoinControl?.include_outpoints ?? [],
+            excludeOutpoints: manualCoinControl?.exclude_outpoints ?? [],
+            confirmedOnly: manualCoinControl?.confirmed_only ?? true,
+            selectionMode: manualCoinControl?.selection_mode ?? "strict-manual",
+          },
+        });
+      } else {
+        result = await createSendMaxPsbt(input);
+      }
 
       setPsbt(result);
     } catch (e: unknown) {
@@ -276,7 +327,9 @@ export function SendPage() {
   };
 
   const handleSweepPreview = async (form: SweepFormState) => {
-    if (!preparePreview() || !selectedWalletName) return;
+    if (!preparePreview() || !selectedWalletName) {
+      return;
+    }
 
     try {
       const coinControl = selectedCoinControl();
@@ -293,11 +346,25 @@ export function SendPage() {
   };
 
   const handleConsolidationPreview = async (form: ConsolidationFormState) => {
-    if (!preparePreview() || !selectedWalletName) return;
+    if (!preparePreview() || !selectedWalletName) {
+      return;
+    }
 
     try {
       const consolidation = selectedConsolidation();
-      const input = toCreateConsolidationPsbtInput(form, selectedWalletName, consolidation);
+      const consolidationDto = toWalletConsolidationDto(consolidation);
+      const input = toCreateConsolidationPsbtInput(form, selectedWalletName, {
+        includeOutpoints: consolidationDto.include_outpoints,
+        excludeOutpoints: consolidationDto.exclude_outpoints,
+        confirmedOnly: consolidationDto.confirmed_only,
+        maxInputCount: consolidationDto.max_input_count,
+        minInputCount: consolidationDto.min_input_count,
+        minUtxoValueSat: consolidationDto.min_utxo_value_sat,
+        maxUtxoValueSat: consolidationDto.max_utxo_value_sat,
+        maxFeePctOfInputValue: consolidationDto.max_fee_pct_of_input_value,
+        strategy: consolidationDto.strategy,
+        selectionMode: consolidationDto.selection_mode,
+      });
       const result = await createConsolidationPsbt(input);
 
       setPsbt(result);
@@ -310,7 +377,9 @@ export function SendPage() {
   };
 
   const handleSign = async () => {
-    if (!selectedWalletName || !psbt) return;
+    if (!selectedWalletName || !psbt) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -333,7 +402,9 @@ export function SendPage() {
   };
 
   const handlePublish = async () => {
-    if (!selectedWalletName || !signedPsbt) return;
+    if (!selectedWalletName || !signedPsbt) {
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -354,10 +425,15 @@ export function SendPage() {
         console.warn("[send/page] sync after broadcast failed", syncError);
       }
 
-      const refreshedUtxos = mapUtxosForCoinControl(await listUtxos(selectedWalletName));
+      const refreshedUtxos = mapUtxosForCoinControl(
+        await listUtxos(selectedWalletName),
+      );
       setAvailableUtxos(refreshedUtxos);
       setSelectedUtxos([]);
-      const possibleCpfpOutpoints = findOutpointsForTxid(refreshedUtxos, result.txid);
+      const possibleCpfpOutpoints = findOutpointsForTxid(
+        refreshedUtxos,
+        result.txid,
+      );
       setLastBroadcastCpfpOutpoints(possibleCpfpOutpoints);
       console.debug("[send/page] possible CPFP outpoints after broadcast", {
         txid: result.txid,
@@ -371,13 +447,21 @@ export function SendPage() {
     }
   };
 
-  const validSelectedUtxos = getValidSelectedOutpoints(selectedUtxos, availableUtxos);
+  const validSelectedUtxos = getValidSelectedOutpoints(
+    selectedUtxos,
+    availableUtxos,
+  );
   const isStrictManualMode = mode === "sweep" || mode === "consolidate";
 
-  const manuallySelectedValueSat = sumSelectedInputValue(availableUtxos, validSelectedUtxos);
+  const manuallySelectedValueSat = sumSelectedInputValue(
+    availableUtxos,
+    validSelectedUtxos,
+  );
 
   const selectedInputCount =
-    coinSelectionMode === "manual" ? validSelectedUtxos.length : psbt?.selected_utxo_count ?? 0;
+    coinSelectionMode === "manual"
+      ? validSelectedUtxos.length
+      : psbt?.selected_utxo_count ?? 0;
   const selectedValueSat =
     coinSelectionMode === "manual"
       ? manuallySelectedValueSat
@@ -457,7 +541,12 @@ export function SendPage() {
               <button
                 className="primary-button"
                 type="button"
-                disabled={loading || !signedPsbt || !signedPsbt.finalized || !!broadcastResult}
+                disabled={
+                  loading ||
+                  !signedPsbt ||
+                  !signedPsbt.finalized ||
+                  !!broadcastResult
+                }
                 onClick={handlePublish}
               >
                 {broadcastResult ? "Broadcasted" : "Broadcast"}
@@ -486,23 +575,36 @@ export function SendPage() {
           {broadcastResult && (
             <div className="send-result-card send-result-card--success">
               <div className="send-result-card__label">Broadcast Result</div>
-              <div className="send-result-card__value">txid: {broadcastResult.txid}</div>
+              <div
+                className="send-result-card__value"
+                title={broadcastResult.txid}
+              >
+                txid: {formatTxid(broadcastResult.txid)}
+              </div>
               <div className="send-result-card__value">
-                replaceable: {formatNullableBoolean(broadcastResult.replaceable)}
+                replaceable:{" "}
+                {formatNullableBoolean(broadcastResult.replaceable)}
               </div>
               <div className="send-result-card__value">
                 Possible CPFP outputs from refreshed UTXOs:{" "}
-                {lastBroadcastCpfpOutpoints.length > 0 ? "available" : "not visible yet"}
+                {lastBroadcastCpfpOutpoints.length > 0
+                  ? "available"
+                  : "not visible yet"}
               </div>
               {lastBroadcastCpfpOutpoints.length > 0 ? (
                 <div className="send-result-card__value">
                   {lastBroadcastCpfpOutpoints.map((outpoint) => (
-                    <div key={outpoint}>possible child input: {outpoint}</div>
+                    <div key={outpoint} title={outpoint}>
+                      possible child input: {formatOutpoint(outpoint)}
+                    </div>
                   ))}
                 </div>
               ) : (
                 <div className="send-result-card__value">
-                  For CPFP, sync the wallet and open this transaction from Transactions. The details modal now shows inputs/outputs, and the CPFP panel reads wallet-owned outputs from the transaction row.
+                  For CPFP, sync the wallet and open this transaction from
+                  Transactions. The details modal now shows inputs/outputs, and
+                  the CPFP panel reads wallet-owned outputs from the transaction
+                  row.
                 </div>
               )}
             </div>
@@ -516,7 +618,9 @@ export function SendPage() {
             utxos={availableUtxos}
             selectedUtxos={validSelectedUtxos}
             selectionMode={isStrictManualMode ? "manual" : coinSelectionMode}
-            onSelectionModeChange={isStrictManualMode ? undefined : setCoinSelectionMode}
+            onSelectionModeChange={
+              isStrictManualMode ? undefined : setCoinSelectionMode
+            }
             onUtxoSelectionChange={setSelectedUtxos}
             onClearSelection={() => setSelectedUtxos([])}
           />

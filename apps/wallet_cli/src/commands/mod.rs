@@ -1,6 +1,9 @@
+pub mod inspect;
 pub mod psbt;
 pub mod wallet;
-pub mod inspect;
+pub mod psbt_create;
+pub mod psbt_broadcast;
+pub mod psbt_rbf;
 
 use anyhow::Result;
 use wallet_api::WalletApi;
@@ -292,7 +295,7 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
             )
             .await?;
         }
-        Commands::ConsolidatePsbt {
+        Commands::Consolidate {
             name,
             fee_rate,
             replaceable,

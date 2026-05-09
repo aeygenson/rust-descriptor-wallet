@@ -7,11 +7,13 @@ import {
   getUtxoValueSat,
 } from "../lib";
 import {
+  formatBtcFromSats,
+  formatConfirmations,
+  formatOutpointFull,
   formatOutpointShort,
   formatSats,
   formatUtxoStatus,
 } from "../format";
-
 
 export function UtxosTable({
   utxos,
@@ -20,11 +22,16 @@ export function UtxosTable({
   onSelectAllVisible,
   onClearSelection,
 }: UtxosTableProps) {
-  const [sort, setSort] = useState<UtxoSortState>({ key: "value", direction: "desc" });
+  const [sort, setSort] = useState<UtxoSortState>({
+    key: "value_sat",
+    direction: "desc",
+  });
   const selectionEnabled = Boolean(onToggleOutpoint);
   const allSelected = areAllVisibleUtxosSelected(utxos, selectedOutpoints);
   const someSelected = areSomeVisibleUtxosSelected(utxos, selectedOutpoints);
   const headerChecked = allSelected;
+
+  const selectedSet = useMemo(() => new Set(selectedOutpoints), [selectedOutpoints]);
 
   const handleHeaderToggle = () => {
     if (!selectionEnabled) return;
@@ -39,7 +46,10 @@ export function UtxosTable({
   const handleSort = (key: UtxoSortKey) => {
     setSort((current) => {
       if (current.key !== key) {
-        return { key, direction: key === "value" || key === "height" ? "desc" : "asc" };
+        return {
+          key,
+          direction: key === "value_sat" || key === "height" ? "desc" : "asc",
+        };
       }
 
       return {
@@ -61,7 +71,7 @@ export function UtxosTable({
       switch (sort.key) {
         case "outpoint":
           return getUtxoOutpoint(a).localeCompare(getUtxoOutpoint(b)) * directionMultiplier;
-        case "value":
+        case "value_sat":
           return (getUtxoValueSat(a) - getUtxoValueSat(b)) * directionMultiplier;
         case "status":
           return (Number(a.confirmed) - Number(b.confirmed)) * directionMultiplier;
@@ -97,27 +107,47 @@ export function UtxosTable({
               </th>
             )}
             <th>
-              <button type="button" className="utxos-table__sort" onClick={() => handleSort("outpoint")}>
+              <button
+                type="button"
+                className="utxos-table__sort"
+                onClick={() => handleSort("outpoint")}
+              >
                 Outpoint{sortLabel("outpoint")}
               </button>
             </th>
             <th>
-              <button type="button" className="utxos-table__sort" onClick={() => handleSort("value")}>
-                Value{sortLabel("value")}
+              <button
+                type="button"
+                className="utxos-table__sort"
+                onClick={() => handleSort("value_sat")}
+              >
+                Value{sortLabel("value_sat")}
               </button>
             </th>
             <th>
-              <button type="button" className="utxos-table__sort" onClick={() => handleSort("status")}>
+              <button
+                type="button"
+                className="utxos-table__sort"
+                onClick={() => handleSort("status")}
+              >
                 Status{sortLabel("status")}
               </button>
             </th>
             <th>
-              <button type="button" className="utxos-table__sort" onClick={() => handleSort("height")}>
+              <button
+                type="button"
+                className="utxos-table__sort"
+                onClick={() => handleSort("height")}
+              >
                 Height{sortLabel("height")}
               </button>
             </th>
             <th>
-              <button type="button" className="utxos-table__sort" onClick={() => handleSort("keychain")}>
+              <button
+                type="button"
+                className="utxos-table__sort"
+                onClick={() => handleSort("keychain")}
+              >
                 Keychain{sortLabel("keychain")}
               </button>
             </th>
@@ -126,11 +156,19 @@ export function UtxosTable({
         <tbody>
           {sortedUtxos.map((utxo) => {
             const outpoint = getUtxoOutpoint(utxo);
-            const isSelected = selectedOutpoints.includes(outpoint);
+            const vout = outpoint.split(":").at(-1);
+            const isSelected = selectedSet.has(outpoint);
+            const confirmations = utxo.confirmed ? 6 : 0;
+            const confirmationLabel = utxo.confirmed ? "Confirmed" : "Pending";
             const valueSat = getUtxoValueSat(utxo);
 
             return (
-              <tr key={outpoint} className={isSelected ? "is-selected" : undefined}>
+              <tr
+                key={outpoint}
+                className={isSelected ? "is-selected" : undefined}
+                data-outpoint={outpoint}
+                data-confirmed={Boolean(utxo.confirmed)}
+              >
                 {selectionEnabled && (
                   <td className="utxos-table__checkbox-cell">
                     <input
@@ -142,16 +180,46 @@ export function UtxosTable({
                   </td>
                 )}
                 <td>
-                  <code title={outpoint}>{formatOutpointShort(outpoint)}</code>
+                  <div className="utxos-table__outpoint-cell">
+                    <code title={formatOutpointFull(outpoint)}>
+                      {formatOutpointShort(outpoint)}
+                    </code>
+                    <span>{vout ? `vout ${vout}` : "outpoint"}</span>
+                  </div>
                 </td>
-                <td>{formatSats(valueSat)}</td>
                 <td>
-                  <span className={`utxo-status ${utxo.confirmed ? "is-confirmed" : "is-pending"}`}>
-                    {formatUtxoStatus(Boolean(utxo.confirmed))}
+                  <div className="utxos-table__value-cell">
+                    <strong className="utxos-table__value-primary">
+                      {formatSats(valueSat)}
+                    </strong>
+                    <span className="utxos-table__value-secondary">
+                      {formatBtcFromSats(valueSat)}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div className="utxos-table__status-cell">
+                    <span
+                      className={`utxo-status ${utxo.confirmed ? "is-confirmed" : "is-pending"}`}
+                      title={formatConfirmations(confirmations)}
+                    >
+                      {formatUtxoStatus(Boolean(utxo.confirmed))}
+                    </span>
+                    <span className="utxos-table__status-subvalue">
+                      {confirmationLabel}
+                    </span>
+                  </div>
+                </td>
+                <td title={formatConfirmations(confirmations)}>
+                  <span className="utxos-table__height">
+                    {utxo.confirmation_height ?? "—"}
                   </span>
                 </td>
-                <td>{utxo.confirmation_height ?? "—"}</td>
-                <td>{utxo.keychain ?? "—"}</td>
+                <td>
+                  <span className="utxos-table__keychain">
+                    {utxo.keychain ?? "—"}
+                  </span>
+                </td>
               </tr>
             );
           })}

@@ -1,4 +1,6 @@
-use crate::model::{WalletTxDto, WalletUtxoDto};
+use crate::model::{
+    WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
+};
 use crate::WalletApiResult;
 use tokio::task;
 
@@ -27,10 +29,15 @@ where
 /// Return wallet transaction history using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
-pub async fn txs(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<WalletTxDto>> {
+pub async fn txs(
+    storage: &WalletStorage,
+    request: WalletTransactionsRequestDto,
+) -> WalletApiResult<Vec<WalletTxDto>> {
+    let WalletTransactionsRequestDto { name } = request;
+
     debug!("api inspect: txs start name={}", name);
 
-    let config = load_wallet_config(storage, name).await?;
+    let config = load_wallet_config(storage, &name).await?;
 
     let txs: Vec<WalletTxDto> = spawn_wallet_blocking(move || {
         let wallet = WalletService::load_or_create(&config)?;
@@ -49,10 +56,15 @@ pub async fn txs(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<Wal
 /// Return wallet UTXOs using the current synced wallet state.
 ///
 /// This performs no network calls. Call `sync(...)` first if fresh chain data is needed.
-pub async fn utxos(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<WalletUtxoDto>> {
+pub async fn utxos(
+    storage: &WalletStorage,
+    request: WalletUtxosRequestDto,
+) -> WalletApiResult<Vec<WalletUtxoDto>> {
+    let WalletUtxosRequestDto { name } = request;
+
     debug!("api inspect: utxos start name={}", name);
 
-    let config = load_wallet_config(storage, name).await?;
+    let config = load_wallet_config(storage, &name).await?;
 
     let utxos: Vec<WalletUtxoDto> = spawn_wallet_blocking(move || {
         let wallet = WalletService::load_or_create(&config)?;
@@ -64,9 +76,13 @@ pub async fn utxos(storage: &WalletStorage, name: &str) -> WalletApiResult<Vec<W
     .await?;
 
     info!(
-        "api inspect: utxos success name={} count={}",
+        "api inspect: utxos success name={} count={} with_derivation_index={}",
         name,
-        utxos.len()
+        utxos.len(),
+        utxos
+            .iter()
+            .filter(|utxo| utxo.derivation_index.is_some())
+            .count()
     );
 
     Ok(utxos)

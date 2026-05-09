@@ -3,6 +3,138 @@ mod common;
 use common::*;
 use serial_test::serial;
 use wallet_api::factory::build_default_api;
+use wallet_api::model::{
+    ConsolidationRequestDto, CreatePsbtRequestDto, WalletAddressRequestDto,
+    WalletConsolidationDto, WalletTransactionsRequestDto, WalletUtxosRequestDto,
+};
+use wallet_api::service;
+
+async fn create_consolidation_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    consolidation: WalletConsolidationDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletPsbtDto> {
+    service::psbt::create_consolidation(
+        &api.storage,
+        ConsolidationRequestDto {
+            name: name.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            consolidation,
+        },
+    )
+    .await
+}
+
+async fn consolidate_and_broadcast(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    consolidation: WalletConsolidationDto,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    service::psbt::consolidate(
+        &api.storage,
+        ConsolidationRequestDto {
+            name: name.to_string(),
+            fee_rate_sat_per_vb,
+            replaceable,
+            consolidation,
+        },
+    )
+    .await
+}
+
+async fn wallet_address(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
+    service::wallet::address(
+        &api.storage,
+        WalletAddressRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_txs(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletTxDto>> {
+    service::inspect::txs(
+        &api.storage,
+        WalletTransactionsRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn wallet_utxos(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+) -> wallet_api::WalletApiResult<Vec<wallet_api::model::WalletUtxoDto>> {
+    service::inspect::utxos(
+        &api.storage,
+        WalletUtxosRequestDto {
+            name: name.to_string(),
+        },
+    )
+    .await
+}
+
+async fn send_psbt(
+    api: &wallet_api::api::WalletApi,
+    name: &str,
+    to_address: &str,
+    amount_sat: u64,
+    fee_rate_sat_per_vb: u64,
+    replaceable: bool,
+    confirmed_only: bool,
+) -> wallet_api::WalletApiResult<wallet_api::model::TxBroadcastResultDto> {
+    let coin_control = if confirmed_only {
+        Some(wallet_api::model::WalletCoinControlDto {
+            confirmed_only: true,
+            ..Default::default()
+        })
+    } else {
+        None
+    };
+
+    let created = service::psbt::create(
+        &api.storage,
+        CreatePsbtRequestDto {
+            name: name.to_string(),
+            to_address: to_address.to_string(),
+            amount_sat,
+            fee_rate_sat_per_vb,
+            replaceable,
+            coin_control,
+        },
+    )
+    .await?;
+
+    let signed = service::psbt::sign(
+        &api.storage,
+        wallet_api::model::SignPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: created.psbt_base64,
+        },
+    )
+    .await?;
+
+    service::psbt::publish(
+        &api.storage,
+        wallet_api::model::PublishPsbtRequestDto {
+            name: name.to_string(),
+            psbt_base64: signed.psbt_base64,
+        },
+    )
+    .await
+}
 
 mod happy_path {
     use super::*;
@@ -18,25 +150,25 @@ mod happy_path {
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
         api.sync(wallet_name).await?;
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(4),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(4),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert!(
             !psbt.psbt_base64.is_empty(),
@@ -88,25 +220,25 @@ mod happy_path {
             .map(|(outpoint, _)| outpoint.clone())
             .collect();
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: requested.clone(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: requested.clone(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
         assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
@@ -146,25 +278,25 @@ mod happy_path {
             .map(|(outpoint, _)| outpoint.clone())
             .collect();
 
-        let published = api
-            .consolidate_and_broadcast(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: requested.clone(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let published = consolidate_and_broadcast(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: requested.clone(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert!(
             !published.txid.is_empty(),
@@ -172,7 +304,7 @@ mod happy_path {
         );
 
         api.sync(wallet_name).await?;
-        let utxos_after_send = api.utxos(wallet_name).await?;
+        let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
         for outpoint in &requested {
             assert!(
                 !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
@@ -196,7 +328,7 @@ mod happy_path {
         env.mine(1)?;
         api.sync(wallet_name).await?;
 
-        let txs = api.txs(wallet_name).await?;
+        let txs = wallet_txs(&api, wallet_name).await?;
         let sent_tx = txs
             .iter()
             .find(|tx| tx.txid == published.txid)
@@ -222,25 +354,25 @@ mod happy_path {
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 3, 80_000).await?;
         api.sync(wallet_name).await?;
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(3),
-                    min_input_count: Some(2),
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(3),
+                min_input_count: Some(2),
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert_eq!(psbt.recipient_count, 1);
         assert_eq!(psbt.output_count, 1);
@@ -265,28 +397,32 @@ mod filters {
         let wallet_name = "regtest-local";
 
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
-        let requested: Vec<String> = confirmed.into_iter().map(|(o, _)| o).collect();
+        let requested: Vec<String> = confirmed
+            .into_iter()
+            .take(2)
+            .map(|(o, _)| o)
+            .collect();
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: requested,
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: Some(3),
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err("expected min_input_count constraint to fail");
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: requested,
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: Some(3),
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err("expected min_input_count constraint to fail");
 
         assert!(!err.to_string().is_empty());
         Ok(())
@@ -304,25 +440,25 @@ mod filters {
 
         let _confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: Some(15_000),
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: Some(15_000),
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert!(psbt.selected_utxo_count >= 1);
         Ok(())
@@ -339,32 +475,32 @@ mod filters {
         let wallet_name = "regtest-local";
 
         for _ in 0..2 {
-            let addr = api.address(wallet_name).await?;
-            let addr = parse_regtest_address(&addr)?;
+            let receive_address = api.address(wallet_name).await?;
+            let addr = parse_regtest_address(&receive_address.address)?;
             env.fund_sats(&addr, 20_000)?;
         }
         env.mine(1)?;
         api.sync(wallet_name).await?;
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: Some(30_000),
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: Some(30_000),
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert!(psbt.selected_utxo_count >= 1);
         Ok(())
@@ -382,26 +518,26 @@ mod filters {
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 10_000).await?;
         let requested: Vec<String> = confirmed.into_iter().map(|(o, _)| o).collect();
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                50,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: requested,
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: Some(1),
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err("expected fee percentage limit to fail");
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            50,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: requested,
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: Some(1),
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err("expected fee percentage limit to fail");
 
         assert!(!err.to_string().is_empty());
         Ok(())
@@ -419,44 +555,44 @@ mod strategies {
         let api = build_default_api().await?;
         let wallet_name = "regtest-local";
 
-        ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 3, 80_000).await?;
-        api.sync(wallet_name).await?;
+        let (preexisting_confirmed, funded) =
+            fund_exact_confirmed_wallet_utxos(&api, &env, wallet_name, &[210_000, 130_000, 90_000])
+                .await?;
 
-        let mut available: Vec<(String, u64)> = api
-            .utxos(wallet_name)
-            .await?
-            .into_iter()
-            .filter(|u| u.confirmed)
-            .map(|u| (u.outpoint, u.value))
-            .collect();
+        let mut available = funded;
         available.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         let expected: Vec<String> = available.iter().take(2).map(|(o, _)| o.clone()).collect();
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: Some(wallet_api::model::WalletConsolidationStrategyDto::LargestFirst),
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: preexisting_confirmed,
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: Some(wallet_api::model::WalletConsolidationStrategyDto::LargestFirst),
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
         assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
         for e in expected {
-            assert!(inputs.contains(&e));
+            assert!(
+                inputs.contains(&e),
+                "largest-first mismatch: expected input {e} in {:?}; funded candidates were {:?}",
+                inputs,
+                available
+            );
         }
         Ok(())
     }
@@ -470,46 +606,46 @@ mod strategies {
         let api = build_default_api().await?;
         let wallet_name = "regtest-local";
 
-        ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 3, 80_000).await?;
-        api.sync(wallet_name).await?;
+        let (preexisting_confirmed, funded) =
+            fund_exact_confirmed_wallet_utxos(&api, &env, wallet_name, &[210_000, 130_000, 90_000])
+                .await?;
 
-        let mut available: Vec<(String, u64)> = api
-            .utxos(wallet_name)
-            .await?
-            .into_iter()
-            .filter(|u| u.confirmed)
-            .map(|u| (u.outpoint, u.value))
-            .collect();
+        let mut available = funded;
         available.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
 
         let expected: Vec<String> = available.iter().take(2).map(|(o, _)| o.clone()).collect();
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: Some(
-                        wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
-                    ),
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: preexisting_confirmed,
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: Some(
+                    wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
+                ),
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         let inputs = decode_psbt_inputs(&psbt.psbt_base64)?;
         assert_eq!(inputs.len(), 2, "expected exactly two selected inputs");
         for e in expected {
-            assert!(inputs.contains(&e));
+            assert!(
+                inputs.contains(&e),
+                "smallest-first mismatch: expected input {e} in {:?}; funded candidates were {:?}",
+                inputs,
+                available
+            );
         }
         Ok(())
     }
@@ -529,33 +665,33 @@ mod edge_cases {
 
         api.sync(wallet_name).await?;
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: vec![
-                        "0000000000000000000000000000000000000000000000000000000000000001:0"
-                            .to_string(),
-                        "0000000000000000000000000000000000000000000000000000000000000002:0"
-                            .to_string(),
-                    ],
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: false,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err(
-                "expected consolidation PSBT creation to fail for missing selected outpoint",
-            );
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: vec![
+                    "0000000000000000000000000000000000000000000000000000000000000001:0"
+                        .to_string(),
+                    "0000000000000000000000000000000000000000000000000000000000000002:0"
+                        .to_string(),
+                ],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: false,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err(
+            "expected consolidation PSBT creation to fail for missing selected outpoint",
+        );
 
         let msg = err.to_string();
         assert!(
@@ -580,26 +716,26 @@ mod edge_cases {
         let outpoint = confirmed[0].0.clone();
         let second = confirmed[1].0.clone();
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: vec![outpoint.clone(), second],
-                    exclude_outpoints: vec![outpoint.clone()],
-                    confirmed_only: true,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err("expected consolidation include/exclude conflict to fail");
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: vec![outpoint.clone(), second],
+                exclude_outpoints: vec![outpoint.clone()],
+                confirmed_only: true,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err("expected consolidation include/exclude conflict to fail");
 
         let msg = err.to_string();
         assert!(
@@ -623,17 +759,24 @@ mod edge_cases {
 
         api.sync(wallet_name).await?;
 
-        let destination = api.address(wallet_name).await?;
-        let parent = api
-            .send_psbt(wallet_name, &destination, 10_000, 1, false, false)
-            .await?;
+        let destination = wallet_address(&api, wallet_name).await?;
+        let parent = send_psbt(
+            &api,
+            wallet_name,
+            &destination.address,
+            10_000,
+            1,
+            false,
+            false,
+        )
+        .await?;
         assert!(
             !parent.txid.is_empty(),
             "expected parent txid to be present"
         );
 
         api.sync(wallet_name).await?;
-        let utxos = api.utxos(wallet_name).await?;
+        let utxos = wallet_utxos(&api, wallet_name).await?;
         let selected: Vec<String> = utxos
             .iter()
             .filter(|u| outpoint_txid(&u.outpoint) == parent.txid)
@@ -647,28 +790,28 @@ mod edge_cases {
             "expected at least two unconfirmed wallet-owned outputs for consolidation"
         );
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: selected,
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err(
-                "expected confirmed-only consolidation to reject unconfirmed selected UTXOs",
-            );
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: selected,
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err(
+            "expected confirmed-only consolidation to reject unconfirmed selected UTXOs",
+        );
 
         let msg = err.to_string();
         assert!(
@@ -692,26 +835,26 @@ mod edge_cases {
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
         let requested = confirmed[0].0.clone();
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: vec![requested],
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: None,
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err("expected consolidation to fail when fewer than two inputs are selected");
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: vec![requested],
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err("expected consolidation to fail when fewer than two inputs are selected");
 
         let msg = err.to_string();
         assert!(
@@ -744,26 +887,26 @@ mod edge_cases {
             .collect();
         let selected_total: u64 = confirmed.iter().take(2).map(|(_, value)| *value).sum();
 
-        let err = api
-            .create_consolidation_psbt(
-                wallet_name,
-                selected_total + 1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: requested,
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(2),
-                    min_input_count: None,
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: None,
-                    selection_mode: None,
-                },
-            )
-            .await
-            .expect_err("expected consolidation to fail when fees consume the selected inputs");
+        let err = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            selected_total + 1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: requested,
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(2),
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: None,
+                selection_mode: None,
+            },
+        )
+        .await
+        .expect_err("expected consolidation to fail when fees consume the selected inputs");
 
         let msg = err.to_string();
         assert!(
@@ -787,27 +930,27 @@ mod edge_cases {
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 4, 80_000).await?;
         api.sync(wallet_name).await?;
 
-        let psbt = api
-            .create_consolidation_psbt(
-                wallet_name,
-                1,
-                false,
-                wallet_api::model::WalletConsolidationDto {
-                    include_outpoints: Vec::new(),
-                    exclude_outpoints: Vec::new(),
-                    confirmed_only: true,
-                    max_input_count: Some(3),
-                    min_input_count: Some(2),
-                    min_utxo_value_sat: None,
-                    max_utxo_value_sat: None,
-                    max_fee_pct_of_input_value: None,
-                    strategy: Some(
-                        wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
-                    ),
-                    selection_mode: None,
-                },
-            )
-            .await?;
+        let psbt = create_consolidation_psbt(
+            &api,
+            wallet_name,
+            1,
+            false,
+            wallet_api::model::WalletConsolidationDto {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: Vec::new(),
+                confirmed_only: true,
+                max_input_count: Some(3),
+                min_input_count: Some(2),
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                max_fee_pct_of_input_value: None,
+                strategy: Some(
+                    wallet_api::model::WalletConsolidationStrategyDto::SmallestFirst,
+                ),
+                selection_mode: None,
+            },
+        )
+        .await?;
 
         assert!(
             !psbt.psbt_base64.is_empty(),
@@ -837,6 +980,10 @@ mod edge_cases {
         );
         assert!(psbt.fee_sat > 0, "expected positive consolidation fee");
         assert!(
+            psbt.replacement.is_none(),
+            "consolidation PSBT should not contain replacement metadata"
+        );
+        assert!(
             psbt.estimated_vsize > 0,
             "expected positive estimated vsize"
         );
@@ -846,7 +993,7 @@ mod edge_cases {
         );
 
         api.sync(wallet_name).await?;
-        let wallet_utxos = api.utxos(wallet_name).await?;
+        let wallet_utxos = wallet_utxos(&api, wallet_name).await?;
         assert!(
             wallet_utxos.iter().all(|u| u.outpoint != psbt.to_address),
             "expected destination address string not to be confused with an outpoint"
@@ -879,7 +1026,7 @@ mod fuzz {
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 6, 80_000).await?;
         api.sync(wallet_name).await?;
 
-        let utxos = api.utxos(wallet_name).await?;
+        let utxos = wallet_utxos(&api, wallet_name).await?;
         let mut confirmed: Vec<(String, u64)> = utxos
             .into_iter()
             .filter(|u| u.confirmed)
@@ -930,25 +1077,25 @@ mod fuzz {
             };
 
             let fee_rate = 1 + (draw_a % 3);
-            let result = api
-                .create_consolidation_psbt(
-                    wallet_name,
-                    fee_rate,
-                    false,
-                    wallet_api::model::WalletConsolidationDto {
-                        include_outpoints: Vec::new(),
-                        exclude_outpoints: Vec::new(),
-                        confirmed_only: true,
-                        max_input_count,
-                        min_input_count,
-                        min_utxo_value_sat,
-                        max_utxo_value_sat,
-                        max_fee_pct_of_input_value: None,
-                        strategy,
-                        selection_mode: None,
-                    },
-                )
-                .await;
+            let result = create_consolidation_psbt(
+                &api,
+                wallet_name,
+                fee_rate,
+                false,
+                wallet_api::model::WalletConsolidationDto {
+                    include_outpoints: Vec::new(),
+                    exclude_outpoints: Vec::new(),
+                    confirmed_only: true,
+                    max_input_count,
+                    min_input_count,
+                    min_utxo_value_sat,
+                    max_utxo_value_sat,
+                    max_fee_pct_of_input_value: None,
+                    strategy,
+                    selection_mode: None,
+                },
+            )
+            .await;
 
             match result {
                 Ok(psbt) => {

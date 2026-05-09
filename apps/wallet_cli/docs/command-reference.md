@@ -76,6 +76,12 @@ Status includes wallet balance, UTXO count, and latest observed block height.
 cargo run -p wallet_cli -- address --name <wallet>
 ```
 
+Address output is structured:
+
+- `address=<encoded-address>`
+- `keychain=external|internal`
+- `index=<derivation-index|n/a>`
+
 ### List UTXOs
 
 ```bash
@@ -83,6 +89,7 @@ cargo run -p wallet_cli -- utxos --name <wallet>
 ```
 
 UTXO output includes outpoint, value, confirmation state, address when available, and keychain.
+When derivation metadata is known, the CLI also prints `index=<derivation-index>`.
 
 ### List transactions
 
@@ -90,7 +97,11 @@ UTXO output includes outpoint, value, confirmation state, address when available
 cargo run -p wallet_cli -- txs --name <wallet>
 ```
 
-Transaction output includes txid, direction, net value, fee when known, confirmation state, and replaceability.
+Transaction output includes txid, direction, net value, fee when known, confirmation state, replaceability, input count, unique parent count, and wallet-owned outputs. The CLI also prints:
+
+- `inputs:` with previous outpoints
+- `parents:` with deduplicated parent txids
+- `wallet_outputs:` with ownership, keychain, and address metadata
 
 ## PSBT Lifecycle
 
@@ -140,6 +151,14 @@ cargo run -p wallet_cli -- publish-psbt \
   --name <wallet> \
   --psbt-base64 '<base64>'
 ```
+
+All PSBT preview commands print a shared structured summary. Depending on the flow, output can include:
+
+- `original_txid=<txid>`
+- `replacement:` with replacement lineage details
+- `selected_inputs:`
+- `change=<sats>`
+- the final `psbt_base64` payload
 
 ## One-Shot Fixed Send
 
@@ -260,7 +279,7 @@ cargo run -p wallet_cli -- create-consolidation-psbt \
 ### One-shot consolidation
 
 ```bash
-cargo run -p wallet_cli -- consolidate-psbt \
+cargo run -p wallet_cli -- consolidate \
   --name <wallet> \
   --fee-rate <sat/vb> \
   --confirmed-only \

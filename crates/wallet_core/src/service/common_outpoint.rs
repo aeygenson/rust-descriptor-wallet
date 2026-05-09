@@ -1,6 +1,6 @@
 use bitcoin::{OutPoint, Txid};
 
-use crate::types::WalletOutPoint;
+use crate::types::{WalletOutPoint, WalletTxid};
 use crate::{WalletCoreError, WalletCoreResult};
 
 /// Parse a txid from string.
@@ -92,8 +92,29 @@ pub fn ensure_no_outpoint_overlap(
 }
 
 /// Return the transaction id portion of a strongly-typed wallet outpoint.
-pub fn outpoint_txid(outpoint: &WalletOutPoint) -> crate::types::WalletTxid {
-    crate::types::WalletTxid::from(outpoint.as_ref().txid)
+pub fn outpoint_txid(outpoint: &WalletOutPoint) -> WalletTxid {
+    WalletTxid::from(outpoint.as_ref().txid)
+}
+
+/// Group wallet outpoints by their transaction id.
+///
+/// This is useful for CPFP/package analysis, transaction graphing,
+/// and future UI workflows that need parent transaction grouping without
+/// returning to raw string parsing.
+pub fn group_outpoints_by_txid(
+    outpoints: &[WalletOutPoint],
+) -> std::collections::HashMap<WalletTxid, Vec<WalletOutPoint>> {
+    let mut grouped: std::collections::HashMap<WalletTxid, Vec<WalletOutPoint>> =
+        std::collections::HashMap::new();
+
+    for outpoint in outpoints {
+        grouped
+            .entry(outpoint_txid(outpoint))
+            .or_default()
+            .push(*outpoint);
+    }
+
+    grouped
 }
 
 #[cfg(test)]
@@ -238,5 +259,27 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn group_outpoints_by_txid_groups_outputs_from_same_parent() {
+        let first = WalletOutPoint::parse(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:0",
+        )
+        .unwrap();
+        let second = WalletOutPoint::parse(
+            "b09f4f973fdc20fdad67ee670572037a1e8fec94848bca9293f78e89e26667ee:1",
+        )
+        .unwrap();
+        let third = WalletOutPoint::parse(
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:0",
+        )
+        .unwrap();
+
+        let grouped = group_outpoints_by_txid(&[first, second, third]);
+
+        assert_eq!(grouped.len(), 2);
+        assert_eq!(grouped.get(&outpoint_txid(&first)).unwrap().len(), 2);
+        assert_eq!(grouped.get(&outpoint_txid(&third)).unwrap().len(), 1);
     }
 }

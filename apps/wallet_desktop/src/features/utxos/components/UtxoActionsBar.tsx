@@ -1,4 +1,5 @@
 import type { UtxoSelectionActionBarProps } from "../types";
+import { formatBtcFromSats } from "../format";
 
 export function UtxoActionsBar({
   selectedCount,
@@ -12,11 +13,25 @@ export function UtxoActionsBar({
 }: UtxoSelectionActionBarProps) {
   if (selectedCount === 0) return null;
 
+  const formattedBtcValue = formatBtcFromSats(selectedValueSat);
+  const formattedSelectedValue = selectedValueSat.toLocaleString();
+
   return (
     <div className="utxo-actions-bar">
       <div className="utxo-actions-bar__left">
-        <span className="utxo-actions-bar__label">
-          Actions for {selectedCount} selected ({selectedValueSat.toLocaleString()} sats)
+        <div className="utxo-actions-bar__summary">
+          <span className="utxo-actions-bar__badge">
+            {selectedCount.toLocaleString()} selected
+          </span>
+
+          <div className="utxo-actions-bar__values">
+            <strong>{formattedSelectedValue} sats</strong>
+            <span>{formattedBtcValue}</span>
+          </div>
+        </div>
+
+        <span className="utxo-actions-bar__hint">
+          Selected inputs can be forwarded directly into Send, Sweep, Consolidation, or future CPFP flows.
         </span>
       </div>
 
@@ -25,15 +40,17 @@ export function UtxoActionsBar({
           type="button"
           className="utxo-actions-bar__btn"
           disabled={disabled}
+          title="Create a standard payment using the selected inputs"
           onClick={onSendFixedSelected}
         >
-          Send Fixed
+          Send
         </button>
 
         <button
           type="button"
           className="utxo-actions-bar__btn"
           disabled={disabled}
+          title="Spend the selected inputs minus fees"
           onClick={onSendMaxSelected}
         >
           Send Max
@@ -43,6 +60,7 @@ export function UtxoActionsBar({
           type="button"
           className="utxo-actions-bar__btn"
           disabled={disabled}
+          title="Sweep the selected inputs into a destination address"
           onClick={onSweepSelected}
         >
           Sweep
@@ -52,6 +70,7 @@ export function UtxoActionsBar({
           type="button"
           className="utxo-actions-bar__btn"
           disabled={disabled}
+          title="Merge selected inputs into fewer wallet-controlled outputs"
           onClick={onConsolidateSelected}
         >
           Consolidate
@@ -60,6 +79,8 @@ export function UtxoActionsBar({
         <button
           type="button"
           className="utxo-actions-bar__btn utxo-actions-bar__btn--secondary"
+          disabled={disabled}
+          title="Clear the current UTXO selection"
           onClick={onClearSelection}
         >
           Clear

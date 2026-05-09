@@ -3,6 +3,8 @@
 import { invokeCommand } from "../../shared/lib/tauri";
 
 import type {
+  BumpFeeRequestDto,
+  CpfpRequestDto,
   TxBroadcastResultDto,
   WalletCpfpPsbtDto,
   WalletPsbtDto,
@@ -12,8 +14,12 @@ import type {
 
 import type { PublishPsbtInput, SignPsbtInput } from "./types";
 
-export async function listTransactions(walletName: string): Promise<WalletTxDto[]> {
-  const transactions = await invokeCommand<WalletTxDto[]>("list_transactions", { walletName });
+export async function listTransactions(
+  walletName: string,
+): Promise<WalletTxDto[]> {
+  const transactions = await invokeCommand<WalletTxDto[]>("list_transactions", {
+    walletName,
+  });
 
   console.debug(
     "[transactions/api] list_transactions response",
@@ -22,7 +28,8 @@ export async function listTransactions(walletName: string): Promise<WalletTxDto[
       confirmed: tx.confirmed,
       replaceable: tx.replaceable,
       outputs: tx.outputs?.length ?? 0,
-      walletOwnedOutputs: tx.outputs?.filter((output) => output.is_mine).length ?? 0,
+      walletOwnedOutputs:
+        tx.outputs?.filter((output) => output.is_mine).length ?? 0,
     })),
   );
 
@@ -42,12 +49,31 @@ export type CpfpPsbtInput = {
   feeRateSatPerVb: number;
 };
 
-export async function bumpFeePsbt(input: BumpFeePsbtInput): Promise<WalletPsbtDto> {
-  const request = {
-    walletName: input.walletName,
+function toBumpFeeRequestDto(
+  input: BumpFeePsbtInput,
+): BumpFeeRequestDto {
+  return {
+    name: input.walletName,
     txid: input.txid,
-    feeRateSatVb: input.feeRateSatPerVb,
+    fee_rate_sat_per_vb: input.feeRateSatPerVb,
   };
+}
+
+function toCpfpRequestDto(
+  input: CpfpPsbtInput,
+): CpfpRequestDto {
+  return {
+    name: input.walletName,
+    parent_txid: input.parentTxid,
+    selected_outpoint: input.selectedOutpoint,
+    fee_rate_sat_per_vb: input.feeRateSatPerVb,
+  };
+}
+
+export async function bumpFeePsbt(
+  input: BumpFeePsbtInput,
+): Promise<WalletPsbtDto> {
+  const request = toBumpFeeRequestDto(input);
 
   console.debug("[transactions/api] bump_fee_psbt request", request);
 
@@ -56,13 +82,10 @@ export async function bumpFeePsbt(input: BumpFeePsbtInput): Promise<WalletPsbtDt
   });
 }
 
-export async function cpfpPsbt(input: CpfpPsbtInput): Promise<WalletCpfpPsbtDto> {
-  const request = {
-    walletName: input.walletName,
-    parentTxid: input.parentTxid,
-    selectedOutpoint: input.selectedOutpoint,
-    feeRateSatVb: input.feeRateSatPerVb,
-  };
+export async function cpfpPsbt(
+  input: CpfpPsbtInput,
+): Promise<WalletCpfpPsbtDto> {
+  const request = toCpfpRequestDto(input);
 
   console.debug("[transactions/api] cpfp_psbt request", request);
 
@@ -72,15 +95,13 @@ export async function cpfpPsbt(input: CpfpPsbtInput): Promise<WalletCpfpPsbtDto>
 }
 
 // Optional direct-send helper (non-PSBT flow)
-export async function bumpFee(input: BumpFeePsbtInput): Promise<{ txid: string }> {
+export async function bumpFee(
+  input: BumpFeePsbtInput,
+): Promise<{ txid: string }> {
   console.debug("[transactions/api] bump_fee request", input);
 
   return invokeCommand<{ txid: string }>("bump_fee", {
-    request: {
-      walletName: input.walletName,
-      txid: input.txid,
-      feeRateSatVb: input.feeRateSatPerVb,
-    },
+    request: toBumpFeeRequestDto(input),
   });
 }
 
@@ -88,16 +109,13 @@ export async function cpfp(input: CpfpPsbtInput): Promise<TxBroadcastResultDto> 
   console.debug("[transactions/api] cpfp request", input);
 
   return invokeCommand<TxBroadcastResultDto>("cpfp", {
-    request: {
-      walletName: input.walletName,
-      parentTxid: input.parentTxid,
-      selectedOutpoint: input.selectedOutpoint,
-      feeRateSatVb: input.feeRateSatPerVb,
-    },
+    request: toCpfpRequestDto(input),
   });
 }
 
-export async function signPsbt(input: SignPsbtInput): Promise<WalletSignedPsbtDto> {
+export async function signPsbt(
+  input: SignPsbtInput,
+): Promise<WalletSignedPsbtDto> {
   const request = {
     walletName: input.walletName,
     psbtBase64: input.psbtBase64,
@@ -110,7 +128,9 @@ export async function signPsbt(input: SignPsbtInput): Promise<WalletSignedPsbtDt
   });
 }
 
-export async function publishPsbt(input: PublishPsbtInput): Promise<TxBroadcastResultDto> {
+export async function publishPsbt(
+  input: PublishPsbtInput,
+): Promise<TxBroadcastResultDto> {
   const request = {
     walletName: input.walletName,
     psbtBase64: input.psbtBase64,

@@ -33,6 +33,8 @@ In one-shot commands, some of these steps are combined.
 
 Even in those cases, the backend still conceptually performs the same sequence.
 
+Preview output is intentionally rich. The CLI exposes selected inputs, counts, estimated vsize, optional change, and for replacement flows also `original_txid` plus replacement-lineage metadata.
+
 ---
 
 ## Standard Fixed-Amount Send
@@ -60,6 +62,7 @@ Important notes:
 - final selected inputs come from the backend
 - change output may be created
 - replaceability depends on request and transaction settings
+- the preview is authoritative for the final selected input set
 
 ---
 
@@ -87,6 +90,7 @@ Important notes:
 - the amount is not user-fixed
 - selected inputs still depend on input-selection mode
 - change output may or may not exist depending on the chosen inputs and fee outcome
+- preview output should be used to verify whether the send-max build still produced change
 
 ---
 
@@ -122,6 +126,7 @@ Important notes:
 - in strict sweep-like behavior, additional wallet inputs should not be silently added
 - sweep-like flows are expected to avoid wallet-internal change when fully draining selected inputs
 - preview output should be used to verify no-change expectations
+- preview-only creation uses `sweep-psbt`; the one-shot command is `sweep`
 
 ---
 
@@ -152,6 +157,7 @@ Important notes:
 - the output remains inside the same wallet
 - this should not be presented as a normal recipient payment
 - consolidation can be used to simplify future spending and reduce UTXO set complexity inside the wallet
+- preview-only creation uses `create-consolidation-psbt`; the one-shot command is `consolidate`
 
 ---
 
@@ -176,6 +182,7 @@ The backend resolves the request and produces the final selected input set.
 This distinction is important:
 - user-requested inputs are not always the same as final backend-selected inputs
 - the preview step is authoritative
+- post-broadcast CLI `txs` output can be used to inspect parent txids and wallet-owned outputs for the resulting transaction graph
 
 ---
 
@@ -244,6 +251,7 @@ Important notes:
 - the replacement transaction should clearly reference the original txid in preview/output
 - replaceability must be surfaced clearly to the user
 - this is a first-class maintenance action, not a normal send
+- preview can also include `replaced_txid`, `replacement_txid`, `replacement_depth`, and `replacement_chain`
 
 ---
 

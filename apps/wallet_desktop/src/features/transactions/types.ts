@@ -1,9 +1,9 @@
 import type {
   TxBroadcastResultDto,
+  WalletCpfpPsbtDto,
   WalletPsbtDto,
   WalletSignedPsbtDto,
   WalletTxDto,
-  WalletCpfpPsbtDto,
 } from "../../shared/types/dtos";
 
 // Derive direction directly from DTO to avoid drift from Rust source of truth
@@ -27,8 +27,19 @@ export type TransactionIntent =
   | "cpfp"
   | "unknown";
 
+export type TransactionConfirmationState =
+  | "pending"
+  | "confirmed"
+  | "finalized";
+
+export type TransactionRelationshipKind = "parents" | "children";
+
 export type TransactionIntentBadgeProps = {
   intent: TransactionIntent;
+};
+
+export type TransactionConfirmationBadgeProps = {
+  state: TransactionConfirmationState;
 };
 
 export type TransactionsFilterBarProps = {
@@ -39,7 +50,7 @@ export type TransactionsFilterBarProps = {
 
 export type TransactionRelationCellProps = {
   txids: string[];
-  kind: "parents" | "children";
+  kind: TransactionRelationshipKind;
   onOpenTx?: (txid: string) => void;
 };
 
@@ -58,6 +69,18 @@ export type TransactionActionsMenuProps = {
   onCpfp: (tx: WalletTxDto) => void;
 };
 
+export type TransactionRowActions = {
+  canBumpFee: boolean;
+  canCpfp: boolean;
+  canCopyTxid: boolean;
+  canOpenDetails: boolean;
+};
+
+export type TransactionWorkflowState = {
+  loading: boolean;
+  error: string | null;
+};
+
 export type BumpFeePsbtInput = {
   walletName: string;
   txid: string;
@@ -69,7 +92,9 @@ export type BumpFeePanelProps = {
   walletName: string;
   loading?: boolean;
   onCancel: () => void;
-  onCreatePsbt: (input: BumpFeePsbtInput) => Promise<void> | void;
+  onCreatePsbt: (
+    input: BumpFeePsbtInput,
+  ) => Promise<void> | void;
 };
 
 export type RbfPsbtWorkflowProps = {
@@ -101,12 +126,19 @@ export type CpfpPsbtInput = {
   walletName: string;
   parentTxid: string;
   selectedOutpoint: string;
-  feeRateSatVb: number;
+  feeRateSatPerVb: number;
 };
 
 export type CpfpPanelInput = {
   selectedOutpoint: string;
-  feeRateSatVb: string;
+  feeRateSatPerVb: string;
+};
+
+export type TransactionRowState = {
+  txid: string;
+  selected?: boolean;
+  expanded?: boolean;
+  highlighted?: boolean;
 };
 
 export type CpfpPanelProps = {
@@ -115,7 +147,9 @@ export type CpfpPanelProps = {
   loading?: boolean;
   availableOutpoints: string[];
   onCancel: () => void;
-  onCreatePsbt: (input: CpfpPsbtInput) => Promise<void> | void;
+  onCreatePsbt: (
+    input: CpfpPsbtInput,
+  ) => Promise<void> | void;
 };
 
 export type CpfpPsbtWorkflowPanelProps = {

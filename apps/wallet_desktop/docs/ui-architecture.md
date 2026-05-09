@@ -20,6 +20,7 @@ src/
     providers/
     router/
   features/
+    receive/
     wallet/
     utxos/
     send/
@@ -33,9 +34,10 @@ This is now real structure, not just a proposed target.
 
 ## Routing
 
-[src/app/router/routes.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/app/router/routes.ts) defines four routes:
+[src/app/router/routes.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/app/router/routes.ts) defines five routes:
 
 - `/`
+- `/receive`
 - `/utxos`
 - `/send`
 - `/transactions`
@@ -71,6 +73,17 @@ This is the one real global state boundary in the current app.
 ### Wallet
 
 [src/features/wallet/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/wallet/api.ts) wraps app-info, wallet listing, status, sync, and backend health commands.
+
+### Receive
+
+[src/features/receive](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/receive) owns:
+
+- receive-address API wrapper
+- address formatting and Bitcoin-URI helpers
+- generated-address card rendering
+- empty-state rendering for no-wallet and no-address states
+
+This feature is intentionally narrow. It is a direct frontend wrapper over wallet-controlled address generation rather than a generalized address-book or request-management system.
 
 ### UTXOs
 
@@ -169,6 +182,8 @@ Rust commands are grouped under:
 - [src-tauri/src/commands/transactions.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/transactions.rs)
 - [src-tauri/src/commands/send.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send.rs)
 - request DTO decoding in [src-tauri/src/commands/send_model.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send_model.rs)
+
+The receive flow lives in the wallet command module through `get_receive_address`. Send-related Tauri commands now normalize frontend request objects into the canonical `wallet_api` request DTOs before calling into Rust service functions.
 
 ## Architectural Decisions Visible In Code
 

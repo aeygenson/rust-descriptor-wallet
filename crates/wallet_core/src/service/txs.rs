@@ -1,6 +1,7 @@
 use bdk_chain::ChainPosition;
 use tracing::debug;
 
+use super::common_outpoint::{group_outpoints_by_txid, outpoint_txid};
 use super::common_tx::{
     classify_tx_direction, fee_rate_sat_per_vb_from_fee_and_vsize, is_rbf_enabled,
 };
@@ -83,7 +84,7 @@ impl WalletService {
 
             let replaceable = is_rbf_enabled(&tx.tx_node.tx);
 
-            let inputs = tx
+            let inputs: Vec<WalletTxInputInfo> = tx
                 .tx_node
                 .tx
                 .input
@@ -92,6 +93,18 @@ impl WalletService {
                     previous_outpoint: input.previous_output.into(),
                 })
                 .collect();
+
+            let previous_outpoints: Vec<_> = inputs
+                .iter()
+                .map(|input| input.previous_outpoint)
+                .collect();
+            let grouped_parent_outpoints = group_outpoints_by_txid(&previous_outpoints);
+            debug!(
+                txid = %txid,
+                input_count = inputs.len(),
+                parent_tx_count = grouped_parent_outpoints.len(),
+                "wallet_service: transactions input parent grouping"
+            );
 
             // Determine confirmation status and height from chain position
             let (confirmed, confirmation_height) = match tx.chain_position {
@@ -168,6 +181,11 @@ mod tests {
                     input.previous_outpoint.to_string().contains(':'),
                     "input previous outpoint should be in txid:vout form"
                 );
+                assert_eq!(
+                    outpoint_txid(&input.previous_outpoint).to_string().len(),
+                    64,
+                    "input previous txid should be canonical hex"
+                );
             }
 
             for output in &tx.outputs {
@@ -179,5 +197,21 @@ mod tests {
                 assert!(output.is_mine, "transaction outputs should be wallet-owned");
             }
         }
+    }
+
+    #[test]
+    fn transaction_input_parent_grouping_handles_empty_projection() {
+        let config = test_config_with_db_prefix("wallet_core_txs_grouping");
+        let wallet = WalletService::load_or_create(&config)
+            .expect("wallet should load or create successfully");
+
+        let txs = wallet.transactions();
+        let all_inputs: Vec<_> = txs
+            .iter()
+            .flat_map(|tx| tx.inputs.iter().map(|input| input.previous_outpoint))
+            .collect();
+        let grouped = group_outpoints_by_txid(&all_inputs);
+
+        assert!(grouped.is_empty());
     }
 }

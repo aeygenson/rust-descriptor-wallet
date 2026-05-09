@@ -6,15 +6,14 @@ use crate::types::WalletOutPoint;
 use crate::{WalletCoreError, WalletCoreResult, WalletService};
 
 impl WalletService {
-    /// Resolve and validate explicitly included outpoints.
+    /// Resolve and validate explicitly included/excluded outpoints.
     ///
     /// This helper keeps included/excluded inputs in the typed wallet-core
     /// domain model (`WalletOutPoint`) and only relies on raw Bitcoin outpoints
     /// when matching against BDK wallet UTXOs.
     ///
-    /// It does not yet build a PSBT by itself. Instead it provides the same
-    /// style of focused, testable service logic as `psbt_cpfp.rs`, so the next
-    /// step can wire it into `psbt_create.rs` with minimal churn.
+    /// It does not build a PSBT by itself. It provides focused, testable
+    /// service logic for `psbt_create.rs` and related workflows.
     pub(crate) fn resolve_coin_control_inputs(
         &self,
         coin_control: &WalletCoinControlInfo,
@@ -44,6 +43,22 @@ impl WalletService {
         ensure_no_outpoint_overlap(&included, &excluded)?;
 
         let wallet_utxos: Vec<_> = self.wallet.list_unspent().collect();
+
+        for requested in &excluded {
+            let requested_outpoint = bitcoin::OutPoint::from(*requested);
+            let utxo = wallet_utxos
+                .iter()
+                .find(|u| u.outpoint == requested_outpoint)
+                .ok_or_else(|| {
+                    WalletCoreError::CoinControlOutpointNotFound(requested.to_string())
+                })?;
+
+            if coin_control.selection.confirmed_only && !utxo.chain_position.is_confirmed() {
+                return Err(WalletCoreError::CoinControlOutpointNotConfirmed(
+                    requested.to_string(),
+                ));
+            }
+        }
 
         for requested in &included {
             let requested_outpoint = bitcoin::OutPoint::from(*requested);
@@ -81,10 +96,29 @@ impl WalletService {
         &self,
         coin_control: &WalletCoinControlInfo,
     ) -> WalletCoreResult<Vec<WalletOutPoint>> {
-        if coin_control.selection.exclude_outpoints.is_empty() {
+        let excluded = coin_control.selection.exclude_outpoints.clone();
+        if excluded.is_empty() {
             return Ok(Vec::new());
         }
-        Ok(coin_control.selection.exclude_outpoints.clone())
+
+        let wallet_utxos: Vec<_> = self.wallet.list_unspent().collect();
+        for requested in &excluded {
+            let requested_outpoint = bitcoin::OutPoint::from(*requested);
+            let utxo = wallet_utxos
+                .iter()
+                .find(|u| u.outpoint == requested_outpoint)
+                .ok_or_else(|| {
+                    WalletCoreError::CoinControlOutpointNotFound(requested.to_string())
+                })?;
+
+            if coin_control.selection.confirmed_only && !utxo.chain_position.is_confirmed() {
+                return Err(WalletCoreError::CoinControlOutpointNotConfirmed(
+                    requested.to_string(),
+                ));
+            }
+        }
+
+        Ok(excluded)
     }
 }
 
@@ -126,6 +160,31 @@ mod tests {
     }
 
     #[test]
+    fn coin_control_with_exclusions_is_reported_correctly() {
+        let cc = WalletCoinControlInfo {
+            selection: crate::model::WalletInputSelectionConfig {
+                include_outpoints: Vec::new(),
+                exclude_outpoints: vec![WalletOutPoint::parse(
+                    "0000000000000000000000000000000000000000000000000000000000000002:1",
+                )
+                .unwrap()],
+                confirmed_only: true,
+                selection_mode: None,
+                max_input_count: None,
+                min_input_count: None,
+                min_utxo_value_sat: None,
+                max_utxo_value_sat: None,
+                strategy: None,
+            },
+        };
+
+        assert!(cc.selection.include_outpoints.is_empty());
+        assert_eq!(cc.selection.exclude_outpoints.len(), 1);
+        assert!(cc.selection.confirmed_only);
+        assert!(!cc.is_empty());
+    }
+
+    #[test]
     fn empty_resolution_is_reported_correctly() {
         let resolution = WalletCoinControlResolutionInfo {
             included_outpoints: Vec::new(),
@@ -137,5 +196,33 @@ mod tests {
 
         assert!(resolution.is_noop());
         assert!(!resolution.has_constraints());
+        assert_eq!(resolution.excluded_count(), 0);
+        assert_eq!(resolution.included_count(), 0);
+    }
+
+    #[test]
+    fn constrained_resolution_reports_constraints_and_counts() {
+        let included = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000001:0",
+        )
+        .unwrap();
+        let excluded = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000002:1",
+        )
+        .unwrap();
+        let resolution = WalletCoinControlResolutionInfo {
+            included_outpoints: vec![included],
+            excluded_outpoints: vec![excluded],
+            confirmed_only: true,
+            selection_mode: Some(crate::model::WalletInputSelectionMode::StrictManual),
+            has_explicit_include_set: true,
+        };
+
+        assert!(!resolution.is_noop());
+        assert!(resolution.has_constraints());
+        assert!(resolution.has_manual_selection());
+        assert!(resolution.has_exclusions());
+        assert_eq!(resolution.included_count(), 1);
+        assert_eq!(resolution.excluded_count(), 1);
     }
 }

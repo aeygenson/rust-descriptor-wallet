@@ -1,5 +1,5 @@
 import type { UtxoSelectionSummaryProps } from "../types";
-import { formatSats } from "../format";
+import { formatBtcFromSats, formatSats } from "../format";
 
 export function UtxoSelectionSummary({
   selectedCount,
@@ -10,26 +10,54 @@ export function UtxoSelectionSummary({
 }: UtxoSelectionSummaryProps) {
   if (selectedCount === 0) return null;
 
+  const formattedBtcValue = formatBtcFromSats(selectedValueSat);
+  const confirmedOnly = unconfirmedCount === 0;
+
+  const formattedSelectedCount = selectedCount.toLocaleString();
+  const formattedConfirmedCount = confirmedCount.toLocaleString();
+  const formattedPendingCount = unconfirmedCount.toLocaleString();
+
   return (
     <section className="utxo-selection-summary">
       <div className="utxo-selection-summary__left">
-        <span className="utxo-selection-summary__title">
-          Selected: {selectedCount.toLocaleString()} UTXO{selectedCount > 1 ? "s" : ""}
-        </span>
+        <div className="utxo-selection-summary__headline">
+          <span className="utxo-selection-summary__badge">
+            {formattedSelectedCount} selected
+          </span>
 
-        <span className="utxo-selection-summary__value">
-          {formatSats(selectedValueSat)}
-        </span>
+          <span className="utxo-selection-summary__title">
+            UTXO Selection Summary
+          </span>
+        </div>
+
+        <div className="utxo-selection-summary__value-group">
+          <strong className="utxo-selection-summary__value-primary">
+            {formatSats(selectedValueSat)}
+          </strong>
+
+          <span className="utxo-selection-summary__value-secondary">
+            {formattedBtcValue}
+          </span>
+        </div>
 
         <span className="utxo-selection-summary__meta">
-          Confirmed: {confirmedCount.toLocaleString()} · Pending: {unconfirmedCount.toLocaleString()}
+          Confirmed: {formattedConfirmedCount} · Pending: {formattedPendingCount}
+          {confirmedOnly
+            ? " · Ready for consolidation, Send, and RBF flows"
+            : " · Contains pending inputs"}
         </span>
+      </div>
+
+      <div className="utxo-selection-summary__hint">
+        Selected inputs can be reused directly in Send, Send Max, Sweep, Consolidation, RBF, and future CPFP flows.
       </div>
 
       {onClearSelection && (
         <button
           type="button"
           className="utxo-selection-summary__clear"
+          aria-label="Clear selected UTXOs"
+          title="Clear the current UTXO selection"
           onClick={onClearSelection}
         >
           Clear

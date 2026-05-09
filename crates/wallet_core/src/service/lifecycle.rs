@@ -1,3 +1,5 @@
+use crate::model::WalletReceiveAddressInfo;
+use crate::types::{AddressIndex, WalletKeychain};
 use crate::{WalletConfig, WalletCoreResult};
 use bdk_wallet::descriptor::IntoWalletDescriptor;
 use bdk_wallet::keys::KeyMap;
@@ -69,7 +71,7 @@ impl WalletService {
 
         Self::attach_signers_if_present(&mut wallet, config)?;
         info!(
-            "wallet_service: load_or_create success path={} network={:?} watch_only= {}",
+            "wallet_service: load_or_create success path={} network={:?} watch_only={}",
             config.db_path.display(),
             config.network,
             config.is_watch_only
@@ -153,20 +155,28 @@ impl WalletService {
         Ok(())
     }
 
-    /// Reveal next receive address.
+    /// Reveal next receive address with typed domain metadata.
     ///
     /// Important:
-    /// - Advances internal derivation index
+    /// - Advances external derivation index
     /// - MUST be persisted to avoid address reuse
-    pub fn next_receive_address(&mut self) -> WalletCoreResult<String> {
+    /// - Call this only from explicit user intent, not page load/polling
+    pub fn next_receive_address(&mut self) -> WalletCoreResult<WalletReceiveAddressInfo> {
         debug!("wallet_service: next_receive_address start");
         let address_info = self.wallet.reveal_next_address(KeychainKind::External);
+        let receive_address = WalletReceiveAddressInfo {
+            address: address_info.address.to_string(),
+            keychain: WalletKeychain::External,
+            index: Some(AddressIndex::from(address_info.index)),
+        };
         self.persist()?;
         info!(
-            "wallet_service: next_receive_address generated address={}",
-            address_info.address
+            "wallet_service: next_receive_address generated address={} keychain={} index={:?}",
+            receive_address.address,
+            receive_address.keychain,
+            receive_address.index.map(|i| i.as_u32())
         );
-        Ok(address_info.address.to_string())
+        Ok(receive_address)
     }
 
     /// Return total wallet balance in satoshis.
@@ -285,7 +295,37 @@ mod tests {
             .next_receive_address()
             .expect("second receive address should be created");
 
-        assert_ne!(addr1, addr2, "receive addresses should advance and differ");
+        assert_ne!(
+            addr1.address, addr2.address,
+            "receive addresses should advance and differ"
+        );
+        assert!(!addr1.address.is_empty());
+        assert!(!addr2.address.is_empty());
+        assert_eq!(addr1.keychain, WalletKeychain::External);
+        assert_eq!(addr2.keychain, WalletKeychain::External);
+    }
+
+    #[test]
+    fn next_receive_address_returns_external_keychain_and_index() {
+        let config = test_config();
+        let mut wallet = WalletService::load_or_create(&config)
+            .expect("wallet should load or create successfully");
+
+        let first = wallet
+            .next_receive_address()
+            .expect("first receive address info should be created");
+        let second = wallet
+            .next_receive_address()
+            .expect("second receive address info should be created");
+
+        assert!(!first.address.is_empty());
+        assert_eq!(first.keychain, WalletKeychain::External);
+        assert_eq!(first.index.map(|i| i.as_u32()), Some(0));
+
+        assert!(!second.address.is_empty());
+        assert_eq!(second.keychain, WalletKeychain::External);
+        assert_eq!(second.index.map(|i| i.as_u32()), Some(1));
+        assert_ne!(first.address, second.address);
     }
 
     #[test]
@@ -309,9 +349,11 @@ mod tests {
         };
 
         assert_ne!(
-            first_address, second_address_after_reload,
+            first_address.address, second_address_after_reload.address,
             "reloaded wallet should continue from persisted derivation state"
         );
+        assert_eq!(first_address.index.map(|i| i.as_u32()), Some(0));
+        assert_eq!(second_address_after_reload.index.map(|i| i.as_u32()), Some(1));
     }
 
     #[test]
