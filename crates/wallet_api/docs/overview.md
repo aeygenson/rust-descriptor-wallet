@@ -10,7 +10,7 @@ It gives callers a stable async facade over wallet storage, runtime wallet loadi
 
 - wallet registry operations: import, list, get, and delete wallets
 - runtime wallet operations: address generation, sync, balance, status, transaction listing, and UTXO listing
-- address and inspection enrichment: receive-address keychain/index metadata, transaction graph inputs/outputs, and UTXO derivation metadata
+- address and inspection enrichment: persisted receive-address history, labels, keychain/index metadata, transaction graph inputs/outputs, and UTXO derivation metadata
 - PSBT preview flows: fixed amount, coin control, send-max, sweep, consolidation, RBF, and CPFP
 - one-shot transaction flows: build, sign, publish, and return the broadcast result
 - DTO conversion: normalize caller input into canonical request DTOs, parse those into typed domain requests, and return stable response DTOs
@@ -32,6 +32,9 @@ Wallet metadata:
 Wallet state:
 
 - `address`
+- `list_receive_addresses`
+- `label_receive_address`
+- `clear_receive_address_label`
 - `sync`
 - `backend_health`
 - `balance`
@@ -86,7 +89,7 @@ CLI and UI code should collect user intent, call `WalletApi`, and render DTOs or
 
 Important caller-facing DTOs include:
 
-- `WalletReceiveAddressDto` with `address`, `keychain`, and optional `index`
+- `WalletReceiveAddressHistoryDto` with `address`, `keychain`, optional `index`, `bitcoin_uri`, optional `label`, `created_at`, and optional `updated_at`
 - `WalletUtxoDto` with optional `derivation_index`
 - `WalletPsbtDto` with optional `original_txid` and optional `replacement` lineage metadata
 - `WalletBroadcastCandidateDto` for finalized transaction analysis before broadcast
@@ -103,6 +106,7 @@ Important canonical request DTOs include:
 - `BumpFeeRequestDto`
 - `CpfpRequestDto`
 - wallet-state request DTOs such as `WalletAddressRequestDto`, `WalletTransactionsRequestDto`, and `WalletUtxosRequestDto`
+- receive-address request DTOs such as `WalletReceiveAddressesRequestDto`, `LabelReceiveAddressRequestDto`, and `ClearReceiveAddressLabelRequestDto`
 
 ## Test Coverage
 

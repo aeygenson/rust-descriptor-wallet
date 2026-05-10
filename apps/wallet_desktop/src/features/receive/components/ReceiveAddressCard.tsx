@@ -1,14 +1,14 @@
 import type { ReceiveAddressCardProps } from "../types";
 
-import {
-  formatAddressIndex,
-  formatReceiveAddress,
-} from "../format";
+import { formatReceiveAddress } from "../format";
 import {
   buildBitcoinUri,
   getReceiveAddressMetadata,
   getReceiveAddressString,
 } from "../lib";
+
+import { ReceiveAddressActions } from "./ReceiveAddressActions";
+import { ReceiveAddressMetadata } from "./ReceiveAddressMetadata";
 
 export function ReceiveAddressCard({
   walletName,
@@ -22,22 +22,6 @@ export function ReceiveAddressCard({
   const metadata = getReceiveAddressMetadata(address);
   const bitcoinUri = buildBitcoinUri(address);
 
-  async function handleCopy(): Promise<void> {
-    if (!addressString) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(addressString);
-    onCopy?.(addressString);
-  }
-
-  async function handleCopyUri(): Promise<void> {
-    if (!bitcoinUri) {
-      return;
-    }
-
-    await navigator.clipboard.writeText(bitcoinUri);
-  }
 
   return (
     <section className="receive-card">
@@ -69,50 +53,22 @@ export function ReceiveAddressCard({
       </div>
 
       {metadata.length > 0 ? (
-        <dl className="receive-card__metadata">
-          {metadata.map((item) => (
-            <div
-              key={item.label}
-              className="receive-card__metadata-item"
-            >
-              <dt>{item.label}</dt>
-              <dd>
-                {item.label === "Index"
-                  ? formatAddressIndex(
-                      typeof item.value === "number"
-                        ? item.value
-                        : null,
-                    )
-                  : item.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <ReceiveAddressMetadata items={metadata} />
       ) : null}
 
-      <div className="receive-card__actions">
-        <button
-          className="receive-card__button"
-          type="button"
-          disabled={!addressString}
-          onClick={() => {
-            void handleCopy();
-          }}
-        >
-          Copy address
-        </button>
-
-        <button
-          className="receive-card__button"
-          type="button"
-          disabled={!bitcoinUri}
-          onClick={() => {
-            void handleCopyUri();
-          }}
-        >
-          Copy bitcoin URI
-        </button>
-      </div>
+      <ReceiveAddressActions
+        address={addressString}
+        bitcoinUri={bitcoinUri}
+        loading={loading}
+        onRefresh={onRefresh}
+        onCopyAddress={(value) => {
+          void navigator.clipboard.writeText(value);
+          onCopy?.(value);
+        }}
+        onCopyBitcoinUri={(value) => {
+          void navigator.clipboard.writeText(value);
+        }}
+      />
     </section>
   );
 }

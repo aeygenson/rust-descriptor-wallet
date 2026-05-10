@@ -37,6 +37,33 @@ Preview output is intentionally rich. The CLI exposes selected inputs, counts, e
 
 ---
 
+## Receive Address Lifecycle
+
+Receive flow is now more than a one-off address reveal.
+
+User provides:
+- wallet name
+
+Backend behavior:
+- derives the next wallet-controlled receive address
+- builds a canonical Bitcoin URI
+- persists the generated address into receive-address history
+- returns the persisted history row, including timestamps and optional label state
+
+Typical lifecycle:
+1. generate address with `address`
+2. inspect persisted receive-history row
+3. optionally list history with `receive-addresses`
+4. optionally attach or update a human label
+5. optionally clear that label later
+
+Important notes:
+- receive-address history is wallet-scoped
+- repeated derivation of an already-persisted address reuses the stored row rather than duplicating it
+- labels are storage metadata, not wallet-core derivation state
+
+---
+
 ## Standard Fixed-Amount Send
 
 This is the default payment flow.

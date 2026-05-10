@@ -1,12 +1,15 @@
 use crate::{WalletStorageError, WalletStorageResult};
 use dirs::home_dir;
 use sqlx::{
+    migrate::Migrator,
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     SqlitePool,
 };
 use std::fs::File;
 use std::path::PathBuf;
 use std::str::FromStr;
+
+static MIGRATOR: Migrator = sqlx::migrate!("./migrations");
 
 pub fn default_app_path() -> WalletStorageResult<PathBuf> {
     let home = home_dir().ok_or(WalletStorageError::HomeDirNotFound)?;
@@ -38,7 +41,8 @@ pub async fn connect() -> WalletStorageResult<SqlitePool> {
     }
 
     let options = SqliteConnectOptions::from_str(&format!("sqlite:///{}", db_path.display()))?
-        .create_if_missing(true);
+        .create_if_missing(true)
+        .foreign_keys(true);
 
     let pool = SqlitePoolOptions::new()
         .max_connections(5)
@@ -50,7 +54,6 @@ pub async fn connect() -> WalletStorageResult<SqlitePool> {
 }
 
 pub async fn migrate(pool: &SqlitePool) -> WalletStorageResult<()> {
-    let sql = include_str!("../migrations/0001_init.sql");
-    sqlx::query(sql).execute(pool).await?;
+    MIGRATOR.run(pool).await?;
     Ok(())
 }

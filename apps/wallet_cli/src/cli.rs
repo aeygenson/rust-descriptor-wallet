@@ -51,6 +51,36 @@ pub enum Commands {
         /// Wallet name.
         name: String,
     },
+    /// List persisted receive address history.
+    ReceiveAddresses {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+    },
+    /// Add or update a label for a persisted receive address.
+    LabelReceiveAddress {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Receive address to label.
+        address: String,
+
+        #[arg(long)]
+        /// Label to store for the receive address.
+        label: String,
+    },
+    /// Clear the label for a persisted receive address.
+    ClearReceiveAddressLabel {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Receive address whose label should be cleared.
+        address: String,
+    },
     /// Synchronize wallet state with the configured backend.
     Sync {
         #[arg(long)]

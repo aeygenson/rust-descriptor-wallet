@@ -3,10 +3,12 @@ pub mod error;
 pub mod models;
 pub mod repository;
 
+
+use repository::{receive_history, wallets};
 use sqlx::SqlitePool;
 
 pub use error::WalletStorageError;
-pub use models::{ImportWalletFile, WalletRecord};
+pub use models::{ImportWalletFile, ReceiveAddressHistoryRecord, WalletRecord};
 
 pub type WalletStorageResult<T> = Result<T, WalletStorageError>;
 
@@ -26,11 +28,11 @@ impl WalletStorage {
     }
 
     pub async fn get_wallet_by_name(&self, name: &str) -> WalletStorageResult<WalletRecord> {
-        repository::get_wallet_by_name(&self.pool, name).await
+        wallets::get_wallet_by_name(&self.pool, name).await
     }
 
     pub async fn list_wallets(&self) -> WalletStorageResult<Vec<WalletRecord>> {
-        repository::list_wallets(&self.pool).await
+        wallets::list_wallets(&self.pool).await
     }
 
     pub async fn create_wallet(
@@ -43,7 +45,7 @@ impl WalletStorage {
         broadcast_backend: Option<&str>,
         is_watch_only: bool,
     ) -> WalletStorageResult<()> {
-        repository::create_wallet(
+        wallets::create_wallet(
             &self.pool,
             name,
             network,
@@ -57,11 +59,78 @@ impl WalletStorage {
     }
 
     pub async fn delete_wallet(&self, name: &str) -> WalletStorageResult<()> {
-        repository::delete_wallet(&self.pool, name).await
+        wallets::delete_wallet(&self.pool, name).await
     }
 
     pub async fn import_wallet_from_file(&self, file_path: &str) -> WalletStorageResult<()> {
-        repository::import_wallet_from_file(&self.pool, file_path).await
+        wallets::import_wallet_from_file(&self.pool, file_path).await
+    }
+
+    pub async fn record_receive_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        keychain: &str,
+        address_index: Option<i64>,
+        bitcoin_uri: &str,
+    ) -> WalletStorageResult<ReceiveAddressHistoryRecord> {
+        receive_history::record_receive_address(
+            &self.pool,
+            wallet_name,
+            address,
+            keychain,
+            address_index,
+            bitcoin_uri,
+        )
+        .await
+    }
+
+    pub async fn list_receive_addresses(
+        &self,
+        wallet_name: &str,
+    ) -> WalletStorageResult<Vec<ReceiveAddressHistoryRecord>> {
+        receive_history::list_receive_addresses(&self.pool, wallet_name).await
+    }
+
+    pub async fn get_receive_address_by_wallet_and_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> WalletStorageResult<Option<ReceiveAddressHistoryRecord>> {
+        receive_history::get_receive_address_by_wallet_and_address(
+            &self.pool,
+            wallet_name,
+            address,
+        )
+        .await
+    }
+
+    pub async fn label_receive_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+        label: &str,
+    ) -> WalletStorageResult<ReceiveAddressHistoryRecord> {
+        receive_history::label_receive_address(
+            &self.pool,
+            wallet_name,
+            address,
+            label,
+        )
+        .await
+    }
+
+    pub async fn clear_receive_address_label(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> WalletStorageResult<ReceiveAddressHistoryRecord> {
+        receive_history::clear_receive_address_label(
+            &self.pool,
+            wallet_name,
+            address,
+        )
+        .await
     }
 
     pub fn pool(&self) -> &SqlitePool {
@@ -70,6 +139,14 @@ impl WalletStorage {
 }
 
 pub use db::{default_app_path, default_db_path, default_wallet_db_path};
-pub use repository::{
+pub use wallets::{
     create_wallet, delete_wallet, get_wallet_by_name, import_wallet_from_file, list_wallets,
+};
+
+pub use receive_history::{
+    clear_receive_address_label,
+    get_receive_address_by_wallet_and_address,
+    label_receive_address,
+    list_receive_addresses,
+    record_receive_address,
 };

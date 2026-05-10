@@ -23,7 +23,7 @@ Wallet metadata and state:
 - `SyncBackendDto`
 - `BroadcastBackendDto`
 - `WalletStatusDto`
-- `WalletReceiveAddressDto`
+- `WalletReceiveAddressHistoryDto`
 - `WalletTxDto`
 - `WalletUtxoDto`
 
@@ -52,6 +52,9 @@ Request DTOs:
 - `WalletTransactionsRequestDto`
 - `WalletUtxosRequestDto`
 - `WalletAddressRequestDto`
+- `WalletReceiveAddressesRequestDto`
+- `LabelReceiveAddressRequestDto`
+- `ClearReceiveAddressLabelRequestDto`
 - `ImportWalletRequestDto`
 - `DeleteWalletRequestDto`
 - `GetWalletRequestDto`
@@ -114,17 +117,21 @@ This keeps consolidation policy parsing outside the CLI and UI layers.
 
 ## Address And Inspection DTOs
 
-`WalletReceiveAddressDto` returns:
+`WalletReceiveAddressHistoryDto` returns:
 
 - `address`
 - `keychain`
 - `index`
+- `bitcoin_uri`
+- `label`
+- `created_at`
+- `updated_at`
 
 `WalletUtxoDto` now also carries:
 
 - `derivation_index`
 
-This lets callers render wallet-owned address metadata without reaching into `wallet_core`.
+This lets callers render wallet-owned address metadata and persisted receive-history rows without reaching into `wallet_core` or `wallet_storage`.
 
 ## Preview DTOs
 

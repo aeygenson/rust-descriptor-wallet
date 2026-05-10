@@ -30,6 +30,19 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::Address { name } => {
             wallet::address(api, &name).await?;
         }
+        Commands::ReceiveAddresses { name } => {
+            wallet::list_receive_addresses(api, &name).await?;
+        }
+        Commands::LabelReceiveAddress {
+            name,
+            address,
+            label,
+        } => {
+            wallet::label_receive_address(api, &name, &address, &label).await?;
+        }
+        Commands::ClearReceiveAddressLabel { name, address } => {
+            wallet::clear_receive_address_label(api, &name, &address).await?;
+        }
         Commands::Sync { name } => {
             wallet::sync_wallet(api, &name).await?;
         }

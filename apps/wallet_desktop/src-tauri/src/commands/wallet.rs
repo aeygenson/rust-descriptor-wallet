@@ -2,7 +2,7 @@ use tauri::{command, State};
 use wallet_api::{
     model::{
         WalletBackendHealthDto,
-        WalletReceiveAddressDto,
+        WalletReceiveAddressHistoryDto,
         WalletStatusDto,
         WalletSummaryDto,
     },
@@ -59,8 +59,44 @@ pub async fn backend_health(
 pub async fn get_receive_address(
     api: State<'_, WalletApi>,
     walletName: String,
-) -> Result<WalletReceiveAddressDto, String> {
+) -> Result<WalletReceiveAddressHistoryDto, String> {
     api.address(&walletName)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn list_receive_addresses(
+    api: State<'_, WalletApi>,
+    walletName: String,
+) -> Result<Vec<WalletReceiveAddressHistoryDto>, String> {
+    api.list_receive_addresses(&walletName)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn label_receive_address(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    address: String,
+    label: String,
+) -> Result<WalletReceiveAddressHistoryDto, String> {
+    api.label_receive_address(&walletName, &address, &label)
+        .await
+        .map_err(|err| err.to_string())
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn clear_receive_address_label(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    address: String,
+) -> Result<WalletReceiveAddressHistoryDto, String> {
+    api.clear_receive_address_label(&walletName, &address)
         .await
         .map_err(|err| err.to_string())
 }

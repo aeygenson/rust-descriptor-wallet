@@ -33,7 +33,8 @@ Current desktop capabilities:
 - load and switch wallets through a shared wallet provider
 - show wallet status and backend health
 - generate the next receive address for the active wallet
-- display receive-address keychain and derivation-index metadata
+- list persisted receive-address history for the active wallet
+- display receive-address keychain, derivation-index, timestamp, and label metadata
 - copy the raw receive address and Bitcoin URI from a dedicated receive surface
 - inspect UTXOs and carry selected outpoints into send flows
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
@@ -77,13 +78,15 @@ flowchart LR
     B --> C["feature/receive api.ts"]
     C --> D["Tauri get_receive_address"]
     D --> E["wallet_api address()"]
-    E --> F["WalletReceiveAddressDto"]
-    F --> G["Receive card"]
-    G --> H["Copy address"]
-    G --> I["Copy bitcoin URI"]
+    E --> F["Persist receive history row"]
+    F --> G["WalletReceiveAddressHistoryDto"]
+    G --> H["Receive card"]
+    G --> I["Receive history list"]
+    H --> J["Copy address"]
+    H --> K["Copy bitcoin URI"]
 ```
 
-The receive page is intentionally simple: it asks Rust for the next wallet-controlled address, then renders the canonical address string plus wallet metadata returned by the backend.
+The receive page is still intentionally lightweight in the rendered UI: it asks Rust for the next wallet-controlled address, persists that row, then renders the canonical address string plus history-backed metadata returned by the backend. The backend command surface already supports listing and labeling persisted receive rows, but the current page only uses generation plus history browsing.
 
 ## Transaction Intent Layer
 

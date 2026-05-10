@@ -2,17 +2,18 @@ use std::sync::Arc;
 use tracing::debug;
 
 use crate::factory::build_default_api;
-use crate::service::{inspect, psbt, registry, wallet};
+use crate::service::{addresses, inspect, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
-    BumpFeeRequestDto, ConsolidationRequestDto, CpfpRequestDto, CreatePsbtRequestDto,
-    DeleteWalletRequestDto, GetWalletRequestDto, ImportWalletRequestDto, PublishPsbtRequestDto,
-    SendMaxRequestDto, SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto,
-    WalletAddressRequestDto, WalletBackendHealthDto, WalletCoinControlDto,
-    WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto,
-    WalletReceiveAddressDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
-    WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
+    BumpFeeRequestDto, ClearReceiveAddressLabelRequestDto, ConsolidationRequestDto, CpfpRequestDto,
+    CreatePsbtRequestDto, DeleteWalletRequestDto, GetWalletRequestDto, ImportWalletRequestDto,
+    LabelReceiveAddressRequestDto, PublishPsbtRequestDto, SendMaxRequestDto, SignPsbtRequestDto,
+    SweepRequestDto, TxBroadcastResultDto, WalletAddressRequestDto, WalletBackendHealthDto,
+    WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto,
+    WalletPsbtDto, WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto,
+    WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto, WalletTransactionsRequestDto,
+    WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
 };
 
 use wallet_core::WalletCore;
@@ -81,11 +82,56 @@ impl WalletApi {
         .await
     }
 
-    pub async fn address(&self, name: &str) -> WalletApiResult<WalletReceiveAddressDto> {
-        wallet::address(
+    pub async fn address(&self, name: &str) -> WalletApiResult<WalletReceiveAddressHistoryDto> {
+        addresses::address(
             &self.storage,
             WalletAddressRequestDto {
                 name: name.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn list_receive_addresses(
+        &self,
+        name: &str,
+    ) -> WalletApiResult<Vec<WalletReceiveAddressHistoryDto>> {
+        addresses::list_receive_addresses(
+            &self.storage,
+            WalletReceiveAddressesRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn label_receive_address(
+        &self,
+        name: &str,
+        address: &str,
+        label: &str,
+    ) -> WalletApiResult<WalletReceiveAddressHistoryDto> {
+        addresses::label_receive_address(
+            &self.storage,
+            LabelReceiveAddressRequestDto {
+                name: name.to_string(),
+                address: address.to_string(),
+                label: label.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn clear_receive_address_label(
+        &self,
+        name: &str,
+        address: &str,
+    ) -> WalletApiResult<WalletReceiveAddressHistoryDto> {
+        addresses::clear_receive_address_label(
+            &self.storage,
+            ClearReceiveAddressLabelRequestDto {
+                name: name.to_string(),
+                address: address.to_string(),
             },
         )
         .await

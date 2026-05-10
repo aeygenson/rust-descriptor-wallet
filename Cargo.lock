@@ -6340,14 +6340,12 @@ dependencies = [
 name = "wallet_storage"
 version = "0.1.0"
 dependencies = [
- "bitcoin",
  "dirs",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
- "tracing",
 ]
 
 [[package]]

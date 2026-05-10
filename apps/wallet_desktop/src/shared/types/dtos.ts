@@ -40,11 +40,30 @@ export interface WalletStatusDto {
     last_block_height: number | null;
 }
 
-// === Receive Address ===
-export interface WalletReceiveAddressDto {
+// === Receive Address History ===
+export interface WalletReceiveAddressHistoryDto {
     address: string;
     keychain: string;
     index: number | null;
+    bitcoin_uri: string;
+    label: string | null;
+    created_at: string;
+    updated_at: string | null;
+}
+
+export interface WalletReceiveAddressesRequestDto {
+    name: string;
+}
+
+export interface LabelReceiveAddressRequestDto {
+    name: string;
+    address: string;
+    label: string;
+}
+
+export interface ClearReceiveAddressLabelRequestDto {
+    name: string;
+    address: string;
 }
 
 // === Input Selection Mode ===

@@ -12,8 +12,8 @@ use wallet_api::service;
 async fn wallet_address(
     api: &wallet_api::api::WalletApi,
     name: &str,
-) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
-    service::wallet::address(
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressHistoryDto> {
+    service::addresses::address(
         &api.storage,
         WalletAddressRequestDto {
             name: name.to_string(),

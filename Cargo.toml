@@ -20,7 +20,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio-rustls", "macros", "migrate"] }
 bdk_wallet = { version = "2.3.0", features = ["file_store"] }
 bdk_esplora = { version = "0.22.1", features = ["blocking"] }
 bdk_file_store = "0.21"

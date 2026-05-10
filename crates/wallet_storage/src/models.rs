@@ -20,6 +20,20 @@ pub struct WalletRecord {
     pub updated_at: Option<String>,
 }
 
+/// SQLite row model for a generated receive address.
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
+pub struct ReceiveAddressHistoryRecord {
+    pub id: i64,
+    pub wallet_name: String,
+    pub address: String,
+    pub keychain: String,
+    pub address_index: Option<i64>,
+    pub bitcoin_uri: String,
+    pub label: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+}
+
 impl WalletRecord {
     pub fn parse_sync_backend(&self) -> Result<SyncBackendFile, serde_json::Error> {
         serde_json::from_str(&self.sync_backend)

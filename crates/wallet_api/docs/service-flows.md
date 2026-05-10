@@ -17,11 +17,17 @@ Backend configuration is parsed when a wallet is loaded. Invalid stored backend 
 
 ## Wallet State
 
-Wallet state methods use `service/wallet.rs`.
+Wallet state methods use `service/wallet.rs` and `service/addresses.rs`.
 
 `sync(name)` loads the wallet configuration, opens or creates the runtime wallet store, and calls `WalletSyncService::sync`. It returns `()` on success.
 
-`address(name)` loads the runtime wallet and derives the next receive address via `WalletAddressRequestDto`. The response includes `address`, `keychain`, and optional derivation `index`.
+`address(name)` loads the runtime wallet, derives the next receive address via `WalletAddressRequestDto`, persists that row into storage, and returns a `WalletReceiveAddressHistoryDto`. The response includes `address`, `keychain`, optional derivation `index`, `bitcoin_uri`, optional `label`, and timestamps.
+
+`list_receive_addresses(name)` reads persisted receive-address history for the wallet through `WalletReceiveAddressesRequestDto`.
+
+`label_receive_address(name, address, label)` updates the stored label for an existing persisted receive-address row through `LabelReceiveAddressRequestDto`.
+
+`clear_receive_address_label(name, address)` clears the stored label for an existing persisted receive-address row through `ClearReceiveAddressLabelRequestDto`.
 
 `backend_health(name)` checks configured backend reachability and reports tip visibility without mutating wallet state.
 

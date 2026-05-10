@@ -132,7 +132,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - wallet import, listing, lookup, and deletion through `wallet_api`
 - CLI commands for wallet metadata management
 - runtime wallet loading and creation backed by per-wallet BDK file stores
-- receive-address generation for stored wallets
+- receive-address generation plus persisted receive-history rows for stored wallets
 - backend-aware wallet sync through `wallet_sync`
 - Electrum sync support for local and compatible deployments
 - balance queries over persisted wallet state
@@ -365,7 +365,7 @@ What is stored right now:
 What works at runtime now:
 
 - load or create a persisted BDK wallet from the stored descriptors
-- reveal the next external receive address and persist the derivation state
+- reveal the next external receive address, persist receive-history metadata, and store optional caller-managed labels
 - sync wallet state through the configured backend via `wallet_sync`
 - read total balance from the persisted wallet state
 - inspect a high-level wallet status view

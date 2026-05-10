@@ -18,6 +18,9 @@ Registered commands:
 - `sync_wallet`
 - `backend_health`
 - `get_receive_address`
+- `list_receive_addresses`
+- `label_receive_address`
+- `clear_receive_address_label`
 
 Frontend wrappers:
 
@@ -108,7 +111,12 @@ Examples:
 - nested `coinControl`
 - nested `consolidation`
 
-The receive-address command is the main exception here. `get_receive_address` takes a single `walletName` argument and returns `WalletReceiveAddressDto`.
+The receive-address commands are the main exception here. They take flat arguments rather than a nested `request` object:
+
+- `get_receive_address(walletName)` -> `WalletReceiveAddressHistoryDto`
+- `list_receive_addresses(walletName)` -> `WalletReceiveAddressHistoryDto[]`
+- `label_receive_address(walletName, address, label)` -> `WalletReceiveAddressHistoryDto`
+- `clear_receive_address_label(walletName, address)` -> `WalletReceiveAddressHistoryDto`
 
 ## Important Boundary Rules
 

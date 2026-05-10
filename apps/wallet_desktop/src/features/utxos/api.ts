@@ -2,7 +2,7 @@ import { invokeCommand } from "../../shared/lib/tauri";
 import type {
     WalletCoinControlDto,
     WalletConsolidationDto,
-    WalletReceiveAddressDto,
+    WalletReceiveAddressHistoryDto,
     WalletUtxoDto,
 } from "../../shared/types/dtos";
 
@@ -16,8 +16,8 @@ export async function listUtxos(
 
 export async function getReceiveAddress(
     walletName: string,
-): Promise<WalletReceiveAddressDto> {
-    return invokeCommand<WalletReceiveAddressDto>("get_receive_address", {
+): Promise<WalletReceiveAddressHistoryDto> {
+    return invokeCommand<WalletReceiveAddressHistoryDto>("get_receive_address", {
         walletName,
     });
 }

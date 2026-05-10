@@ -35,7 +35,7 @@ pub async fn ensure_confirmed_wallet_utxos(
         let missing = min_count - confirmed.len();
 
         for _ in 0..missing {
-            let receive_address = service::wallet::address(
+            let receive_address = service::addresses::address(
                 &api.storage,
                 WalletAddressRequestDto {
                     name: wallet_name.to_string(),
@@ -95,7 +95,7 @@ pub async fn fund_exact_confirmed_wallet_utxos(
 
     let mut funding_txids = HashSet::new();
     for amount_sat in amounts_sat {
-        let receive_address = service::wallet::address(
+        let receive_address = service::addresses::address(
             &api.storage,
             WalletAddressRequestDto {
                 name: wallet_name.to_string(),

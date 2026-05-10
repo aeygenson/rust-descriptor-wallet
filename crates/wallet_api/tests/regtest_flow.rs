@@ -5,15 +5,15 @@ use serial_test::serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto, WalletAddressRequestDto,
-    WalletTransactionsRequestDto, WalletUtxosRequestDto,
+    WalletTransactionsRequestDto, WalletUtxosRequestDto, WalletReceiveAddressHistoryDto,
 };
 use wallet_api::service;
 
 async fn wallet_address(
     api: &wallet_api::api::WalletApi,
     name: &str,
-) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressDto> {
-    service::wallet::address(
+) -> wallet_api::WalletApiResult<wallet_api::model::WalletReceiveAddressHistoryDto> {
+    service::addresses::address(
         &api.storage,
         WalletAddressRequestDto {
             name: name.to_string(),

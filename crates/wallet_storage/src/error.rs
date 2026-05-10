@@ -6,6 +6,9 @@ pub enum WalletStorageError {
     Database(#[from] sqlx::Error),
 
     #[error(transparent)]
+    Migration(#[from] sqlx::migrate::MigrateError),
+
+    #[error(transparent)]
     Serialization(#[from] serde_json::Error),
 
     #[error(transparent)]

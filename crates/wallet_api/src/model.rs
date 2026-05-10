@@ -3,11 +3,12 @@ use wallet_core::error::WalletCoreError;
 use wallet_core::model::{
     WalletBackendCapabilities, WalletBroadcastCandidateInfo, WalletCoinControlInfo,
     WalletConsolidationInfo, WalletConsolidationStrategy, WalletCpfpPsbtInfo,
-    WalletInputSelectionConfig, WalletInputSelectionMode, WalletPsbtInfo,
-    WalletReceiveAddressInfo, WalletReplacementInfo, WalletSelectionResult, WalletSignedPsbtInfo,
+    WalletInputSelectionConfig, WalletInputSelectionMode, WalletPsbtInfo, WalletReplacementInfo,
+    WalletSelectionResult, WalletSignedPsbtInfo,
     WalletTxInfo, WalletUtxoInfo,
 };
 use wallet_core::types::WalletOutPoint;
+use wallet_storage::ReceiveAddressHistoryRecord;
 
 /// Lightweight wallet summary for listing and UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -426,6 +427,27 @@ pub struct WalletAddressRequestDto {
     pub name: String,
 }
 
+/// Canonical request DTO for listing persisted receive address history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletReceiveAddressesRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for labeling a persisted receive address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LabelReceiveAddressRequestDto {
+    pub name: String,
+    pub address: String,
+    pub label: String,
+}
+
+/// Canonical request DTO for clearing a persisted receive address label.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClearReceiveAddressLabelRequestDto {
+    pub name: String,
+    pub address: String,
+}
+
 /// Canonical request DTO for importing a wallet from a JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportWalletRequestDto {
@@ -444,20 +466,29 @@ pub struct GetWalletRequestDto {
     pub name: String,
 }
 
-/// API DTO for a generated or discovered receive address.
+
+/// API DTO for a persisted receive address history entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WalletReceiveAddressDto {
+pub struct WalletReceiveAddressHistoryDto {
     pub address: String,
     pub keychain: String,
     pub index: Option<u32>,
+    pub bitcoin_uri: String,
+    pub label: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
 }
 
-impl From<WalletReceiveAddressInfo> for WalletReceiveAddressDto {
-    fn from(info: WalletReceiveAddressInfo) -> Self {
+impl From<ReceiveAddressHistoryRecord> for WalletReceiveAddressHistoryDto {
+    fn from(record: ReceiveAddressHistoryRecord) -> Self {
         Self {
-            address: info.address,
-            keychain: info.keychain.as_str().to_string(),
-            index: info.index.map(|i| i.as_u32()),
+            address: record.address,
+            keychain: record.keychain,
+            index: record.address_index.and_then(|index| u32::try_from(index).ok()),
+            bitcoin_uri: record.bitcoin_uri,
+            label: record.label,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
         }
     }
 }

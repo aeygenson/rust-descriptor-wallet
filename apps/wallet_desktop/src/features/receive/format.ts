@@ -48,6 +48,34 @@ export function formatReceiveTimestamp(
   return parsed.toLocaleString();
 }
 
+export function formatReceiveLabel(
+  label: string | null | undefined,
+): string {
+  const normalized = label?.trim();
+
+  if (!normalized) {
+    return "—";
+  }
+
+  return normalized;
+}
+
+export function formatBitcoinUri(
+  uri: string | null | undefined,
+): string {
+  const normalized = uri?.trim();
+
+  if (!normalized) {
+    return "—";
+  }
+
+  if (normalized.length <= 36) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 18)}…${normalized.slice(-14)}`;
+}
+
 export function formatDerivationPath(
   path: string | null | undefined,
 ): string {

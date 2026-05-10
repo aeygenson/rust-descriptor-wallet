@@ -34,6 +34,8 @@ The CLI exposes the following core concepts:
 
 - PSBT (Partially Signed Bitcoin Transaction)
 - coin control (explicit include/exclude inputs)
+- persisted receive-address history
+- receive-address labeling
 
 Input selection modes:
 - `strict-manual`
@@ -51,7 +53,7 @@ Transaction lifecycle:
 - sign
 - publish
 
-Caller-visible output is intentionally structured rather than prose-only. The CLI surfaces receive-address metadata, transaction parent/output inspection data, and richer PSBT preview fields such as selected inputs and replacement lineage.
+Caller-visible output is intentionally structured rather than prose-only. The CLI surfaces receive-address metadata, persisted receive history rows, address labels, transaction parent/output inspection data, and richer PSBT preview fields such as selected inputs and replacement lineage.
 
 ---
 

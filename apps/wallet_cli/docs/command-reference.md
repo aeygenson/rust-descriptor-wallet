@@ -76,11 +76,52 @@ Status includes wallet balance, UTXO count, and latest observed block height.
 cargo run -p wallet_cli -- address --name <wallet>
 ```
 
-Address output is structured:
+Address generation now persists a receive-history entry for the wallet. Output is structured:
 
 - `address=<encoded-address>`
 - `keychain=external|internal`
 - `index=<derivation-index|n/a>`
+- `bitcoin_uri=bitcoin:<encoded-address>`
+- optional `label=<text>`
+- `created_at=<timestamp>`
+- optional `updated_at=<timestamp>`
+
+### List persisted receive-address history
+
+```bash
+cargo run -p wallet_cli -- receive-addresses --name <wallet>
+```
+
+Each history entry prints:
+
+- `address=<encoded-address>`
+- `keychain=external|internal`
+- `index=<derivation-index|n/a>`
+- `bitcoin_uri=bitcoin:<encoded-address>`
+- optional `label=<text>`
+- `created_at=<timestamp>`
+- optional `updated_at=<timestamp>`
+
+### Add or update a receive-address label
+
+```bash
+cargo run -p wallet_cli -- label-receive-address \
+  --name <wallet> \
+  --address <encoded-address> \
+  --label "Cold storage invoice 12"
+```
+
+The command returns the updated persisted history row.
+
+### Clear a receive-address label
+
+```bash
+cargo run -p wallet_cli -- clear-receive-address-label \
+  --name <wallet> \
+  --address <encoded-address>
+```
+
+The command returns the same persisted history row with `label=<none>`.
 
 ### List UTXOs
 

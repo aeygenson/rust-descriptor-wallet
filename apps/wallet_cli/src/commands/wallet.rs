@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::path::Path;
 use wallet_api::model::{
-    WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressDto, WalletStatusDto,
+    WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressHistoryDto, WalletStatusDto,
     WalletSummaryDto,
 };
 use wallet_api::WalletApi;
@@ -63,7 +63,7 @@ pub async fn backend_health(api: &WalletApi, name: &str) -> Result<()> {
 }
 
 pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
-    let addr: WalletReceiveAddressDto = api.address(name).await?;
+    let addr: WalletReceiveAddressHistoryDto = api.address(name).await?;
 
     println!("address={}", addr.address);
     println!("keychain={}", addr.keychain);
@@ -73,6 +73,101 @@ pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
             .map(|index| index.to_string())
             .unwrap_or_else(|| "n/a".to_string())
     );
+    println!("bitcoin_uri={}", addr.bitcoin_uri);
+    if let Some(label) = addr.label {
+        println!("label={label}");
+    }
+    println!("created_at={}", addr.created_at);
+    if let Some(updated_at) = addr.updated_at {
+        println!("updated_at={updated_at}");
+    }
+
+    Ok(())
+}
+
+pub async fn list_receive_addresses(api: &WalletApi, name: &str) -> Result<()> {
+    let addresses: Vec<WalletReceiveAddressHistoryDto> = api.list_receive_addresses(name).await?;
+
+    if addresses.is_empty() {
+        println!("No receive addresses found for wallet {name}.");
+    } else {
+        for addr in addresses {
+            println!("address={}", addr.address);
+            println!("keychain={}", addr.keychain);
+            println!(
+                "index={}",
+                addr.index
+                    .map(|index| index.to_string())
+                    .unwrap_or_else(|| "n/a".to_string())
+            );
+            println!("bitcoin_uri={}", addr.bitcoin_uri);
+            if let Some(label) = addr.label {
+                println!("label={label}");
+            }
+            println!("created_at={}", addr.created_at);
+            if let Some(updated_at) = addr.updated_at {
+                println!("updated_at={updated_at}");
+            }
+            println!("---");
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn label_receive_address(
+    api: &WalletApi,
+    name: &str,
+    address: &str,
+    label: &str,
+) -> Result<()> {
+    let addr: WalletReceiveAddressHistoryDto = api
+        .label_receive_address(name, address, label)
+        .await?;
+
+    println!("address={}", addr.address);
+    println!("keychain={}", addr.keychain);
+    println!(
+        "index={}",
+        addr.index
+            .map(|index| index.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+    println!("bitcoin_uri={}", addr.bitcoin_uri);
+    if let Some(label) = addr.label {
+        println!("label={label}");
+    }
+    println!("created_at={}", addr.created_at);
+    if let Some(updated_at) = addr.updated_at {
+        println!("updated_at={updated_at}");
+    }
+
+    Ok(())
+}
+
+pub async fn clear_receive_address_label(
+    api: &WalletApi,
+    name: &str,
+    address: &str,
+) -> Result<()> {
+    let addr: WalletReceiveAddressHistoryDto = api
+        .clear_receive_address_label(name, address)
+        .await?;
+
+    println!("address={}", addr.address);
+    println!("keychain={}", addr.keychain);
+    println!(
+        "index={}",
+        addr.index
+            .map(|index| index.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+    println!("bitcoin_uri={}", addr.bitcoin_uri);
+    println!("label=<none>");
+    println!("created_at={}", addr.created_at);
+    if let Some(updated_at) = addr.updated_at {
+        println!("updated_at={updated_at}");
+    }
 
     Ok(())
 }
