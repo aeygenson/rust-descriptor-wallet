@@ -92,6 +92,41 @@ The SQLite wallet registry is documented under [`crates/wallet_storage/docs`](cr
 - [wallet storage overview](crates/wallet_storage/docs/overview.md)
 - [schema](crates/wallet_storage/docs/schema.md)
 
+Current persisted schema at a glance:
+
+```mermaid
+erDiagram
+    wallets ||--o{ receive_address_history : "owns"
+
+    wallets {
+        int id PK
+        text name UK
+        text network
+        text external_descriptor
+        text internal_descriptor
+        text sync_backend
+        text broadcast_backend
+        text db_path
+        int is_watch_only
+        text created_at
+        text updated_at
+    }
+
+    receive_address_history {
+        int id PK
+        text wallet_name FK
+        text address
+        text keychain
+        int address_index
+        text bitcoin_uri
+        text label
+        text created_at
+        text updated_at
+    }
+```
+
+This is intentionally narrow storage. Wallet state such as synced transactions and UTXOs still lives in each wallet's BDK database at `db_path`.
+
 ## Wallet Sync Documentation
 
 The blockchain integration layer is documented under [`crates/wallet_sync/docs`](crates/wallet_sync/docs):
