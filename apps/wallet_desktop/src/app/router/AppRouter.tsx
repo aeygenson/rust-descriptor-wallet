@@ -6,6 +6,7 @@ import { SendPage } from "../../pages/SendPage";
 import { routes } from "./routes";
 import { TransactionsPage } from "../../pages/TransactionsPage";
 import { ReceivePage } from "../../pages/ReceivePage";
+import { AddressBookPage } from "../../pages/AddressBookPage";
 
 
 export function AppRouter() {
@@ -15,6 +16,7 @@ export function AppRouter() {
         <Route element={<AppShell />}>
           <Route index element={<OverviewPage />} />
           <Route path={routes.receive.slice(1)} element={<ReceivePage />} />
+          <Route path={routes.addressBook.slice(1)} element={<AddressBookPage />} />
           <Route path={routes.utxos.slice(1)} element={<UtxosPage />} />
           <Route path={routes.send.slice(1)} element={<SendPage />} />
           <Route path={routes.transactions.slice(1)} element={<TransactionsPage />} />

@@ -8,6 +8,7 @@ Current sidebar routes:
 
 - Overview
 - Receive
+- Address Book
 - UTXOs
 - Send
 - Transactions
@@ -108,6 +109,32 @@ Current UI features:
 - strict-manual behavior for sweep and consolidation
 - PSBT preview panel with selected input and fee information
 
+## Address Book
+
+File:
+
+- [src/pages/AddressBookPage.tsx](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/pages/AddressBookPage.tsx)
+
+Current responsibilities:
+
+- load persisted wallet-scoped address-book entries
+- create a new external recipient entry with label, address, and optional notes
+- delete an existing entry
+- render network, label, address, notes, and timestamps
+
+Current UI states:
+
+- no wallet selected
+- loading entries
+- create form ready
+- non-empty address-book list
+- request/validation error
+
+Current boundary note:
+
+- this page is for external destinations, not wallet-owned receive derivations
+- it uses the dedicated address-book Tauri commands, not the receive-history commands
+
 ## Transactions
 
 File:
@@ -138,12 +165,15 @@ Implemented relationships:
 
 - Overview -> operational state and health
 - UTXOs -> Send with preselected outpoints
+- Address Book -> external recipient management
 - Send fixed/send max/sweep/consolidate -> PSBT preview -> sign -> publish
 - Transactions -> RBF/CPFP workflows
 
 The Send screen should be understood as four transaction-entry flows that share one downstream workflow, not as one fixed-send screen with a few optional extras.
 
 The Receive screen should be understood as a dedicated address-generation workflow, not as a hidden sub-action inside Overview or UTXOs.
+
+The Address Book screen should be understood as an external-recipient registry, not as an alias for receive history.
 
 ## Missing Screens
 

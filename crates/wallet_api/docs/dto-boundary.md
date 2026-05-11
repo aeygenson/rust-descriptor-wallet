@@ -24,6 +24,7 @@ Wallet metadata and state:
 - `BroadcastBackendDto`
 - `WalletStatusDto`
 - `WalletReceiveAddressHistoryDto`
+- `AddressBookEntryDto`
 - `WalletTxDto`
 - `WalletUtxoDto`
 
@@ -55,6 +56,10 @@ Request DTOs:
 - `WalletReceiveAddressesRequestDto`
 - `LabelReceiveAddressRequestDto`
 - `ClearReceiveAddressLabelRequestDto`
+- `CreateAddressBookEntryRequestDto`
+- `ListAddressBookEntriesRequestDto`
+- `GetAddressBookEntryRequestDto`
+- `DeleteAddressBookEntryRequestDto`
 - `ImportWalletRequestDto`
 - `DeleteWalletRequestDto`
 - `GetWalletRequestDto`
@@ -125,6 +130,16 @@ This keeps consolidation policy parsing outside the CLI and UI layers.
 - `bitcoin_uri`
 - `qr_svg`
 - `label`
+- `created_at`
+- `updated_at`
+
+`AddressBookEntryDto` returns:
+
+- `wallet_name`
+- `network`
+- `label`
+- `address`
+- `notes`
 - `created_at`
 - `updated_at`
 

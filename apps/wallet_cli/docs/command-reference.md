@@ -139,6 +139,50 @@ cargo run -p wallet_cli -- clear-receive-address-label \
 
 The command returns the same persisted history row with `label=<none>`.
 
+## Address Book
+
+### Add an address-book entry
+
+```bash
+cargo run -p wallet_cli -- address-book-add \
+  --name <wallet> \
+  --label "Exchange hot wallet" \
+  --address <encoded-address> \
+  --notes "Outbound settlements only"
+```
+
+### List address-book entries
+
+```bash
+cargo run -p wallet_cli -- address-book-list --name <wallet>
+```
+
+### Get one address-book entry by address
+
+```bash
+cargo run -p wallet_cli -- address-book-get \
+  --name <wallet> \
+  --address <encoded-address>
+```
+
+### Delete one address-book entry by address
+
+```bash
+cargo run -p wallet_cli -- address-book-delete \
+  --name <wallet> \
+  --address <encoded-address>
+```
+
+Address-book output is structured per persisted entry:
+
+- `wallet_name=<wallet>`
+- `network=<bitcoin|testnet|signet|regtest>`
+- `label=<text>`
+- `address=<encoded-address>`
+- optional `notes=<text>`
+- `created_at=<timestamp>`
+- optional `updated_at=<timestamp>`
+
 ### List UTXOs
 
 ```bash

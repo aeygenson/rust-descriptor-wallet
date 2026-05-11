@@ -4,7 +4,9 @@ import { useWallet } from "../providers/useWallet";
 
 const navIcons: Record<string, string> = {
   overview: "⌂",
-  send: "↗",
+  receive: "↧",
+  addressBook: "⌘",
+  send: "➚",
   utxos: "◉",
   transactions: "⇄",
 };

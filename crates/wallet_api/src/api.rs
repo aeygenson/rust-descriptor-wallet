@@ -6,14 +6,17 @@ use crate::service::{addresses, inspect, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
-    BumpFeeRequestDto, ClearReceiveAddressLabelRequestDto, ConsolidationRequestDto, CpfpRequestDto,
-    CreatePsbtRequestDto, DeleteWalletRequestDto, GetWalletRequestDto, ImportWalletRequestDto,
-    LabelReceiveAddressRequestDto, PublishPsbtRequestDto, SendMaxRequestDto, SignPsbtRequestDto,
-    SweepRequestDto, TxBroadcastResultDto, WalletAddressRequestDto, WalletBackendHealthDto,
-    WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto,
-    WalletPsbtDto, WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto,
-    WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto, WalletTransactionsRequestDto,
-    WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
+    AddressBookEntryDto, BumpFeeRequestDto, ClearReceiveAddressLabelRequestDto,
+    ConsolidationRequestDto, CpfpRequestDto, CreateAddressBookEntryRequestDto,
+    CreatePsbtRequestDto, DeleteAddressBookEntryRequestDto, DeleteWalletRequestDto,
+    GetAddressBookEntryRequestDto, GetWalletRequestDto, ImportWalletRequestDto,
+    LabelReceiveAddressRequestDto, ListAddressBookEntriesRequestDto, PublishPsbtRequestDto,
+    SendMaxRequestDto, SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto,
+    WalletAddressRequestDto, WalletBackendHealthDto, WalletCoinControlDto,
+    WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto,
+    WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto, WalletSignedPsbtDto,
+    WalletStatusDto, WalletSummaryDto, WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto,
+    WalletUtxosRequestDto,
 };
 
 use wallet_core::WalletCore;
@@ -130,6 +133,68 @@ impl WalletApi {
         addresses::clear_receive_address_label(
             &self.storage,
             ClearReceiveAddressLabelRequestDto {
+                name: name.to_string(),
+                address: address.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn create_address_book_entry(
+        &self,
+        name: &str,
+        label: &str,
+        address: &str,
+        notes: Option<String>,
+    ) -> WalletApiResult<AddressBookEntryDto> {
+        addresses::create_address_book_entry(
+            &self.storage,
+            CreateAddressBookEntryRequestDto {
+                name: name.to_string(),
+                label: label.to_string(),
+                address: address.to_string(),
+                notes,
+            },
+        )
+        .await
+    }
+
+    pub async fn list_address_book_entries(
+        &self,
+        name: &str,
+    ) -> WalletApiResult<Vec<AddressBookEntryDto>> {
+        addresses::list_address_book_entries(
+            &self.storage,
+            ListAddressBookEntriesRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn get_address_book_entry(
+        &self,
+        name: &str,
+        address: &str,
+    ) -> WalletApiResult<Option<AddressBookEntryDto>> {
+        addresses::get_address_book_entry(
+            &self.storage,
+            GetAddressBookEntryRequestDto {
+                name: name.to_string(),
+                address: address.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn delete_address_book_entry(
+        &self,
+        name: &str,
+        address: &str,
+    ) -> WalletApiResult<bool> {
+        addresses::delete_address_book_entry(
+            &self.storage,
+            DeleteAddressBookEntryRequestDto {
                 name: name.to_string(),
                 address: address.to_string(),
             },

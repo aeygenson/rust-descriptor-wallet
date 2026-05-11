@@ -34,6 +34,19 @@ pub struct ReceiveAddressHistoryRecord {
     pub updated_at: Option<String>,
 }
 
+/// SQLite row model for a persisted address book entry.
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
+pub struct AddressBookEntryRecord {
+    pub id: i64,
+    pub wallet_name: String,
+    pub network: String,
+    pub label: String,
+    pub address: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+}
+
 impl WalletRecord {
     pub fn parse_sync_backend(&self) -> Result<SyncBackendFile, serde_json::Error> {
         serde_json::from_str(&self.sync_backend)

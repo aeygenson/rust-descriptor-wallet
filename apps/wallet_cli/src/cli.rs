@@ -89,6 +89,50 @@ pub enum Commands {
         /// Receive address whose label should be cleared.
         address: String,
     },
+    /// Create a wallet-scoped address book entry.
+    AddressBookAdd {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Address book label.
+        label: String,
+
+        #[arg(long)]
+        /// External destination address to store.
+        address: String,
+
+        #[arg(long)]
+        /// Optional notes for this address book entry.
+        notes: Option<String>,
+    },
+    /// List wallet-scoped address book entries.
+    AddressBookList {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+    },
+    /// Get a wallet-scoped address book entry by address.
+    AddressBookGet {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Address book address to look up.
+        address: String,
+    },
+    /// Delete a wallet-scoped address book entry by address.
+    AddressBookDelete {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Address book address to delete.
+        address: String,
+    },
     /// Synchronize wallet state with the configured backend.
     Sync {
         #[arg(long)]

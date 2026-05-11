@@ -24,6 +24,7 @@ Current routed screens:
 
 - Overview
 - Receive
+- Address Book
 - UTXOs
 - Send
 - Transactions
@@ -37,6 +38,7 @@ Current desktop capabilities:
 - display receive-address keychain, derivation-index, timestamp, label, and QR metadata
 - render a QR image for the active receive address
 - copy the raw receive address and Bitcoin URI from a dedicated receive surface
+- create, list, and delete wallet-scoped address-book entries for external recipients
 - inspect UTXOs and carry selected outpoints into send flows
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
 - sign and publish PSBTs
@@ -90,6 +92,25 @@ flowchart LR
 ```
 
 The receive page now does four real things in one surface: it generates the next wallet-controlled address, renders the backend-produced QR for the active address, lets the user edit the persisted label for that row, and lets the user browse the stored receive history.
+
+## Address Book Flow
+
+Address book is now a dedicated routed surface for external recipient management.
+
+```mermaid
+flowchart LR
+    A["Address Book Route"] --> B["Create entry form"]
+    A --> C["Existing entry list"]
+    B --> D["feature/address-book api.ts"]
+    C --> D
+    D --> E["Tauri wallet commands"]
+    E --> F["wallet_api address-book service"]
+    F --> G["wallet_storage address_book_entries"]
+    G --> H["AddressBookEntryDto[] / entry"]
+    H --> A
+```
+
+This flow is intentionally separate from receive history. Receive rows are wallet-owned derivations. Address-book rows are external destinations that the user curates.
 
 ## Transaction Intent Layer
 

@@ -10,7 +10,7 @@ It gives callers a stable async facade over wallet storage, runtime wallet loadi
 
 - wallet registry operations: import, list, get, and delete wallets
 - runtime wallet operations: address generation, sync, balance, status, transaction listing, and UTXO listing
-- address and inspection enrichment: persisted receive-address history, labels, canonical Bitcoin URIs, QR SVG payloads, keychain/index metadata, transaction graph inputs/outputs, and UTXO derivation metadata
+- address and inspection enrichment: persisted receive-address history, receive labels, wallet-scoped address-book entries, canonical Bitcoin URIs, QR SVG payloads, keychain/index metadata, transaction graph inputs/outputs, and UTXO derivation metadata
 - PSBT preview flows: fixed amount, coin control, send-max, sweep, consolidation, RBF, and CPFP
 - one-shot transaction flows: build, sign, publish, and return the broadcast result
 - DTO conversion: normalize caller input into canonical request DTOs, parse those into typed domain requests, and return stable response DTOs
@@ -35,6 +35,10 @@ Wallet state:
 - `list_receive_addresses`
 - `label_receive_address`
 - `clear_receive_address_label`
+- `create_address_book_entry`
+- `list_address_book_entries`
+- `get_address_book_entry`
+- `delete_address_book_entry`
 - `sync`
 - `backend_health`
 - `balance`
@@ -90,6 +94,7 @@ CLI and UI code should collect user intent, call `WalletApi`, and render DTOs or
 Important caller-facing DTOs include:
 
 - `WalletReceiveAddressHistoryDto` with `address`, `keychain`, optional `index`, `bitcoin_uri`, optional `qr_svg`, optional `label`, `created_at`, and optional `updated_at`
+- `AddressBookEntryDto` with `wallet_name`, `network`, `label`, `address`, optional `notes`, `created_at`, and optional `updated_at`
 - `WalletUtxoDto` with optional `derivation_index`
 - `WalletPsbtDto` with optional `original_txid` and optional `replacement` lineage metadata
 - `WalletBroadcastCandidateDto` for finalized transaction analysis before broadcast
@@ -107,6 +112,7 @@ Important canonical request DTOs include:
 - `CpfpRequestDto`
 - wallet-state request DTOs such as `WalletAddressRequestDto`, `WalletTransactionsRequestDto`, and `WalletUtxosRequestDto`
 - receive-address request DTOs such as `WalletReceiveAddressesRequestDto`, `LabelReceiveAddressRequestDto`, and `ClearReceiveAddressLabelRequestDto`
+- address-book request DTOs such as `CreateAddressBookEntryRequestDto`, `ListAddressBookEntriesRequestDto`, `GetAddressBookEntryRequestDto`, and `DeleteAddressBookEntryRequestDto`
 
 ## Test Coverage
 

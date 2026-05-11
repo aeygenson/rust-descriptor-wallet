@@ -29,6 +29,14 @@ Wallet state methods use `service/wallet.rs` and `service/addresses.rs`.
 
 `clear_receive_address_label(name, address)` clears the stored label for an existing persisted receive-address row through `ClearReceiveAddressLabelRequestDto` and returns the QR-backed row.
 
+`create_address_book_entry(name, label, address, notes)` validates the wallet exists, derives the wallet network from stored config, persists a wallet-scoped external-recipient row through `CreateAddressBookEntryRequestDto`, and returns an `AddressBookEntryDto`.
+
+`list_address_book_entries(name)` reads persisted wallet-scoped external-recipient rows through `ListAddressBookEntriesRequestDto`.
+
+`get_address_book_entry(name, address)` looks up one persisted address-book row through `GetAddressBookEntryRequestDto`.
+
+`delete_address_book_entry(name, address)` removes one persisted address-book row through `DeleteAddressBookEntryRequestDto` and returns a `bool` indicating whether a row was deleted.
+
 `backend_health(name)` checks configured backend reachability and reports tip visibility without mutating wallet state.
 
 `balance(name)` returns the current persisted wallet balance in satoshis. It does not perform a network sync.

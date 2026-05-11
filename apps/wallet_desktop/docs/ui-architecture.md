@@ -20,6 +20,7 @@ src/
     providers/
     router/
   features/
+    address-book/
     receive/
     wallet/
     utxos/
@@ -34,10 +35,11 @@ This is now real structure, not just a proposed target.
 
 ## Routing
 
-[src/app/router/routes.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/app/router/routes.ts) defines five routes:
+[src/app/router/routes.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/app/router/routes.ts) defines six routes:
 
 - `/`
 - `/receive`
+- `/address-book`
 - `/utxos`
 - `/send`
 - `/transactions`
@@ -90,6 +92,19 @@ This is the one real global state boundary in the current app.
 This feature is intentionally narrow. It is a direct frontend wrapper over wallet-controlled address generation and persisted receive history rather than a generalized address-book or request-management system.
 
 The backend command surface covers generate, list, label, and clear-label operations and returns QR-backed receive rows. The current rendered page mounts generation, history browsing, QR rendering, and label editing directly in the visible receive flow.
+
+### Address Book
+
+[src/features/address-book](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/address-book) owns:
+
+- address-book API wrappers
+- create-form validation and normalization helpers
+- list sorting and lookup helpers
+- entry formatting helpers
+- entry-card rendering
+- list rendering
+
+This feature is intentionally distinct from receive. Address-book entries represent external destinations the user wants to save. They are persisted in backend storage and routed through dedicated Tauri commands.
 
 ### UTXOs
 
@@ -190,6 +205,8 @@ Rust commands are grouped under:
 - request DTO decoding in [src-tauri/src/commands/send_model.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send_model.rs)
 
 The receive flow lives in the wallet command module through `get_receive_address`, `list_receive_addresses`, `label_receive_address`, and `clear_receive_address_label`. Those commands now return `WalletReceiveAddressHistoryDto` rows that include the canonical Bitcoin URI and an optional QR SVG payload. Send-related Tauri commands normalize frontend request objects into the canonical `wallet_api` request DTOs before calling into Rust service functions.
+
+The address-book flow also lives in the wallet command module through `create_address_book_entry`, `list_address_book_entries`, `get_address_book_entry`, and `delete_address_book_entry`. Those commands return `AddressBookEntryDto` rows and map directly onto `wallet_api` address-book service calls.
 
 ## Architectural Decisions Visible In Code
 

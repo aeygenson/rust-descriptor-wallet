@@ -97,6 +97,7 @@ Current persisted schema at a glance:
 ```mermaid
 erDiagram
     wallets ||--o{ receive_address_history : "owns"
+    wallets ||--o{ address_book_entries : "owns"
 
     wallets {
         int id PK
@@ -120,6 +121,17 @@ erDiagram
         int address_index
         text bitcoin_uri
         text label
+        text created_at
+        text updated_at
+    }
+
+    address_book_entries {
+        int id PK
+        text wallet_name FK
+        text network
+        text label
+        text address
+        text notes
         text created_at
         text updated_at
     }
@@ -168,6 +180,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - CLI commands for wallet metadata management
 - runtime wallet loading and creation backed by per-wallet BDK file stores
 - receive-address generation plus persisted receive-history rows for stored wallets
+- wallet-scoped address-book persistence for external recipients
 - backend-aware wallet sync through `wallet_sync`
 - Electrum sync support for local and compatible deployments
 - balance queries over persisted wallet state
@@ -192,7 +205,8 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - CPFP PSBT creation for unconfirmed parent transactions
 - one-shot CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
-- first Tauri desktop UI with Overview, UTXOs, Send, and Transactions screens
+- first Tauri desktop UI with Overview, Receive, Address Book, UTXOs, Send, and Transactions screens
+- first Tauri desktop address-book screen for external recipient management
 - desktop PSBT preview/sign/publish flows for fixed send, send-max, sweep, and consolidation
 - desktop transaction actions for RBF and CPFP
 - stronger domain types for wallet amounts, fee rates, txids, outpoints, PSBT payloads, raw transaction hex, virtual size, block height, percentages, keychains, and transaction direction
@@ -213,6 +227,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - richer transaction policy controls around selection defaults, limits, and safety checks
 - hardware-signing flow on top of the same PSBT pipeline
 - receive/settings wallet-management screens on top of the same wallet API boundary
+- send-page address-book integration on top of the same wallet API boundary
 
 ## Planned Capabilities
 

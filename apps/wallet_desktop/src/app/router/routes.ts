@@ -1,6 +1,7 @@
 export const routes = {
   overview: "/",
   receive: "/receive",
+  addressBook: "/address-book",
   utxos: "/utxos",
   send: "/send",
   transactions: "/transactions",
@@ -17,6 +18,7 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   { id: "overview", label: "Overview", path: routes.overview },
   { id: "receive", label: "Receive", path: routes.receive },
+  { id: "addressBook", label: "Address Book", path: routes.addressBook },
   { id: "utxos", label: "UTXOs", path: routes.utxos },
   { id: "send", label: "Send", path: routes.send },
   { id: "transactions", label: "Transactions", path: routes.transactions },

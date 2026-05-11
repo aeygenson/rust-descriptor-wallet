@@ -4,8 +4,10 @@ use qrcode::{render::svg, QrCode};
 use tracing::{debug, info};
 
 use crate::model::{
-    ClearReceiveAddressLabelRequestDto, LabelReceiveAddressRequestDto, WalletAddressRequestDto,
-    WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto,
+    AddressBookEntryDto, ClearReceiveAddressLabelRequestDto, CreateAddressBookEntryRequestDto,
+    DeleteAddressBookEntryRequestDto, GetAddressBookEntryRequestDto, LabelReceiveAddressRequestDto,
+    ListAddressBookEntriesRequestDto, WalletAddressRequestDto, WalletReceiveAddressHistoryDto,
+    WalletReceiveAddressesRequestDto,
 };
 use crate::service::wallet::load_wallet_config;
 use crate::{WalletApiError, WalletApiResult};
@@ -154,4 +156,124 @@ pub async fn clear_receive_address_label(
     );
 
     Ok(dto)
+}
+
+pub async fn create_address_book_entry(
+    storage: &WalletStorage,
+    request: CreateAddressBookEntryRequestDto,
+) -> WalletApiResult<AddressBookEntryDto> {
+    let CreateAddressBookEntryRequestDto {
+        name,
+        label,
+        address,
+        notes,
+    } = request;
+
+    debug!(
+        "api addresses: create_address_book_entry start name={} address={}",
+        name,
+        address
+    );
+
+    let config = load_wallet_config(storage, &name).await?;
+    let network = config.network.to_string();
+
+    let record = storage
+        .create_address_book_entry(
+            &name,
+            &network,
+            &label,
+            &address,
+            notes.as_deref(),
+        )
+        .await?;
+    let dto = AddressBookEntryDto::from(record);
+
+    info!(
+        "api addresses: create_address_book_entry success name={} label={} address={}",
+        name,
+        dto.label,
+        dto.address
+    );
+
+    Ok(dto)
+}
+
+pub async fn list_address_book_entries(
+    storage: &WalletStorage,
+    request: ListAddressBookEntriesRequestDto,
+) -> WalletApiResult<Vec<AddressBookEntryDto>> {
+    let ListAddressBookEntriesRequestDto { name } = request;
+
+    debug!(
+        "api addresses: list_address_book_entries start name={}",
+        name
+    );
+
+    let records = storage.list_address_book_entries(&name).await?;
+    let dtos = records
+        .into_iter()
+        .map(AddressBookEntryDto::from)
+        .collect::<Vec<_>>();
+
+    info!(
+        "api addresses: list_address_book_entries success name={} count={}",
+        name,
+        dtos.len()
+    );
+
+    Ok(dtos)
+}
+
+pub async fn get_address_book_entry(
+    storage: &WalletStorage,
+    request: GetAddressBookEntryRequestDto,
+) -> WalletApiResult<Option<AddressBookEntryDto>> {
+    let GetAddressBookEntryRequestDto { name, address } = request;
+
+    debug!(
+        "api addresses: get_address_book_entry start name={} address={}",
+        name,
+        address
+    );
+
+    let record = storage
+        .get_address_book_entry_by_address(&name, &address)
+        .await?;
+    let dto = record.map(AddressBookEntryDto::from);
+
+    info!(
+        "api addresses: get_address_book_entry success name={} address={} found={}",
+        name,
+        address,
+        dto.is_some()
+    );
+
+    Ok(dto)
+}
+
+pub async fn delete_address_book_entry(
+    storage: &WalletStorage,
+    request: DeleteAddressBookEntryRequestDto,
+) -> WalletApiResult<bool> {
+    let DeleteAddressBookEntryRequestDto { name, address } = request;
+
+    debug!(
+        "api addresses: delete_address_book_entry start name={} address={}",
+        name,
+        address
+    );
+
+    let deleted = storage
+        .delete_address_book_entry(&name, &address)
+        .await?;
+
+    info!(
+        "api addresses: delete_address_book_entry success name={} address={} deleted={}",
+        name,
+        address,
+        deleted
+    );
+
+    Ok(deleted)
 }

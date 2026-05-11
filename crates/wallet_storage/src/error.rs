@@ -23,6 +23,15 @@ pub enum WalletStorageError {
     #[error("wallet already exists: {0}")]
     AlreadyExists(String),
 
+    #[error("address book label already exists: {0}")]
+    DuplicateAddressBookLabel(String),
+
+    #[error("address book address already exists: {0}")]
+    DuplicateAddressBookAddress(String),
+
+    #[error("invalid address book address: {0}")]
+    InvalidAddressBookAddress(String),
+
     #[error("invalid backend config: {0}")]
     InvalidBackend(String),
 

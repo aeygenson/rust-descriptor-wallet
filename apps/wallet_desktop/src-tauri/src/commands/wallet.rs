@@ -1,6 +1,7 @@
 use tauri::{command, State};
 use wallet_api::{
     model::{
+        AddressBookEntryDto,
         WalletBackendHealthDto,
         WalletReceiveAddressHistoryDto,
         WalletStatusDto,
@@ -105,6 +106,55 @@ pub async fn clear_receive_address_label(
     address: String,
 ) -> Result<WalletReceiveAddressHistoryDto, String> {
     api.clear_receive_address_label(&walletName, &address)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn create_address_book_entry(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    label: String,
+    address: String,
+    notes: Option<String>,
+) -> Result<AddressBookEntryDto, String> {
+    api.create_address_book_entry(&walletName, &label, &address, notes)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn list_address_book_entries(
+    api: State<'_, WalletApi>,
+    walletName: String,
+) -> Result<Vec<AddressBookEntryDto>, String> {
+    api.list_address_book_entries(&walletName)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn get_address_book_entry(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    address: String,
+) -> Result<Option<AddressBookEntryDto>, String> {
+    api.get_address_book_entry(&walletName, &address)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn delete_address_book_entry(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    address: String,
+) -> Result<bool, String> {
+    api.delete_address_book_entry(&walletName, &address)
         .await
         .map_err(tauri_error)
 }

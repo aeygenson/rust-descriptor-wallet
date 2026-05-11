@@ -8,6 +8,7 @@ import "./styles/utxos.css";
 import "./styles/transactions.css";
 import "./styles/actions.css";
 import "./styles/receive.css";
+import "./styles/address-book.css";
 import App from "./App.tsx";
 
 createRoot(document.getElementById("root")!).render(

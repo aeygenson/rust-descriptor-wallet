@@ -8,7 +8,7 @@ use wallet_core::model::{
     WalletTxInfo, WalletUtxoInfo,
 };
 use wallet_core::types::WalletOutPoint;
-use wallet_storage::ReceiveAddressHistoryRecord;
+use wallet_storage::{AddressBookEntryRecord, ReceiveAddressHistoryRecord};
 
 /// Lightweight wallet summary for listing and UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -448,6 +448,35 @@ pub struct ClearReceiveAddressLabelRequestDto {
     pub address: String,
 }
 
+/// Canonical request DTO for creating a persisted wallet-scoped address book entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAddressBookEntryRequestDto {
+    pub name: String,
+    pub label: String,
+    pub address: String,
+    pub notes: Option<String>,
+}
+
+/// Canonical request DTO for listing persisted wallet-scoped address book entries.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListAddressBookEntriesRequestDto {
+    pub name: String,
+}
+
+/// Canonical request DTO for retrieving a wallet-scoped address book entry by address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetAddressBookEntryRequestDto {
+    pub name: String,
+    pub address: String,
+}
+
+/// Canonical request DTO for deleting a wallet-scoped address book entry by address.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteAddressBookEntryRequestDto {
+    pub name: String,
+    pub address: String,
+}
+
 /// Canonical request DTO for importing a wallet from a JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportWalletRequestDto {
@@ -489,6 +518,32 @@ impl From<ReceiveAddressHistoryRecord> for WalletReceiveAddressHistoryDto {
             bitcoin_uri: record.bitcoin_uri,
             qr_svg: None,
             label: record.label,
+            created_at: record.created_at,
+            updated_at: record.updated_at,
+        }
+    }
+}
+
+/// API DTO for a persisted wallet-scoped address book entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AddressBookEntryDto {
+    pub wallet_name: String,
+    pub network: String,
+    pub label: String,
+    pub address: String,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+}
+
+impl From<AddressBookEntryRecord> for AddressBookEntryDto {
+    fn from(record: AddressBookEntryRecord) -> Self {
+        Self {
+            wallet_name: record.wallet_name,
+            network: record.network,
+            label: record.label,
+            address: record.address,
+            notes: record.notes,
             created_at: record.created_at,
             updated_at: record.updated_at,
         }

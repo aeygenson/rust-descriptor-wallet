@@ -32,6 +32,15 @@ pub enum WalletApiError {
     #[error("QR generation failed: {0}")]
     QrGeneration(String),
 
+    #[error("address book label already exists: {0}")]
+    DuplicateAddressBookLabel(String),
+
+    #[error("address book address already exists: {0}")]
+    DuplicateAddressBookAddress(String),
+
+    #[error("invalid address book address: {0}")]
+    InvalidAddressBookAddress(String),
+
     #[error("backend unavailable: {0}")]
     BackendUnavailable(String),
 
@@ -39,7 +48,7 @@ pub enum WalletApiError {
     BackendHealth(String),
 
     #[error(transparent)]
-    Storage(#[from] WalletStorageError),
+    Storage(WalletStorageError),
 
     #[error(transparent)]
     Core(WalletCoreError),
@@ -126,6 +135,23 @@ pub enum WalletApiError {
 
     #[error("failed to extract transaction from psbt: {0}")]
     ExtractTxFailed(String),
+}
+
+impl From<WalletStorageError> for WalletApiError {
+    fn from(error: WalletStorageError) -> Self {
+        match error {
+            WalletStorageError::DuplicateAddressBookLabel(message) => {
+                Self::DuplicateAddressBookLabel(message)
+            }
+            WalletStorageError::DuplicateAddressBookAddress(message) => {
+                Self::DuplicateAddressBookAddress(message)
+            }
+            WalletStorageError::InvalidAddressBookAddress(message) => {
+                Self::InvalidAddressBookAddress(message)
+            }
+            other => Self::Storage(other),
+        }
+    }
 }
 
 impl From<WalletSyncError> for WalletApiError {
@@ -400,6 +426,9 @@ impl WalletApiError {
             | Self::DestinationNetworkMismatch(_)
             | Self::SelectionFailed(_) => "validation",
             Self::QrGeneration(_) => "receive",
+            Self::DuplicateAddressBookLabel(_)
+            | Self::DuplicateAddressBookAddress(_)
+            | Self::InvalidAddressBookAddress(_) => "address-book",
             Self::TransactionNotFound(_)
             | Self::TransactionAlreadyConfirmed(_)
             | Self::TransactionNotReplaceable(_) => "transaction",
@@ -444,7 +473,10 @@ impl WalletApiError {
             | Self::TransactionNotReplaceable(_)
             | Self::PsbtNotFinalized
             | Self::SendNotFinalized
-            | Self::SelectionFailed(_) => "user-action",
+            | Self::SelectionFailed(_)
+            | Self::DuplicateAddressBookLabel(_)
+            | Self::DuplicateAddressBookAddress(_)
+            | Self::InvalidAddressBookAddress(_) => "user-action",
             Self::WatchOnlyCannotSign | Self::InvalidBackend(_) => "fix-configuration",
             Self::NotImplemented(_) => "unsupported",
             _ => "fatal",
@@ -460,6 +492,9 @@ impl WalletApiError {
             | Self::InvalidDestinationAddress(_)
             | Self::DestinationNetworkMismatch(_)
             | Self::SelectionFailed(_)
+            | Self::DuplicateAddressBookLabel(_)
+            | Self::DuplicateAddressBookAddress(_)
+            | Self::InvalidAddressBookAddress(_)
             | Self::NotImplemented(_) => "info",
             Self::BroadcastTransport(_)
             | Self::Sync(_)

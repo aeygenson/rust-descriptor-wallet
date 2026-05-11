@@ -67,6 +67,38 @@ export interface ClearReceiveAddressLabelRequestDto {
     address: string;
 }
 
+// === Address Book ===
+export interface AddressBookEntryDto {
+    wallet_name: string;
+    network: string;
+    label: string;
+    address: string;
+    notes: string | null;
+    created_at: string;
+    updated_at: string | null;
+}
+
+export interface CreateAddressBookEntryRequestDto {
+    name: string;
+    label: string;
+    address: string;
+    notes: string | null;
+}
+
+export interface ListAddressBookEntriesRequestDto {
+    name: string;
+}
+
+export interface GetAddressBookEntryRequestDto {
+    name: string;
+    address: string;
+}
+
+export interface DeleteAddressBookEntryRequestDto {
+    name: string;
+    address: string;
+}
+
 // === Input Selection Mode ===
 export type WalletInputSelectionModeDto =
     | "strict-manual"

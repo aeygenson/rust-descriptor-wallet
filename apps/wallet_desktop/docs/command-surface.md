@@ -21,11 +21,16 @@ Registered commands:
 - `list_receive_addresses`
 - `label_receive_address`
 - `clear_receive_address_label`
+- `create_address_book_entry`
+- `list_address_book_entries`
+- `get_address_book_entry`
+- `delete_address_book_entry`
 
 Frontend wrappers:
 
 - [src/features/wallet/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/wallet/api.ts)
 - [src/features/receive/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/receive/api.ts)
+- [src/features/address-book/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/address-book/api.ts)
 
 ## UTXO Commands
 
@@ -118,6 +123,13 @@ The receive-address commands are the main exception here. They take flat argumen
 - `label_receive_address(walletName, address, label)` -> `WalletReceiveAddressHistoryDto`
 - `clear_receive_address_label(walletName, address)` -> `WalletReceiveAddressHistoryDto`
 
+The address-book commands follow the same flat-argument style:
+
+- `create_address_book_entry(walletName, label, address, notes)` -> `AddressBookEntryDto`
+- `list_address_book_entries(walletName)` -> `AddressBookEntryDto[]`
+- `get_address_book_entry(walletName, address)` -> `AddressBookEntryDto | null`
+- `delete_address_book_entry(walletName, address)` -> `boolean`
+
 Receive DTOs now carry:
 
 - `address`
@@ -126,6 +138,16 @@ Receive DTOs now carry:
 - `bitcoin_uri`
 - optional `qr_svg`
 - optional `label`
+- `created_at`
+- optional `updated_at`
+
+Address-book DTOs carry:
+
+- `wallet_name`
+- `network`
+- `label`
+- `address`
+- optional `notes`
 - `created_at`
 - optional `updated_at`
 

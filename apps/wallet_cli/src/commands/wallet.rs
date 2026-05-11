@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::path::Path;
 use wallet_api::model::{
-    WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressHistoryDto, WalletStatusDto,
-    WalletSummaryDto,
+    AddressBookEntryDto, WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressHistoryDto,
+    WalletStatusDto, WalletSummaryDto,
 };
 use wallet_api::WalletApi;
 
@@ -130,6 +130,7 @@ pub async fn label_receive_address(
     Ok(())
 }
 
+
 pub async fn clear_receive_address_label(
     api: &WalletApi,
     name: &str,
@@ -140,6 +141,75 @@ pub async fn clear_receive_address_label(
         .await?;
 
     print_receive_address(&addr, false);
+
+    Ok(())
+}
+
+fn print_address_book_entry(entry: &AddressBookEntryDto) {
+    println!("wallet={}", entry.wallet_name);
+    println!("network={}", entry.network);
+    println!("label={}", entry.label);
+    println!("address={}", entry.address);
+
+    if let Some(notes) = &entry.notes {
+        println!("notes={notes}");
+    }
+
+    println!("created_at={}", entry.created_at);
+
+    if let Some(updated_at) = &entry.updated_at {
+        println!("updated_at={updated_at}");
+    }
+}
+
+pub async fn create_address_book_entry(
+    api: &WalletApi,
+    name: &str,
+    label: &str,
+    address: &str,
+    notes: Option<String>,
+) -> Result<()> {
+    let entry: AddressBookEntryDto = api
+        .create_address_book_entry(name, label, address, notes)
+        .await?;
+
+    print_address_book_entry(&entry);
+
+    Ok(())
+}
+
+pub async fn list_address_book_entries(api: &WalletApi, name: &str) -> Result<()> {
+    let entries: Vec<AddressBookEntryDto> = api.list_address_book_entries(name).await?;
+
+    if entries.is_empty() {
+        println!("No address book entries found for wallet {name}.");
+    } else {
+        for entry in entries {
+            print_address_book_entry(&entry);
+            println!("---");
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn get_address_book_entry(api: &WalletApi, name: &str, address: &str) -> Result<()> {
+    match api.get_address_book_entry(name, address).await? {
+        Some(entry) => print_address_book_entry(&entry),
+        None => println!("No address book entry found for wallet {name} and address {address}."),
+    }
+
+    Ok(())
+}
+
+pub async fn delete_address_book_entry(api: &WalletApi, name: &str, address: &str) -> Result<()> {
+    let deleted = api.delete_address_book_entry(name, address).await?;
+
+    if deleted {
+        println!("Deleted address book entry for wallet {name} address {address}.");
+    } else {
+        println!("No address book entry found for wallet {name} address {address}.");
+    }
 
     Ok(())
 }

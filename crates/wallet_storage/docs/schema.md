@@ -1,8 +1,8 @@
 # Wallet Storage Schema
 
-The current schema is embedded in `migrations/0001_init.sql` and `migrations/0002_receive_history.sql`, and is applied by `WalletStorage::migrate`.
+The current schema is embedded in `migrations/0001_init.sql`, `migrations/0002_receive_history.sql`, and `migrations/0003_address_book.sql`, and is applied by `WalletStorage::migrate`.
 
-The schema is intentionally small: it stores wallet registry metadata plus persisted receive-address history.
+The schema is intentionally small: it stores wallet registry metadata plus persisted receive-address history and wallet-scoped address-book entries.
 
 ## Table: `wallets`
 
@@ -166,6 +166,75 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_receive_address_history_wallet_address
     ON receive_address_history(wallet_name, address);
 ```
 
+## Table: `address_book_entries`
+
+```sql
+CREATE TABLE IF NOT EXISTS address_book_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wallet_name TEXT NOT NULL,
+    network TEXT NOT NULL,
+    label TEXT NOT NULL,
+    address TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+
+    CONSTRAINT fk_address_book_wallet
+        FOREIGN KEY (wallet_name)
+        REFERENCES wallets(name)
+        ON DELETE CASCADE,
+
+    CONSTRAINT uq_address_book_wallet_address
+        UNIQUE (wallet_name, address),
+
+    CONSTRAINT uq_address_book_wallet_label
+        UNIQUE (wallet_name, label)
+);
+```
+
+## Columns
+
+`wallet_name`
+
+Owning wallet record name. This is a foreign key to `wallets(name)`.
+
+`network`
+
+Text copy of the wallet network at creation time. This lets callers render recipient network metadata without reloading the wallet record.
+
+`label`
+
+Wallet-scoped recipient label. `(wallet_name, label)` is unique.
+
+`address`
+
+Persisted external destination address string. `(wallet_name, address)` is unique.
+
+`notes`
+
+Nullable caller-supplied free text.
+
+`created_at`
+
+Timestamp for initial persistence.
+
+`updated_at`
+
+Nullable timestamp reserved for later row updates. The current address-book flow only creates and deletes entries.
+
+The address-book migration adds:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_address_book_wallet_name
+    ON address_book_entries(wallet_name);
+
+CREATE INDEX IF NOT EXISTS idx_address_book_network
+    ON address_book_entries(network);
+
+CREATE INDEX IF NOT EXISTS idx_address_book_label
+    ON address_book_entries(label);
+```
+
 ## Repository Queries
 
 `get_wallet_by_name` selects all wallet columns by `name` and returns `WalletStorageError::NotFound` when absent.
@@ -190,6 +259,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_receive_address_history_wallet_address
 
 `get_receive_address_by_wallet_and_address` selects one row by `(wallet_name, address)`.
 
+## Address Book Queries
+
+`create_address_book_entry` inserts one wallet-scoped recipient row and maps duplicate wallet-local labels and addresses into dedicated storage errors.
+
+`list_address_book_entries` selects all address-book rows for a wallet ordered by `label ASC`.
+
+`get_address_book_entry_by_address` selects one row by `(wallet_name, address)`.
+
+`delete_address_book_entry` deletes one row by `(wallet_name, address)` and returns `false` when no row matched.
+
 ## Not Stored Here
 
 The schema does not store:
@@ -201,6 +280,6 @@ The schema does not store:
 - signing metadata
 - raw PSBTs
 
-Receive-address labels are now stored here, but broader transaction-annotation systems are not.
+Receive-address labels and address-book rows are stored here, but broader transaction-annotation systems are not.
 
 Runtime wallet state is managed by the BDK wallet store at `db_path`.

@@ -43,6 +43,30 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::ClearReceiveAddressLabel { name, address } => {
             wallet::clear_receive_address_label(api, &name, &address).await?;
         }
+        Commands::AddressBookAdd {
+            name,
+            label,
+            address,
+            notes,
+        } => {
+            wallet::create_address_book_entry(
+                api,
+                &name,
+                &label,
+                &address,
+                notes,
+            )
+            .await?;
+        }
+        Commands::AddressBookList { name } => {
+            wallet::list_address_book_entries(api, &name).await?;
+        }
+        Commands::AddressBookGet { name, address } => {
+            wallet::get_address_book_entry(api, &name, &address).await?;
+        }
+        Commands::AddressBookDelete { name, address } => {
+            wallet::delete_address_book_entry(api, &name, &address).await?;
+        }
         Commands::Sync { name } => {
             wallet::sync_wallet(api, &name).await?;
         }

@@ -4,11 +4,16 @@ pub mod models;
 pub mod repository;
 
 
-use repository::{receive_history, wallets};
+use repository::{address_book, receive_history, wallets};
 use sqlx::SqlitePool;
 
 pub use error::WalletStorageError;
-pub use models::{ImportWalletFile, ReceiveAddressHistoryRecord, WalletRecord};
+pub use models::{
+    AddressBookEntryRecord,
+    ImportWalletFile,
+    ReceiveAddressHistoryRecord,
+    WalletRecord,
+};
 
 pub type WalletStorageResult<T> = Result<T, WalletStorageError>;
 
@@ -27,6 +32,9 @@ impl WalletStorage {
         db::migrate(&self.pool).await
     }
 
+    // ---------------------------------------------------------------------
+    // Wallets
+    // ---------------------------------------------------------------------
     pub async fn get_wallet_by_name(&self, name: &str) -> WalletStorageResult<WalletRecord> {
         wallets::get_wallet_by_name(&self.pool, name).await
     }
@@ -66,6 +74,9 @@ impl WalletStorage {
         wallets::import_wallet_from_file(&self.pool, file_path).await
     }
 
+    // ---------------------------------------------------------------------
+    // Receive history
+    // ---------------------------------------------------------------------
     pub async fn record_receive_address(
         &self,
         wallet_name: &str,
@@ -133,12 +144,71 @@ impl WalletStorage {
         .await
     }
 
+    // ---------------------------------------------------------------------
+    // Address book
+    // ---------------------------------------------------------------------
+    pub async fn create_address_book_entry(
+        &self,
+        wallet_name: &str,
+        network: &str,
+        label: &str,
+        address: &str,
+        notes: Option<&str>,
+    ) -> WalletStorageResult<AddressBookEntryRecord> {
+        address_book::create_entry(
+            &self.pool,
+            wallet_name,
+            network,
+            label,
+            address,
+            notes,
+        )
+        .await
+    }
+
+    pub async fn list_address_book_entries(
+        &self,
+        wallet_name: &str,
+    ) -> WalletStorageResult<Vec<AddressBookEntryRecord>> {
+        address_book::list_entries(&self.pool, wallet_name).await
+    }
+
+    pub async fn get_address_book_entry_by_address(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> WalletStorageResult<Option<AddressBookEntryRecord>> {
+        address_book::get_entry_by_address(
+            &self.pool,
+            wallet_name,
+            address,
+        )
+        .await
+    }
+
+    pub async fn delete_address_book_entry(
+        &self,
+        wallet_name: &str,
+        address: &str,
+    ) -> WalletStorageResult<bool> {
+        address_book::delete_entry(
+            &self.pool,
+            wallet_name,
+            address,
+        )
+        .await
+    }
+
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
 }
 
 pub use db::{default_app_path, default_db_path, default_wallet_db_path};
+
+// -------------------------------------------------------------------------
+// Re-exported repository helpers
+// -------------------------------------------------------------------------
 pub use wallets::{
     create_wallet, delete_wallet, get_wallet_by_name, import_wallet_from_file, list_wallets,
 };
@@ -149,4 +219,11 @@ pub use receive_history::{
     label_receive_address,
     list_receive_addresses,
     record_receive_address,
+};
+
+pub use address_book::{
+    create_entry as create_address_book_entry,
+    delete_entry as delete_address_book_entry,
+    get_entry_by_address as get_address_book_entry_by_address,
+    list_entries as list_address_book_entries,
 };
