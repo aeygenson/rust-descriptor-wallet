@@ -123,6 +123,7 @@ This keeps consolidation policy parsing outside the CLI and UI layers.
 - `keychain`
 - `index`
 - `bitcoin_uri`
+- `qr_svg`
 - `label`
 - `created_at`
 - `updated_at`

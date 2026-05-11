@@ -1,5 +1,6 @@
 
 
+use qrcode::{render::svg, QrCode};
 use tracing::{debug, info};
 
 use crate::model::{
@@ -7,13 +8,32 @@ use crate::model::{
     WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto,
 };
 use crate::service::wallet::load_wallet_config;
-use crate::WalletApiResult;
+use crate::{WalletApiError, WalletApiResult};
 
 use wallet_core::WalletService;
 use wallet_storage::WalletStorage;
 
 fn bitcoin_uri(address: &str) -> String {
     format!("bitcoin:{address}")
+}
+
+fn qr_svg(payload: &str) -> WalletApiResult<String> {
+    let code = QrCode::new(payload.as_bytes())
+        .map_err(|err| WalletApiError::QrGeneration(err.to_string()))?;
+
+    Ok(code
+        .render::<svg::Color>()
+        .min_dimensions(220, 220)
+        .dark_color(svg::Color("#0f172a"))
+        .light_color(svg::Color("#ffffff"))
+        .build())
+}
+
+fn attach_qr_svg(
+    mut dto: WalletReceiveAddressHistoryDto,
+) -> WalletApiResult<WalletReceiveAddressHistoryDto> {
+    dto.qr_svg = Some(qr_svg(&dto.bitcoin_uri)?);
+    Ok(dto)
 }
 
 pub async fn address(
@@ -44,7 +64,7 @@ pub async fn address(
         )
         .await?;
 
-    let dto = WalletReceiveAddressHistoryDto::from(record);
+    let dto = attach_qr_svg(WalletReceiveAddressHistoryDto::from(record))?;
 
     info!(
         "api addresses: address success name={} keychain={} index={:?}",
@@ -68,7 +88,8 @@ pub async fn list_receive_addresses(
     let dtos = records
         .into_iter()
         .map(WalletReceiveAddressHistoryDto::from)
-        .collect::<Vec<_>>();
+        .map(attach_qr_svg)
+        .collect::<WalletApiResult<Vec<_>>>()?;
 
     info!(
         "api addresses: list_receive_addresses success name={} count={}",
@@ -98,7 +119,7 @@ pub async fn label_receive_address(
     let record = storage
         .label_receive_address(&name, &address, &label)
         .await?;
-    let dto = WalletReceiveAddressHistoryDto::from(record);
+    let dto = attach_qr_svg(WalletReceiveAddressHistoryDto::from(record))?;
 
     info!(
         "api addresses: label_receive_address success name={} address={}",
@@ -124,7 +145,7 @@ pub async fn clear_receive_address_label(
     let record = storage
         .clear_receive_address_label(&name, &address)
         .await?;
-    let dto = WalletReceiveAddressHistoryDto::from(record);
+    let dto = attach_qr_svg(WalletReceiveAddressHistoryDto::from(record))?;
 
     info!(
         "api addresses: clear_receive_address_label success name={} address={}",

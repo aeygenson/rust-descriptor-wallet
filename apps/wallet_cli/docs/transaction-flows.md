@@ -47,8 +47,9 @@ User provides:
 Backend behavior:
 - derives the next wallet-controlled receive address
 - builds a canonical Bitcoin URI
+- renders a QR SVG from that Bitcoin URI
 - persists the generated address into receive-address history
-- returns the persisted history row, including timestamps and optional label state
+- returns the persisted history row, including timestamps, optional label state, and optional QR SVG payload
 
 Typical lifecycle:
 1. generate address with `address`
@@ -61,6 +62,7 @@ Important notes:
 - receive-address history is wallet-scoped
 - repeated derivation of an already-persisted address reuses the stored row rather than duplicating it
 - labels are storage metadata, not wallet-core derivation state
+- CLI callers can choose whether to print the raw QR SVG payload with `--qr-svg`
 
 ---
 

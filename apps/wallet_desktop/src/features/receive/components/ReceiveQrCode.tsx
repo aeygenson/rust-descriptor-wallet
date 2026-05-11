@@ -1,13 +1,13 @@
-
-
 import type { ReceiveQrCodeProps } from "../types";
 
 export function ReceiveQrCode({
   value,
+  svg,
   size = 220,
 }: ReceiveQrCodeProps) {
   const normalizedValue = value.trim();
-  const hasValue = normalizedValue.length > 0;
+  const normalizedSvg = svg?.trim() ?? "";
+  const hasSvg = normalizedSvg.length > 0;
 
   return (
     <div
@@ -17,15 +17,14 @@ export function ReceiveQrCode({
         height: `${size}px`,
       }}
       aria-label="Receive QR code"
+      title={normalizedValue || "Receive QR code"}
     >
-      {hasValue ? (
-        <div className="receive-qr__placeholder">
-          <div className="receive-qr__grid" />
-
-          <div className="receive-qr__label">
-            QR preview
-          </div>
-        </div>
+      {hasSvg ? (
+        <img
+          className="receive-qr__image"
+          src={`data:image/svg+xml;utf8,${encodeURIComponent(normalizedSvg)}`}
+          alt="Bitcoin receive QR code"
+        />
       ) : (
         <div className="receive-qr__empty">
           No QR data

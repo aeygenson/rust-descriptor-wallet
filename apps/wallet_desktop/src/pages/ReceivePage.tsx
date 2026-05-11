@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { WalletReceiveAddressHistoryDto } from "../shared/types/dtos";
-import { getReceiveAddress, listReceiveAddresses } from "../features/receive/api";
+import {
+  clearReceiveAddressLabel,
+  getReceiveAddress,
+  labelReceiveAddress,
+  listReceiveAddresses,
+} from "../features/receive/api";
 import { ReceiveAddressCard } from "../features/receive/components/ReceiveAddressCard";
 import { ReceiveEmptyState } from "../features/receive/components/ReceiveEmptyState";
 import { ReceiveAddressHistoryList } from "../features/receive/components/ReceiveAddressHistoryList";
@@ -52,6 +57,51 @@ export function ReceivePage() {
     }
   };
 
+  const handleSaveLabel = async (label: string) => {
+    if (!selectedWalletName || !address) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const updated = await labelReceiveAddress(
+        selectedWalletName,
+        address.address,
+        label,
+      );
+      setAddress(updated);
+      await loadHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearLabel = async () => {
+    if (!selectedWalletName || !address) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const updated = await clearReceiveAddressLabel(
+        selectedWalletName,
+        address.address,
+      );
+      setAddress(updated);
+      await loadHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="receive-page">
       <header className="receive-page__header">
@@ -75,6 +125,8 @@ export function ReceivePage() {
           loading={loading}
           onRefresh={handleGenerate}
           onCopy={() => undefined}
+          onSaveLabel={handleSaveLabel}
+          onClearLabel={handleClearLabel}
         />
       ) : (
         <ReceiveEmptyState

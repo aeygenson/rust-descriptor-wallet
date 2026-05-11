@@ -60,8 +60,10 @@ Current responsibilities:
 - show the currently selected wallet in a receive-specific header
 - request the next receive address from the Tauri backend
 - render address metadata returned by Rust
+- render the QR image for the active receive address
 - load persisted receive-address history for the selected wallet
 - let the user select a historical receive address as the active card
+- let the user save or clear the label for the active receive-history row
 - let the user generate a fresh address on demand
 - let the user copy the raw address or Bitcoin URI
 
@@ -75,8 +77,8 @@ Current UI states:
 
 Current boundary note:
 
-- the Tauri backend already exposes list, label, and clear-label commands for receive history
-- the current rendered page uses generation plus history browsing, but does not yet surface label editing in the visible page flow
+- the Tauri backend exposes generate, list, label, clear-label, and QR-backed receive rows
+- the current rendered page uses generation, history browsing, QR rendering, and visible label editing
 
 ## Send
 

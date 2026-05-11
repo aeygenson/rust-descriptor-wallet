@@ -21,13 +21,13 @@ Wallet state methods use `service/wallet.rs` and `service/addresses.rs`.
 
 `sync(name)` loads the wallet configuration, opens or creates the runtime wallet store, and calls `WalletSyncService::sync`. It returns `()` on success.
 
-`address(name)` loads the runtime wallet, derives the next receive address via `WalletAddressRequestDto`, persists that row into storage, and returns a `WalletReceiveAddressHistoryDto`. The response includes `address`, `keychain`, optional derivation `index`, `bitcoin_uri`, optional `label`, and timestamps.
+`address(name)` loads the runtime wallet, derives the next receive address via `WalletAddressRequestDto`, persists that row into storage, renders a QR SVG from the canonical Bitcoin URI, and returns a `WalletReceiveAddressHistoryDto`. The response includes `address`, `keychain`, optional derivation `index`, `bitcoin_uri`, optional `qr_svg`, optional `label`, and timestamps.
 
-`list_receive_addresses(name)` reads persisted receive-address history for the wallet through `WalletReceiveAddressesRequestDto`.
+`list_receive_addresses(name)` reads persisted receive-address history for the wallet through `WalletReceiveAddressesRequestDto` and attaches QR SVG payloads to each returned row.
 
-`label_receive_address(name, address, label)` updates the stored label for an existing persisted receive-address row through `LabelReceiveAddressRequestDto`.
+`label_receive_address(name, address, label)` updates the stored label for an existing persisted receive-address row through `LabelReceiveAddressRequestDto` and returns the QR-backed row.
 
-`clear_receive_address_label(name, address)` clears the stored label for an existing persisted receive-address row through `ClearReceiveAddressLabelRequestDto`.
+`clear_receive_address_label(name, address)` clears the stored label for an existing persisted receive-address row through `ClearReceiveAddressLabelRequestDto` and returns the QR-backed row.
 
 `backend_health(name)` checks configured backend reachability and reports tip visibility without mutating wallet state.
 

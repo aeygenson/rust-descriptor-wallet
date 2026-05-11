@@ -23,7 +23,7 @@ use wallet_sync::WalletSyncService;
 #[derive(Debug)]
 pub struct WalletApi {
     core: Arc<WalletCore>,
-    pub  storage: WalletStorage,
+    pub storage: WalletStorage,
     sync: WalletSyncService,
 }
 

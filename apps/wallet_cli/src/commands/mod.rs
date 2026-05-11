@@ -27,11 +27,11 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::DeleteWallet { name } => {
             wallet::delete_wallet(api, &name).await?;
         }
-        Commands::Address { name } => {
-            wallet::address(api, &name).await?;
+        Commands::Address { name, qr_svg } => {
+            wallet::address(api, &name, qr_svg).await?;
         }
-        Commands::ReceiveAddresses { name } => {
-            wallet::list_receive_addresses(api, &name).await?;
+        Commands::ReceiveAddresses { name, qr_svg } => {
+            wallet::list_receive_addresses(api, &name, qr_svg).await?;
         }
         Commands::LabelReceiveAddress {
             name,

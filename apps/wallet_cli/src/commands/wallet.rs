@@ -62,9 +62,7 @@ pub async fn backend_health(api: &WalletApi, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
-    let addr: WalletReceiveAddressHistoryDto = api.address(name).await?;
-
+fn print_receive_address(addr: &WalletReceiveAddressHistoryDto, show_qr_svg: bool) {
     println!("address={}", addr.address);
     println!("keychain={}", addr.keychain);
     println!(
@@ -74,40 +72,42 @@ pub async fn address(api: &WalletApi, name: &str) -> Result<()> {
             .unwrap_or_else(|| "n/a".to_string())
     );
     println!("bitcoin_uri={}", addr.bitcoin_uri);
-    if let Some(label) = addr.label {
+
+    if let Some(label) = &addr.label {
         println!("label={label}");
     }
+
     println!("created_at={}", addr.created_at);
-    if let Some(updated_at) = addr.updated_at {
+
+    if let Some(updated_at) = &addr.updated_at {
         println!("updated_at={updated_at}");
     }
+
+    if let Some(qr_svg) = &addr.qr_svg {
+        println!("qr_svg_length={}", qr_svg.len());
+
+        if show_qr_svg {
+            println!("qr_svg={qr_svg}");
+        }
+    }
+}
+
+pub async fn address(api: &WalletApi, name: &str, show_qr_svg: bool) -> Result<()> {
+    let addr: WalletReceiveAddressHistoryDto = api.address(name).await?;
+
+    print_receive_address(&addr, show_qr_svg);
 
     Ok(())
 }
 
-pub async fn list_receive_addresses(api: &WalletApi, name: &str) -> Result<()> {
+pub async fn list_receive_addresses(api: &WalletApi, name: &str, show_qr_svg: bool) -> Result<()> {
     let addresses: Vec<WalletReceiveAddressHistoryDto> = api.list_receive_addresses(name).await?;
 
     if addresses.is_empty() {
         println!("No receive addresses found for wallet {name}.");
     } else {
         for addr in addresses {
-            println!("address={}", addr.address);
-            println!("keychain={}", addr.keychain);
-            println!(
-                "index={}",
-                addr.index
-                    .map(|index| index.to_string())
-                    .unwrap_or_else(|| "n/a".to_string())
-            );
-            println!("bitcoin_uri={}", addr.bitcoin_uri);
-            if let Some(label) = addr.label {
-                println!("label={label}");
-            }
-            println!("created_at={}", addr.created_at);
-            if let Some(updated_at) = addr.updated_at {
-                println!("updated_at={updated_at}");
-            }
+            print_receive_address(&addr, show_qr_svg);
             println!("---");
         }
     }
@@ -125,22 +125,7 @@ pub async fn label_receive_address(
         .label_receive_address(name, address, label)
         .await?;
 
-    println!("address={}", addr.address);
-    println!("keychain={}", addr.keychain);
-    println!(
-        "index={}",
-        addr.index
-            .map(|index| index.to_string())
-            .unwrap_or_else(|| "n/a".to_string())
-    );
-    println!("bitcoin_uri={}", addr.bitcoin_uri);
-    if let Some(label) = addr.label {
-        println!("label={label}");
-    }
-    println!("created_at={}", addr.created_at);
-    if let Some(updated_at) = addr.updated_at {
-        println!("updated_at={updated_at}");
-    }
+    print_receive_address(&addr, false);
 
     Ok(())
 }
@@ -154,20 +139,7 @@ pub async fn clear_receive_address_label(
         .clear_receive_address_label(name, address)
         .await?;
 
-    println!("address={}", addr.address);
-    println!("keychain={}", addr.keychain);
-    println!(
-        "index={}",
-        addr.index
-            .map(|index| index.to_string())
-            .unwrap_or_else(|| "n/a".to_string())
-    );
-    println!("bitcoin_uri={}", addr.bitcoin_uri);
-    println!("label=<none>");
-    println!("created_at={}", addr.created_at);
-    if let Some(updated_at) = addr.updated_at {
-        println!("updated_at={updated_at}");
-    }
+    print_receive_address(&addr, false);
 
     Ok(())
 }

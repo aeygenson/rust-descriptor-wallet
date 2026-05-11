@@ -76,12 +76,20 @@ Status includes wallet balance, UTXO count, and latest observed block height.
 cargo run -p wallet_cli -- address --name <wallet>
 ```
 
+To print the generated QR SVG payload too:
+
+```bash
+cargo run -p wallet_cli -- address --name <wallet> --qr-svg
+```
+
 Address generation now persists a receive-history entry for the wallet. Output is structured:
 
 - `address=<encoded-address>`
 - `keychain=external|internal`
 - `index=<derivation-index|n/a>`
 - `bitcoin_uri=bitcoin:<encoded-address>`
+- `qr_svg_length=<svg-bytes>` when QR generation succeeds
+- optional `qr_svg=<svg-payload>` when `--qr-svg` is requested
 - optional `label=<text>`
 - `created_at=<timestamp>`
 - optional `updated_at=<timestamp>`
@@ -92,12 +100,20 @@ Address generation now persists a receive-history entry for the wallet. Output i
 cargo run -p wallet_cli -- receive-addresses --name <wallet>
 ```
 
+To print QR SVG payloads for each entry too:
+
+```bash
+cargo run -p wallet_cli -- receive-addresses --name <wallet> --qr-svg
+```
+
 Each history entry prints:
 
 - `address=<encoded-address>`
 - `keychain=external|internal`
 - `index=<derivation-index|n/a>`
 - `bitcoin_uri=bitcoin:<encoded-address>`
+- `qr_svg_length=<svg-bytes>` when QR generation succeeds
+- optional `qr_svg=<svg-payload>` when `--qr-svg` is requested
 - optional `label=<text>`
 - `created_at=<timestamp>`
 - optional `updated_at=<timestamp>`

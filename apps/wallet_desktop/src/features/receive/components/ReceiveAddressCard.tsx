@@ -5,10 +5,13 @@ import {
   buildBitcoinUri,
   getReceiveAddressMetadata,
   getReceiveAddressString,
+  getReceiveQrSvg,
 } from "../lib";
 
 import { ReceiveAddressActions } from "./ReceiveAddressActions";
+import { ReceiveAddressLabelEditor } from "./ReceiveAddressLabelEditor";
 import { ReceiveAddressMetadata } from "./ReceiveAddressMetadata";
+import { ReceiveQrCode } from "./ReceiveQrCode";
 
 export function ReceiveAddressCard({
   walletName,
@@ -16,11 +19,14 @@ export function ReceiveAddressCard({
   loading = false,
   onRefresh,
   onCopy,
+  onSaveLabel,
+  onClearLabel,
 }: ReceiveAddressCardProps) {
   const addressString = getReceiveAddressString(address);
   const formattedAddress = formatReceiveAddress(addressString);
   const metadata = getReceiveAddressMetadata(address);
   const bitcoinUri = buildBitcoinUri(address);
+  const qrSvg = getReceiveQrSvg(address);
 
 
   return (
@@ -55,6 +61,18 @@ export function ReceiveAddressCard({
       {metadata.length > 0 ? (
         <ReceiveAddressMetadata items={metadata} />
       ) : null}
+
+      <ReceiveQrCode
+        value={bitcoinUri}
+        svg={qrSvg}
+      />
+
+      <ReceiveAddressLabelEditor
+        address={address}
+        loading={loading}
+        onSave={onSaveLabel}
+        onClear={onClearLabel}
+      />
 
       <ReceiveAddressActions
         address={addressString}

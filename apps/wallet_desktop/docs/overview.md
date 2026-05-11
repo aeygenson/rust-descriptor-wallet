@@ -34,7 +34,8 @@ Current desktop capabilities:
 - show wallet status and backend health
 - generate the next receive address for the active wallet
 - list persisted receive-address history for the active wallet
-- display receive-address keychain, derivation-index, timestamp, and label metadata
+- display receive-address keychain, derivation-index, timestamp, label, and QR metadata
+- render a QR image for the active receive address
 - copy the raw receive address and Bitcoin URI from a dedicated receive surface
 - inspect UTXOs and carry selected outpoints into send flows
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
@@ -82,11 +83,13 @@ flowchart LR
     F --> G["WalletReceiveAddressHistoryDto"]
     G --> H["Receive card"]
     G --> I["Receive history list"]
-    H --> J["Copy address"]
-    H --> K["Copy bitcoin URI"]
+    H --> J["QR image render"]
+    H --> K["Label editor"]
+    H --> L["Copy address"]
+    H --> M["Copy bitcoin URI"]
 ```
 
-The receive page is still intentionally lightweight in the rendered UI: it asks Rust for the next wallet-controlled address, persists that row, then renders the canonical address string plus history-backed metadata returned by the backend. The backend command surface already supports listing and labeling persisted receive rows, but the current page only uses generation plus history browsing.
+The receive page now does four real things in one surface: it generates the next wallet-controlled address, renders the backend-produced QR for the active address, lets the user edit the persisted label for that row, and lets the user browse the stored receive history.
 
 ## Transaction Intent Layer
 

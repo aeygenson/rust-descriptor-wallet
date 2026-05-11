@@ -8,6 +8,14 @@ use wallet_api::{
     },
     WalletApi,
 };
+
+fn tauri_error<E>(err: E) -> String
+where
+    E: std::fmt::Display,
+{
+    err.to_string()
+}
+
 /// Returns a simple string to verify that the Rust backend is connected.
 #[command]
 pub fn get_app_info() -> String {
@@ -16,7 +24,7 @@ pub fn get_app_info() -> String {
 
 #[command]
 pub async fn list_wallets(api: State<'_, WalletApi>) -> Result<Vec<WalletSummaryDto>, String> {
-    api.list_wallets().await.map_err(|err| err.to_string())
+    api.list_wallets().await.map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -27,7 +35,7 @@ pub async fn get_wallet_status(
 ) -> Result<WalletStatusDto, String> {
     api.status(&walletName)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 #[allow(non_snake_case)]
 #[command]
@@ -37,10 +45,10 @@ pub async fn sync_wallet(
 ) -> Result<WalletStatusDto, String> {
     api.sync(&walletName)
         .await
-        .map_err(|err| err.to_string())?;
+        .map_err(tauri_error)?;
     api.status(&walletName)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -51,7 +59,7 @@ pub async fn backend_health(
 ) -> Result<WalletBackendHealthDto, String> {
     api.backend_health(&walletName)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -62,7 +70,7 @@ pub async fn get_receive_address(
 ) -> Result<WalletReceiveAddressHistoryDto, String> {
     api.address(&walletName)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -73,7 +81,7 @@ pub async fn list_receive_addresses(
 ) -> Result<Vec<WalletReceiveAddressHistoryDto>, String> {
     api.list_receive_addresses(&walletName)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -86,7 +94,7 @@ pub async fn label_receive_address(
 ) -> Result<WalletReceiveAddressHistoryDto, String> {
     api.label_receive_address(&walletName, &address, &label)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }
 
 #[allow(non_snake_case)]
@@ -98,5 +106,5 @@ pub async fn clear_receive_address_label(
 ) -> Result<WalletReceiveAddressHistoryDto, String> {
     api.clear_receive_address_label(&walletName, &address)
         .await
-        .map_err(|err| err.to_string())
+        .map_err(tauri_error)
 }

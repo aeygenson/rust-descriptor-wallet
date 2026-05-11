@@ -81,13 +81,15 @@ This is the one real global state boundary in the current app.
 - receive-address API wrapper
 - receive-history API wrapper
 - address formatting and Bitcoin-URI helpers
+- QR SVG extraction and rendering helpers
 - generated-address card rendering
 - receive-history list rendering
+- label editor rendering
 - empty-state rendering for no-wallet and no-address states
 
 This feature is intentionally narrow. It is a direct frontend wrapper over wallet-controlled address generation and persisted receive history rather than a generalized address-book or request-management system.
 
-The backend command surface already covers list, label, and clear-label operations. The current rendered page uses generation plus history browsing, while label-editing helpers exist in the feature module but are not yet mounted into the visible page flow.
+The backend command surface covers generate, list, label, and clear-label operations and returns QR-backed receive rows. The current rendered page mounts generation, history browsing, QR rendering, and label editing directly in the visible receive flow.
 
 ### UTXOs
 
@@ -187,7 +189,7 @@ Rust commands are grouped under:
 - [src-tauri/src/commands/send.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send.rs)
 - request DTO decoding in [src-tauri/src/commands/send_model.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send_model.rs)
 
-The receive flow lives in the wallet command module through `get_receive_address`, `list_receive_addresses`, `label_receive_address`, and `clear_receive_address_label`. Send-related Tauri commands now normalize frontend request objects into the canonical `wallet_api` request DTOs before calling into Rust service functions.
+The receive flow lives in the wallet command module through `get_receive_address`, `list_receive_addresses`, `label_receive_address`, and `clear_receive_address_label`. Those commands now return `WalletReceiveAddressHistoryDto` rows that include the canonical Bitcoin URI and an optional QR SVG payload. Send-related Tauri commands normalize frontend request objects into the canonical `wallet_api` request DTOs before calling into Rust service functions.
 
 ## Architectural Decisions Visible In Code
 

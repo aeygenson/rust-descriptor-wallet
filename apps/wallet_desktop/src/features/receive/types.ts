@@ -12,6 +12,8 @@ export type ReceiveAddressCardProps = {
   loading?: boolean;
   onRefresh?: () => void;
   onCopy?: (address: string) => void;
+  onSaveLabel?: (label: string) => void;
+  onClearLabel?: () => void;
 };
 
 
@@ -51,6 +53,7 @@ export type ReceiveAddressLabelEditorProps = {
 
 export type ReceiveQrCodeProps = {
   value: string;
+  svg: string | null | undefined;
   size?: number;
 };
 

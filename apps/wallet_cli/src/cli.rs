@@ -50,12 +50,20 @@ pub enum Commands {
         #[arg(long)]
         /// Wallet name.
         name: String,
+
+        #[arg(long = "qr-svg", default_value_t = false)]
+        /// Print the generated QR SVG payload.
+        qr_svg: bool,
     },
     /// List persisted receive address history.
     ReceiveAddresses {
         #[arg(long)]
         /// Wallet name.
         name: String,
+
+        #[arg(long = "qr-svg", default_value_t = false)]
+        /// Print QR SVG payloads for each receive address.
+        qr_svg: bool,
     },
     /// Add or update a label for a persisted receive address.
     LabelReceiveAddress {

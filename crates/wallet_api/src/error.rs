@@ -29,6 +29,9 @@ pub enum WalletApiError {
     #[error("invalid backend: {0}")]
     InvalidBackend(String),
 
+    #[error("QR generation failed: {0}")]
+    QrGeneration(String),
+
     #[error("backend unavailable: {0}")]
     BackendUnavailable(String),
 
@@ -396,6 +399,7 @@ impl WalletApiError {
             | Self::InvalidDestinationAddress(_)
             | Self::DestinationNetworkMismatch(_)
             | Self::SelectionFailed(_) => "validation",
+            Self::QrGeneration(_) => "receive",
             Self::TransactionNotFound(_)
             | Self::TransactionAlreadyConfirmed(_)
             | Self::TransactionNotReplaceable(_) => "transaction",
@@ -426,7 +430,8 @@ impl WalletApiError {
             | Self::Sync(_)
             | Self::BackendUnavailable(_)
             | Self::BackendHealth(_)
-            | Self::Storage(_) => "retry",
+            | Self::Storage(_)
+            | Self::QrGeneration(_) => "retry",
             Self::TransactionNotFound(_)
             | Self::BroadcastMissingInputs(_) => "refresh-state",
             Self::InvalidInput(_)
@@ -461,6 +466,7 @@ impl WalletApiError {
             | Self::BackendUnavailable(_)
             | Self::BackendHealth(_)
             | Self::Storage(_)
+            | Self::QrGeneration(_)
             | Self::TransactionNotFound(_)
             | Self::BroadcastMissingInputs(_) => "warning",
             _ => "error",

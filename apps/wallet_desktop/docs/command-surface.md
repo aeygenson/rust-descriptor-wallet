@@ -118,6 +118,17 @@ The receive-address commands are the main exception here. They take flat argumen
 - `label_receive_address(walletName, address, label)` -> `WalletReceiveAddressHistoryDto`
 - `clear_receive_address_label(walletName, address)` -> `WalletReceiveAddressHistoryDto`
 
+Receive DTOs now carry:
+
+- `address`
+- `keychain`
+- `index`
+- `bitcoin_uri`
+- optional `qr_svg`
+- optional `label`
+- `created_at`
+- optional `updated_at`
+
 ## Important Boundary Rules
 
 - command handlers call `wallet_api`; they do not reimplement wallet logic

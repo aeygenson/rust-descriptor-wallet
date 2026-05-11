@@ -32,6 +32,14 @@ export function getReceiveBitcoinUri(
   return address?.bitcoin_uri?.trim() ?? "";
 }
 
+export function getReceiveQrSvg(
+  address: WalletReceiveAddressHistoryDto | null | undefined,
+): string | null {
+  const svg = address?.qr_svg?.trim();
+
+  return svg && svg.length > 0 ? svg : null;
+}
+
 export function getReceiveLabel(
   address: WalletReceiveAddressHistoryDto | null | undefined,
 ): string | null {
@@ -60,6 +68,12 @@ export function hasReceiveAddress(
   address: WalletReceiveAddressHistoryDto | null | undefined,
 ): boolean {
   return getReceiveAddressString(address).length > 0;
+}
+
+export function hasReceiveQrSvg(
+  address: WalletReceiveAddressHistoryDto | null | undefined,
+): boolean {
+  return getReceiveQrSvg(address) !== null;
 }
 
 export function hasReceiveMetadata(

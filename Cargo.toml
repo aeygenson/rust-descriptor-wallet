@@ -26,6 +26,8 @@ bdk_esplora = { version = "0.22.1", features = ["blocking"] }
 bdk_file_store = "0.21"
 bdk_chain = "0.23.3"
 bitcoin = "0.32"
+qrcode = "0.14"
+image = "0.25"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 tracing = "0.1"

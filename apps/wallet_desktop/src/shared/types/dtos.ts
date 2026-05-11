@@ -46,6 +46,7 @@ export interface WalletReceiveAddressHistoryDto {
     keychain: string;
     index: number | null;
     bitcoin_uri: string;
+    qr_svg: string | null;
     label: string | null;
     created_at: string;
     updated_at: string | null;
