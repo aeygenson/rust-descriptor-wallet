@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     BumpFeeRequestDto, CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto,
@@ -133,26 +133,17 @@ async fn bump_fee(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_bump_fee_replaces_unconfirmed_transaction() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-rbf").await?;
+    let wallet_name = wallet_name.as_str();
 
-    // Make sure wallet state is up to date and the wallet has enough funds.
-    api.sync(wallet_name).await?;
-    let mut balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-        balance_before = api.balance(wallet_name).await?;
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
+    let balance_before = api.balance(wallet_name).await?;
 
     // Create a self-send we can replace.
     let destination = wallet_address(&api, wallet_name).await?;
@@ -287,25 +278,17 @@ async fn wallet_bump_fee_replaces_unconfirmed_transaction() -> anyhow::Result<()
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_bump_fee_psbt_returns_replacement_metadata() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-rbf").await?;
+    let wallet_name = wallet_name.as_str();
 
-    api.sync(wallet_name).await?;
-    let mut balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-        balance_before = api.balance(wallet_name).await?;
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
+    let balance_before = api.balance(wallet_name).await?;
 
     assert!(
         balance_before >= 50_000,

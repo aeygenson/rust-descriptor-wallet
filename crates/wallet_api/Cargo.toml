@@ -20,5 +20,5 @@ tracing.workspace = true
 [dev-dependencies]
 test_support = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-serial_test.workspace = true
+serial_test = { workspace = true, features = ["file_locks"] }
 anyhow.workspace = true

@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto, WalletAddressRequestDto,
@@ -99,7 +99,7 @@ async fn send_psbt(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
     // 1. Start regtest environment
     let env = RegtestEnv::new();
@@ -108,7 +108,8 @@ async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
     // 2. Build API
     let api = build_default_api().await?;
 
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-flow").await?;
+    let wallet_name = wallet_name.as_str();
 
     // 3. Initial sync
     api.sync(wallet_name).await?;
@@ -142,16 +143,17 @@ async fn wallet_receives_funds_after_sync() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_self_send_creates_change() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-flow").await?;
+    let wallet_name = wallet_name.as_str();
 
     // Make sure wallet state is up to date before building the spend.
-    api.sync(wallet_name).await?;
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
 
     let balance_before = api.balance(wallet_name).await?;
 
@@ -245,13 +247,14 @@ async fn wallet_self_send_creates_change() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_address_returns_increasing_external_indexes() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-flow").await?;
+    let wallet_name = wallet_name.as_str();
 
     api.sync(wallet_name).await?;
 

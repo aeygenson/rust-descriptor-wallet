@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     CpfpRequestDto, CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto,
@@ -133,26 +133,16 @@ async fn publish_psbt(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-cpfp").await?;
+    let wallet_name = wallet_name.as_str();
 
-    // Make sure wallet state is current and we have enough confirmed funds.
-    api.sync(wallet_name).await?;
-    let balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-        // No need to reassign balance_before
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
 
     // Create an unconfirmed parent transaction by self-sending.
     let destination = wallet_address(&api, wallet_name).await?;
@@ -163,7 +153,7 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
         10_000,
         1,
         false,
-        false,
+        true,
     )
     .await?;
     assert!(
@@ -241,24 +231,16 @@ async fn wallet_cpfp_psbt_builds_for_unconfirmed_parent() -> anyhow::Result<()> 
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-cpfp").await?;
+    let wallet_name = wallet_name.as_str();
 
-    api.sync(wallet_name).await?;
-    let balance_before = api.balance(wallet_name).await?;
-
-    if balance_before < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
 
     // Create an unconfirmed self-send parent transaction that should produce at least
     // an external recipient output and an internal change output.
@@ -270,7 +252,7 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
         10_000,
         1,
         false,
-        false,
+        true,
     )
     .await?;
     assert!(
@@ -321,25 +303,16 @@ async fn wallet_cpfp_psbt_uses_requested_parent_outpoint() -> anyhow::Result<()>
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-cpfp").await?;
+    let wallet_name = wallet_name.as_str();
 
-    // Ensure the wallet is synced and has enough confirmed funds.
-    api.sync(wallet_name).await?;
-    let initial_balance = api.balance(wallet_name).await?;
-
-    if initial_balance < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
 
     // Create a low-fee unconfirmed parent transaction.
     let destination = wallet_address(&api, wallet_name).await?;
@@ -350,7 +323,7 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
         10_000,
         1,
         false,
-        false,
+        true,
     )
     .await?;
     assert!(
@@ -463,25 +436,16 @@ async fn wallet_cpfp_child_broadcasts_and_confirms() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-cpfp").await?;
+    let wallet_name = wallet_name.as_str();
 
-    // Ensure we have enough confirmed funds.
-    api.sync(wallet_name).await?;
-    let balance = api.balance(wallet_name).await?;
-
-    if balance < 50_000 {
-        let refill_addr = wallet_address(&api, wallet_name).await?;
-        let refill_addr = parse_regtest_address(&refill_addr.address)?;
-        env.fund_sats(&refill_addr, 100_000)?;
-        env.mine(1)?;
-        api.sync(wallet_name).await?;
-    }
+    ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
 
     // Create a parent transaction and then confirm it.
     let destination = wallet_address(&api, wallet_name).await?;
@@ -492,7 +456,7 @@ async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
         10_000,
         1,
         false,
-        false,
+        true,
     )
     .await?;
     assert!(
@@ -531,13 +495,14 @@ async fn wallet_cpfp_psbt_fails_for_confirmed_parent() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_cpfp_psbt_fails_when_parent_not_found() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-cpfp").await?;
+    let wallet_name = wallet_name.as_str();
 
     api.sync(wallet_name).await?;
 

@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     CreatePsbtRequestDto, PublishPsbtRequestDto, SignPsbtRequestDto, SweepRequestDto,
@@ -142,13 +142,14 @@ async fn send_psbt(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_uses_requested_utxo() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -202,13 +203,14 @@ async fn wallet_create_sweep_psbt_uses_requested_utxo() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_rejects_missing_selected_outpoint() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     api.sync(wallet_name).await?;
 
@@ -243,13 +245,14 @@ async fn wallet_create_sweep_psbt_rejects_missing_selected_outpoint() -> anyhow:
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_rejects_conflicting_rules() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
     let outpoint = confirmed[0].0.clone();
@@ -282,14 +285,15 @@ async fn wallet_create_sweep_psbt_rejects_conflicting_rules() -> anyhow::Result<
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_rejects_unconfirmed_selected_utxo_when_confirmed_only(
 ) -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     api.sync(wallet_name).await?;
 
@@ -344,13 +348,14 @@ async fn wallet_create_sweep_psbt_rejects_unconfirmed_selected_utxo_when_confirm
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_rejects_insufficient_after_fees() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -388,13 +393,14 @@ async fn wallet_create_sweep_psbt_rejects_insufficient_after_fees() -> anyhow::R
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_sweep_psbt_sweeps_requested_utxo() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -451,13 +457,14 @@ async fn wallet_sweep_psbt_sweeps_requested_utxo() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_sweep_psbt_uses_all_requested_utxos() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let mut confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
     confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -511,13 +518,14 @@ async fn wallet_create_sweep_psbt_uses_all_requested_utxos() -> anyhow::Result<(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_sweep_psbt_sweeps_all_requested_utxos() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-sweep").await?;
+    let wallet_name = wallet_name.as_str();
 
     let mut confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
     confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));

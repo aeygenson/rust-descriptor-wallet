@@ -2,6 +2,7 @@ use std::collections::HashSet;
 
 use bdk_wallet::KeychainKind;
 use bitcoin::FeeRate;
+use bitcoin::Sequence;
 use tracing::{debug, info};
 
 use crate::model::{
@@ -148,6 +149,8 @@ impl WalletService {
 
         if enable_rbf {
             builder.set_exact_sequence(RBF_SEQUENCE);
+        } else {
+            builder.set_exact_sequence(Sequence::MAX);
         }
 
         for outpoint in &selected_inputs {

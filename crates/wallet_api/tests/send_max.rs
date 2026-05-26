@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     PublishPsbtRequestDto, SendMaxRequestDto, SignPsbtRequestDto, WalletAddressRequestDto,
@@ -127,13 +127,14 @@ async fn send_max_psbt_with_coin_control(
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_send_max_psbt_builds_after_sync() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     api.sync(wallet_name).await?;
@@ -174,13 +175,14 @@ async fn wallet_create_send_max_psbt_builds_after_sync() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_send_max_psbt_with_coin_control_uses_requested_utxo() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -227,13 +229,14 @@ async fn wallet_create_send_max_psbt_with_coin_control_uses_requested_utxo() -> 
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -293,14 +296,15 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_requested_utxo() -> anyho
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_create_send_max_psbt_with_coin_control_rejects_insufficient_after_fees(
 ) -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     let requested = confirmed
@@ -338,13 +342,14 @@ async fn wallet_create_send_max_psbt_with_coin_control_rejects_insufficient_afte
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     let mut confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
     confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
@@ -409,13 +414,14 @@ async fn wallet_send_max_psbt_with_coin_control_sweeps_all_requested_utxos() -> 
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[serial]
+#[file_serial]
 async fn wallet_send_max_psbt_recipient_and_no_change_invariant() -> anyhow::Result<()> {
     let env = RegtestEnv::new();
     env.start()?;
 
     let api = build_default_api().await?;
-    let wallet_name = "regtest-local";
+    let wallet_name = clone_wallet_for_test(&api, "regtest-local", "regtest-send-max").await?;
+    let wallet_name = wallet_name.as_str();
 
     ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 50_000).await?;
     api.sync(wallet_name).await?;

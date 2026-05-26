@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use serial_test::serial;
+use serial_test::file_serial;
 use wallet_api::factory::build_default_api;
 use wallet_api::model::{
     ConsolidationRequestDto, CreatePsbtRequestDto, WalletAddressRequestDto,
@@ -139,13 +139,15 @@ async fn send_psbt(
 mod happy_path {
     use super::*;
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_builds_after_sync() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
         api.sync(wallet_name).await?;
@@ -202,13 +204,15 @@ mod happy_path {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_uses_requested_utxos() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let mut confirmed =
             ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
@@ -259,17 +263,19 @@ mod happy_path {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_consolidate_psbt_spends_requested_utxos_and_creates_internal_output(
     ) -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidate-broadcast").await?;
+        let wallet_name = wallet_name.as_str();
 
         let mut confirmed =
-            ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 80_000).await?;
+            ensure_confirmed_wallet_utxos(&api, &env, &wallet_name, 2, 80_000).await?;
         confirmed.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
         let requested: Vec<String> = confirmed
@@ -280,7 +286,7 @@ mod happy_path {
 
         let published = consolidate_and_broadcast(
             &api,
-            wallet_name,
+            &wallet_name,
             1,
             false,
             wallet_api::model::WalletConsolidationDto {
@@ -303,8 +309,8 @@ mod happy_path {
             "expected published consolidation txid"
         );
 
-        api.sync(wallet_name).await?;
-        let utxos_after_send = wallet_utxos(&api, wallet_name).await?;
+        api.sync(&wallet_name).await?;
+        let utxos_after_send = wallet_utxos(&api, &wallet_name).await?;
         for outpoint in &requested {
             assert!(
                 !utxos_after_send.iter().any(|u| u.outpoint == *outpoint),
@@ -326,9 +332,9 @@ mod happy_path {
         );
 
         env.mine(1)?;
-        api.sync(wallet_name).await?;
+        api.sync(&wallet_name).await?;
 
-        let txs = wallet_txs(&api, wallet_name).await?;
+        let txs = wallet_txs(&api, &wallet_name).await?;
         let sent_tx = txs
             .iter()
             .find(|tx| tx.txid == published.txid)
@@ -342,14 +348,16 @@ mod happy_path {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_recipient_count_and_change_consistency(
     ) -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 3, 80_000).await?;
         api.sync(wallet_name).await?;
@@ -387,14 +395,16 @@ mod happy_path {
 mod filters {
     use super::*;
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_min_input_count_not_met() -> anyhow::Result<()>
     {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
         let requested: Vec<String> = confirmed
@@ -429,14 +439,16 @@ mod filters {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_applies_min_utxo_value_filter() -> anyhow::Result<()>
     {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let _confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
 
@@ -465,14 +477,16 @@ mod filters {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_applies_max_utxo_value_filter() -> anyhow::Result<()>
     {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         for _ in 0..2 {
             let receive_address = api.address(wallet_name).await?;
@@ -507,13 +521,15 @@ mod filters {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_fee_pct_limit() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 10_000).await?;
         let requested: Vec<String> = confirmed.into_iter().map(|(o, _)| o).collect();
@@ -547,16 +563,23 @@ mod filters {
 mod strategies {
     use super::*;
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_uses_largest_first_strategy() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidate-largest").await?;
+        let wallet_name = wallet_name.as_str();
 
         let (preexisting_confirmed, funded) =
-            fund_exact_confirmed_wallet_utxos(&api, &env, wallet_name, &[210_000, 130_000, 90_000])
+            fund_exact_confirmed_wallet_utxos(
+                &api,
+                &env,
+                &wallet_name,
+                &[210_000, 130_000, 90_000],
+            )
                 .await?;
 
         let mut available = funded;
@@ -566,7 +589,7 @@ mod strategies {
 
         let psbt = create_consolidation_psbt(
             &api,
-            wallet_name,
+            &wallet_name,
             1,
             false,
             wallet_api::model::WalletConsolidationDto {
@@ -598,16 +621,23 @@ mod strategies {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_uses_smallest_first_strategy() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidate-smallest").await?;
+        let wallet_name = wallet_name.as_str();
 
         let (preexisting_confirmed, funded) =
-            fund_exact_confirmed_wallet_utxos(&api, &env, wallet_name, &[210_000, 130_000, 90_000])
+            fund_exact_confirmed_wallet_utxos(
+                &api,
+                &env,
+                &wallet_name,
+                &[210_000, 130_000, 90_000],
+            )
                 .await?;
 
         let mut available = funded;
@@ -617,7 +647,7 @@ mod strategies {
 
         let psbt = create_consolidation_psbt(
             &api,
-            wallet_name,
+            &wallet_name,
             1,
             false,
             wallet_api::model::WalletConsolidationDto {
@@ -654,14 +684,16 @@ mod strategies {
 mod edge_cases {
     use super::*;
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_missing_selected_outpoint(
     ) -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         api.sync(wallet_name).await?;
 
@@ -704,13 +736,15 @@ mod edge_cases {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_conflicting_rules() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
         let outpoint = confirmed[0].0.clone();
@@ -748,26 +782,30 @@ mod edge_cases {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_unconfirmed_selected_utxos_when_confirmed_only(
     ) -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidate-confirmed-only")
+                .await?;
+        let wallet_name = wallet_name.as_str();
 
-        api.sync(wallet_name).await?;
+        api.sync(&wallet_name).await?;
 
-        let destination = wallet_address(&api, wallet_name).await?;
+        let destination = wallet_address(&api, &wallet_name).await?;
+        ensure_confirmed_wallet_utxos(&api, &env, &wallet_name, 1, 20_000).await?;
         let parent = send_psbt(
             &api,
-            wallet_name,
+            &wallet_name,
             &destination.address,
             10_000,
             1,
             false,
-            false,
+            true,
         )
         .await?;
         assert!(
@@ -775,8 +813,8 @@ mod edge_cases {
             "expected parent txid to be present"
         );
 
-        api.sync(wallet_name).await?;
-        let utxos = wallet_utxos(&api, wallet_name).await?;
+        api.sync(&wallet_name).await?;
+        let utxos = wallet_utxos(&api, &wallet_name).await?;
         let selected: Vec<String> = utxos
             .iter()
             .filter(|u| outpoint_txid(&u.outpoint) == parent.txid)
@@ -792,7 +830,7 @@ mod edge_cases {
 
         let err = create_consolidation_psbt(
             &api,
-            wallet_name,
+            &wallet_name,
             1,
             false,
             wallet_api::model::WalletConsolidationDto {
@@ -824,13 +862,15 @@ mod edge_cases {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_too_few_inputs() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let confirmed = ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 1, 20_000).await?;
         let requested = confirmed[0].0.clone();
@@ -867,14 +907,16 @@ mod edge_cases {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_rejects_insufficient_after_fees() -> anyhow::Result<()>
     {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         let mut confirmed =
             ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 2, 20_000).await?;
@@ -919,13 +961,15 @@ mod edge_cases {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_preserves_core_invariants() -> anyhow::Result<()> {
         let env = RegtestEnv::new();
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 4, 80_000).await?;
         api.sync(wallet_name).await?;
@@ -1006,7 +1050,7 @@ mod edge_cases {
 mod fuzz {
     use super::*;
     #[tokio::test(flavor = "current_thread")]
-    #[serial]
+    #[file_serial]
     async fn wallet_create_consolidation_psbt_fuzz_preserves_invariants() -> anyhow::Result<()> {
         fn next_u64(state: &mut u64) -> u64 {
             let mut x = *state;
@@ -1021,7 +1065,9 @@ mod fuzz {
         env.start()?;
 
         let api = build_default_api().await?;
-        let wallet_name = "regtest-local";
+        let wallet_name =
+            clone_wallet_for_test(&api, "regtest-local", "regtest-consolidation").await?;
+        let wallet_name = wallet_name.as_str();
 
         ensure_confirmed_wallet_utxos(&api, &env, wallet_name, 6, 80_000).await?;
         api.sync(wallet_name).await?;
