@@ -40,6 +40,7 @@ Current desktop capabilities:
 - copy the raw receive address and Bitcoin URI from a dedicated receive surface
 - create, list, and delete wallet-scoped address-book entries for external recipients
 - inspect UTXOs and carry selected outpoints into send flows
+- lock and unlock UTXOs from the UTXO screen with persisted wallet-scoped lock reasons
 - build PSBT previews for fixed send, send-max, sweep, and consolidation
 - sign and publish PSBTs
 - inspect transaction history with derived parent/child graph data
@@ -147,6 +148,7 @@ Three earlier design ideas are now implemented and still correct:
 - Rust remains the source of truth for transaction construction.
 - The send experience is PSBT-preview-first.
 - Coin control in the UI expresses user intent, while final selection stays backend-owned.
+- locked UTXOs are enforced in Rust, not merely hidden in the table UI.
 
 ## Gaps And Near-Term Limits
 

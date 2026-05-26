@@ -38,6 +38,22 @@ export function formatCompactBtcFromSats(valueSat: number): string {
 export function formatUtxoStatus(confirmed: boolean): string {
   return confirmed ? "Confirmed" : "Pending";
 }
+
+export function formatLockState(isLocked: boolean): string {
+  return isLocked ? "Locked" : "Spendable";
+}
+
+export function formatLockBadge(isLocked: boolean): string {
+  return isLocked ? "🔒 Locked" : "Spendable";
+}
+
+export function formatLockReason(reason?: string | null): string {
+  if (!reason || reason.trim().length === 0) {
+    return "No reason";
+  }
+
+  return reason;
+}
 export function formatConfirmations(confirmations?: number | null): string {
   if (confirmations == null) return "—";
   return confirmations === 0 ? "Unconfirmed" : `${confirmations} conf`;

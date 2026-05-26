@@ -9,7 +9,7 @@ A modular Bitcoin descriptor wallet in Rust, designed around clean crate boundar
 
 This repository is being built as a production-style architecture project: the design is already laid out, the workspace is in place, and the missing wallet functionality is actively being filled in.
 
-Current milestone: the project now supports real wallet transaction operations across coin control, send-max, sweep, consolidation, RBF, and CPFP, with explicit input-selection modes, stronger typed wallet-core domain boundaries, and full local regtest integration coverage.
+Current milestone: the project now supports real wallet transaction operations across coin control, locked UTXOs, send-max, sweep, consolidation, RBF, and CPFP, with explicit input-selection modes, stronger typed wallet-core domain boundaries, and full local regtest integration coverage.
 
 ## Vision
 
@@ -98,6 +98,7 @@ Current persisted schema at a glance:
 erDiagram
     wallets ||--o{ receive_address_history : "owns"
     wallets ||--o{ address_book_entries : "owns"
+    wallets ||--o{ locked_utxos : "owns"
 
     wallets {
         int id PK
@@ -132,6 +133,15 @@ erDiagram
         text label
         text address
         text notes
+        text created_at
+        text updated_at
+    }
+
+    locked_utxos {
+        int id PK
+        text wallet_name FK
+        text outpoint
+        text reason
         text created_at
         text updated_at
     }
@@ -181,12 +191,14 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - runtime wallet loading and creation backed by per-wallet BDK file stores
 - receive-address generation plus persisted receive-history rows for stored wallets
 - wallet-scoped address-book persistence for external recipients
+- wallet-scoped locked-UTXO persistence with optional operator reason
 - backend-aware wallet sync through `wallet_sync`
 - Electrum sync support for local and compatible deployments
 - balance queries over persisted wallet state
 - wallet status reporting with balance, UTXO count, and latest observed block height
 - transaction history inspection from synced wallet state
 - UTXO inspection from synced wallet state
+- lock/unlock flows for wallet UTXOs with persisted exclusion from future spends
 - unsigned PSBT creation through the runtime wallet flow
 - PSBT signing for software-signing wallets
 - finalized-PSBT extraction and publish through `wallet_sync`
@@ -196,6 +208,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - strict coin-control enforcement for explicitly included input sets
 - explicit input-selection modes: `strict-manual`, `manual-with-auto-completion`, and `automatic-only`
 - confirmed-only coin-control selection for safer manual spending
+- automatic exclusion and explicit-selection rejection for locked UTXOs
 - send-max PSBT creation and one-shot send flow
 - sweep PSBT creation and one-shot sweep flow
 - wallet-internal consolidation PSBT creation and one-shot consolidation flow

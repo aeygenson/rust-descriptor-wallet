@@ -19,6 +19,10 @@ export function isUtxoConfirmed(utxo: WalletUtxoDto): boolean {
   return Boolean(utxo.confirmed);
 }
 
+export function isUtxoLocked(utxo: WalletUtxoDto): boolean {
+  return Boolean(utxo.is_locked);
+}
+
 export function normalizeSelectedOutpoints(
   selectedOutpoints: UtxoOutpoint[]
 ): UtxoOutpoint[] {
@@ -57,6 +61,14 @@ export function filterConfirmedUtxos(utxos: WalletUtxoDto[]): WalletUtxoDto[] {
   return utxos.filter(isUtxoConfirmed);
 }
 
+export function filterLockedUtxos(utxos: WalletUtxoDto[]): WalletUtxoDto[] {
+  return utxos.filter(isUtxoLocked);
+}
+
+export function filterSpendableUtxos(utxos: WalletUtxoDto[]): WalletUtxoDto[] {
+  return utxos.filter((utxo) => !isUtxoLocked(utxo));
+}
+
 export function filterUtxos(
   utxos: WalletUtxoDto[],
   filter: UtxoFilterState
@@ -73,6 +85,14 @@ export function filterUtxos(
     }
 
     if (filter.status === "pending" && confirmed) {
+      return false;
+    }
+
+    if (filter.status === "locked" && !isUtxoLocked(utxo)) {
+      return false;
+    }
+
+    if (filter.status === "spendable" && isUtxoLocked(utxo)) {
       return false;
     }
 
@@ -111,6 +131,8 @@ export function buildUtxoSelectionSummary(
     selectedValueSat: 0,
     confirmedCount: 0,
     unconfirmedCount: 0,
+    lockedCount: 0,
+    spendableCount: 0,
   };
 
   for (const utxo of utxos) {
@@ -124,6 +146,12 @@ export function buildUtxoSelectionSummary(
       summary.confirmedCount += 1;
     } else {
       summary.unconfirmedCount += 1;
+    }
+
+    if (isUtxoLocked(utxo)) {
+      summary.lockedCount += 1;
+    } else {
+      summary.spendableCount += 1;
     }
   }
 
@@ -170,6 +198,28 @@ export function getConfirmedSelectedOutpoints(
   );
 }
 
+export function getLockedSelectedOutpoints(
+  utxos: WalletUtxoDto[],
+  selectedOutpoints: UtxoOutpoint[]
+): UtxoOutpoint[] {
+  const lockedSet = new Set(filterLockedUtxos(utxos).map(getUtxoOutpoint));
+
+  return getValidSelectedOutpoints(utxos, selectedOutpoints).filter((outpoint) =>
+    lockedSet.has(outpoint)
+  );
+}
+
+export function getSpendableSelectedOutpoints(
+  utxos: WalletUtxoDto[],
+  selectedOutpoints: UtxoOutpoint[]
+): UtxoOutpoint[] {
+  const lockedSet = new Set(filterLockedUtxos(utxos).map(getUtxoOutpoint));
+
+  return getValidSelectedOutpoints(utxos, selectedOutpoints).filter(
+    (outpoint) => !lockedSet.has(outpoint)
+  );
+}
+
 export function toggleSelectedOutpoint(
   selectedOutpoints: UtxoOutpoint[],
   outpoint: UtxoOutpoint
@@ -180,17 +230,18 @@ export function toggleSelectedOutpoint(
 }
 
 export function selectAllVisibleOutpoints(utxos: WalletUtxoDto[]): UtxoOutpoint[] {
-  return Array.from(new Set(utxos.map(getUtxoOutpoint)));
+  return Array.from(new Set(filterSpendableUtxos(utxos).map(getUtxoOutpoint)));
 }
 
 export function areAllVisibleUtxosSelected(
   utxos: WalletUtxoDto[],
   selectedOutpoints: UtxoOutpoint[]
 ): boolean {
-  if (utxos.length === 0) return false;
+  const spendableUtxos = filterSpendableUtxos(utxos);
+  if (spendableUtxos.length === 0) return false;
 
   const selectedSet = new Set(normalizeSelectedOutpoints(selectedOutpoints));
-  return utxos.every((utxo) => selectedSet.has(getUtxoOutpoint(utxo)));
+  return spendableUtxos.every((utxo) => selectedSet.has(getUtxoOutpoint(utxo)));
 }
 
 export function areSomeVisibleUtxosSelected(

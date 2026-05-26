@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../app/providers/useWallet";
-import { listUtxos } from "../features/utxos/api";
+import { listUtxos, lockUtxo, unlockUtxo } from "../features/utxos/api";
 import { UtxoActionsBar } from "../features/utxos/components/UtxoActionsBar";
 import { UtxoSelectionSummary } from "../features/utxos/components/UtxoSelectionSummary";
 import { UtxosHeader } from "../features/utxos/components/UtxosHeader";
@@ -11,8 +11,11 @@ import {
   buildUtxoSelectionPreview,
   buildUtxoSelectionSummary,
   filterUtxos,
+  getLockedSelectedOutpoints,
+  getSpendableSelectedOutpoints,
   getUtxoValueSat,
   getValidSelectedOutpoints,
+  isUtxoLocked,
   selectAllVisibleOutpoints,
   toggleSelectedOutpoint,
 } from "../features/utxos/lib";
@@ -81,6 +84,10 @@ export function UtxosPage() {
     let pendingValue = 0;
     let confirmedCount = 0;
     let pendingCount = 0;
+    let lockedValue = 0;
+    let spendableValue = 0;
+    let lockedCount = 0;
+    let spendableCount = 0;
     const keychainSet = new Set<string>();
 
     for (const utxo of utxos) {
@@ -98,6 +105,14 @@ export function UtxosPage() {
         pendingCount += 1;
         pendingValue += value;
       }
+
+      if (isUtxoLocked(utxo)) {
+        lockedCount += 1;
+        lockedValue += value;
+      } else {
+        spendableCount += 1;
+        spendableValue += value;
+      }
     }
 
     return {
@@ -108,6 +123,10 @@ export function UtxosPage() {
       confirmedValue,
       pendingCount,
       pendingValue,
+      lockedCount,
+      lockedValue,
+      spendableCount,
+      spendableValue,
       keychains: Array.from(keychainSet).join(", ") || "—",
     };
   }, [utxos]);
@@ -129,6 +148,8 @@ export function UtxosPage() {
       all: utxos.length,
       confirmed: utxos.filter((utxo) => utxo.confirmed).length,
       pending: utxos.filter((utxo) => !utxo.confirmed).length,
+      locked: utxos.filter(isUtxoLocked).length,
+      spendable: utxos.filter((utxo) => !isUtxoLocked(utxo)).length,
     }),
     [utxos]
   );
@@ -148,6 +169,19 @@ export function UtxosPage() {
     [visibleUtxos, validSelectedOutpoints]
   );
 
+  const lockedSelectedOutpoints = useMemo(
+    () => getLockedSelectedOutpoints(utxos, validSelectedOutpoints),
+    [utxos, validSelectedOutpoints]
+  );
+
+  const spendableSelectedOutpoints = useMemo(
+    () => getSpendableSelectedOutpoints(utxos, validSelectedOutpoints),
+    [utxos, validSelectedOutpoints]
+  );
+
+  const hasLockedSelection = lockedSelectedOutpoints.length > 0;
+  const hasSpendableSelection = spendableSelectedOutpoints.length > 0;
+
   const handleToggleOutpoint = (outpoint: UtxoOutpoint) => {
     setSelectedOutpoints((current) => toggleSelectedOutpoint(current, outpoint));
   };
@@ -160,8 +194,58 @@ export function UtxosPage() {
     setSelectedOutpoints([]);
   };
 
+  const reloadUtxos = async (walletName: string) => {
+    const data = await listUtxos(walletName);
+    setUtxos(data);
+    setSelectedOutpoints((current) => getValidSelectedOutpoints(data, current));
+  };
+
+  const handleLockSelected = async () => {
+    if (!selectedWalletName || spendableSelectedOutpoints.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await Promise.all(
+        spendableSelectedOutpoints.map((outpoint) =>
+          lockUtxo(selectedWalletName, outpoint, "Locked from desktop UTXO page")
+        )
+      );
+      await reloadUtxos(selectedWalletName);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnlockSelected = async () => {
+    if (!selectedWalletName || lockedSelectedOutpoints.length === 0) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await Promise.all(
+        lockedSelectedOutpoints.map((outpoint) => unlockUtxo(selectedWalletName, outpoint))
+      );
+      await reloadUtxos(selectedWalletName);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const navigateToSendWithMode = (mode: "fixed" | "send_max" | "sweep" | "consolidate") => {
     if (validSelectedOutpoints.length === 0) return;
+    if (hasLockedSelection) {
+      setError("Selected UTXOs include locked coins. Unlock them before spending.");
+      return;
+    }
 
     const state: UtxosPageNavigationActionState = {
       mode,
@@ -197,7 +281,7 @@ export function UtxosPage() {
               role="group"
               aria-label="UTXO status filters"
             >
-              {(["all", "confirmed", "pending"] as UtxoFilterStatus[]).map((status) => (
+              {(["all", "confirmed", "pending", "locked", "spendable"] as UtxoFilterStatus[]).map((status) => (
                 <button
                   key={status}
                   type="button"
@@ -231,17 +315,23 @@ export function UtxosPage() {
             selectedValueSat={selectionPreview.selectedValueSat}
             confirmedCount={selectionSummary.confirmedCount}
             unconfirmedCount={selectionSummary.unconfirmedCount}
+            lockedCount={selectionSummary.lockedCount}
+            spendableCount={selectionSummary.spendableCount}
             onClearSelection={handleClearSelection}
           />
 
           <UtxoActionsBar
             selectedCount={selectionPreview.selectedCount}
             selectedValueSat={selectionPreview.selectedValueSat}
+            hasLockedSelection={hasLockedSelection}
+            hasSpendableSelection={hasSpendableSelection}
             disabled={loading || selectionPreview.selectedCount === 0}
             onSendFixedSelected={() => navigateToSendWithMode("fixed")}
             onSendMaxSelected={() => navigateToSendWithMode("send_max")}
             onSweepSelected={() => navigateToSendWithMode("sweep")}
             onConsolidateSelected={handleConsolidateSelected}
+            onLockSelected={handleLockSelected}
+            onUnlockSelected={handleUnlockSelected}
             onClearSelection={handleClearSelection}
           />
 

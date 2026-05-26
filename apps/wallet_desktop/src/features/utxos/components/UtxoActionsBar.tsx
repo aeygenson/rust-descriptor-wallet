@@ -4,11 +4,15 @@ import { formatBtcFromSats } from "../format";
 export function UtxoActionsBar({
   selectedCount,
   selectedValueSat,
+  hasLockedSelection,
+  hasSpendableSelection,
   disabled,
   onSendFixedSelected,
   onSendMaxSelected,
   onSweepSelected,
   onConsolidateSelected,
+  onLockSelected,
+  onUnlockSelected,
   onClearSelection,
 }: UtxoSelectionActionBarProps) {
   if (selectedCount === 0) return null;
@@ -31,7 +35,9 @@ export function UtxoActionsBar({
         </div>
 
         <span className="utxo-actions-bar__hint">
-          Selected inputs can be forwarded directly into Send, Sweep, Consolidation, or future CPFP flows.
+          {hasLockedSelection
+            ? "Locked inputs are selected. Unlock them before using spend flows."
+            : "Selected inputs can be forwarded directly into Send, Sweep, Consolidation, or future CPFP flows."}
         </span>
       </div>
 
@@ -39,7 +45,7 @@ export function UtxoActionsBar({
         <button
           type="button"
           className="utxo-actions-bar__btn"
-          disabled={disabled}
+          disabled={disabled || hasLockedSelection || !hasSpendableSelection}
           title="Create a standard payment using the selected inputs"
           onClick={onSendFixedSelected}
         >
@@ -49,7 +55,7 @@ export function UtxoActionsBar({
         <button
           type="button"
           className="utxo-actions-bar__btn"
-          disabled={disabled}
+          disabled={disabled || hasLockedSelection || !hasSpendableSelection}
           title="Spend the selected inputs minus fees"
           onClick={onSendMaxSelected}
         >
@@ -59,7 +65,7 @@ export function UtxoActionsBar({
         <button
           type="button"
           className="utxo-actions-bar__btn"
-          disabled={disabled}
+          disabled={disabled || hasLockedSelection || !hasSpendableSelection}
           title="Sweep the selected inputs into a destination address"
           onClick={onSweepSelected}
         >
@@ -69,11 +75,31 @@ export function UtxoActionsBar({
         <button
           type="button"
           className="utxo-actions-bar__btn"
-          disabled={disabled}
+          disabled={disabled || hasLockedSelection || !hasSpendableSelection}
           title="Merge selected inputs into fewer wallet-controlled outputs"
           onClick={onConsolidateSelected}
         >
           Consolidate
+        </button>
+
+        <button
+          type="button"
+          className="utxo-actions-bar__btn utxo-actions-bar__btn--secondary"
+          disabled={disabled || !hasSpendableSelection}
+          title="Lock selected spendable inputs"
+          onClick={onLockSelected}
+        >
+          Lock
+        </button>
+
+        <button
+          type="button"
+          className="utxo-actions-bar__btn utxo-actions-bar__btn--secondary"
+          disabled={disabled || !hasLockedSelection}
+          title="Unlock selected locked inputs"
+          onClick={onUnlockSelected}
+        >
+          Unlock
         </button>
 
         <button

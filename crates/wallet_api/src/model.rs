@@ -8,7 +8,7 @@ use wallet_core::model::{
     WalletTxInfo, WalletUtxoInfo,
 };
 use wallet_core::types::WalletOutPoint;
-use wallet_storage::{AddressBookEntryRecord, ReceiveAddressHistoryRecord};
+use wallet_storage::{AddressBookEntryRecord, LockedUtxoRecord, ReceiveAddressHistoryRecord};
 
 /// Lightweight wallet summary for listing and UI
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,6 +105,9 @@ pub struct WalletUtxoDto {
     pub address: Option<String>,
     pub keychain: String,
     pub derivation_index: Option<u32>,
+    pub is_locked: bool,
+    pub lock_reason: Option<String>,
+    pub locked_at: Option<String>,
 }
 
 // Conversion from core model
@@ -118,6 +121,9 @@ impl From<WalletUtxoInfo> for WalletUtxoDto {
             address: value.address,
             keychain: value.keychain.as_str().to_string(),
             derivation_index: value.derivation_index.map(|index| index.as_u32()),
+            is_locked: false,
+            lock_reason: None,
+            locked_at: None,
         }
     }
 }
@@ -477,6 +483,27 @@ pub struct DeleteAddressBookEntryRequestDto {
     pub address: String,
 }
 
+/// Canonical request DTO for locking one or more wallet-scoped UTXOs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletLockUtxosRequestDto {
+    pub name: String,
+    pub outpoints: Vec<String>,
+    pub reason: Option<String>,
+}
+
+/// Canonical request DTO for unlocking one or more wallet-scoped UTXOs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletUnlockUtxosRequestDto {
+    pub name: String,
+    pub outpoints: Vec<String>,
+}
+
+/// Canonical request DTO for listing wallet-scoped locked UTXOs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletLockedUtxosRequestDto {
+    pub name: String,
+}
+
 /// Canonical request DTO for importing a wallet from a JSON file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImportWalletRequestDto {
@@ -548,6 +575,35 @@ impl From<AddressBookEntryRecord> for AddressBookEntryDto {
             updated_at: record.updated_at,
         }
     }
+}
+
+/// API DTO for a persisted wallet-scoped locked UTXO entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletLockedUtxoDto {
+    pub wallet_name: String,
+    pub outpoint: String,
+    pub reason: Option<String>,
+    pub locked_at: String,
+    pub updated_at: Option<String>,
+}
+
+impl From<LockedUtxoRecord> for WalletLockedUtxoDto {
+    fn from(record: LockedUtxoRecord) -> Self {
+        Self {
+            wallet_name: record.wallet_name,
+            outpoint: record.outpoint,
+            reason: record.reason,
+            locked_at: record.created_at,
+            updated_at: record.updated_at,
+        }
+    }
+}
+
+/// API DTO for listing wallet-scoped locked UTXOs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletLockedUtxosDto {
+    pub wallet_name: String,
+    pub locked_utxos: Vec<WalletLockedUtxoDto>,
 }
 
 /// API DTO for rich input-selection metadata.

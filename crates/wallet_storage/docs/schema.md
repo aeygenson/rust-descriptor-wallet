@@ -1,8 +1,8 @@
 # Wallet Storage Schema
 
-The current schema is embedded in `migrations/0001_init.sql`, `migrations/0002_receive_history.sql`, and `migrations/0003_address_book.sql`, and is applied by `WalletStorage::migrate`.
+The current schema is embedded in `migrations/0001_init.sql`, `migrations/0002_receive_history.sql`, `migrations/0003_address_book.sql`, and `migrations/0004_locked_utxos.sql`, and is applied by `WalletStorage::migrate`.
 
-The schema is intentionally small: it stores wallet registry metadata plus persisted receive-address history and wallet-scoped address-book entries.
+The schema is intentionally small: it stores wallet registry metadata plus persisted receive-address history, wallet-scoped address-book entries, and wallet-scoped locked-UTXO rows.
 
 ## Table: `wallets`
 
@@ -146,6 +146,49 @@ Timestamp for initial persistence.
 
 Nullable timestamp updated when the receive-address label changes.
 
+## Table: `locked_utxos`
+
+```sql
+CREATE TABLE IF NOT EXISTS locked_utxos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wallet_name TEXT NOT NULL,
+    outpoint TEXT NOT NULL,
+    reason TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+
+    CONSTRAINT fk_locked_utxos_wallet
+        FOREIGN KEY (wallet_name)
+        REFERENCES wallets(name)
+        ON DELETE CASCADE,
+
+    CONSTRAINT uq_locked_utxos_wallet_outpoint
+        UNIQUE (wallet_name, outpoint)
+);
+```
+
+## Columns
+
+`wallet_name`
+
+Owning wallet record name. This is a foreign key to `wallets(name)`.
+
+`outpoint`
+
+Persisted `<txid>:<vout>` string identifying the locked coin.
+
+`reason`
+
+Nullable operator-supplied lock reason.
+
+`created_at`
+
+Timestamp for initial lock persistence.
+
+`updated_at`
+
+Nullable timestamp reserved for future lock-row updates.
+
 ## Indexes
 
 The migration creates:
@@ -164,6 +207,16 @@ CREATE INDEX IF NOT EXISTS idx_receive_address_history_wallet_name
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_receive_address_history_wallet_address
     ON receive_address_history(wallet_name, address);
+```
+
+The locked-UTXO migration adds:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_locked_utxos_wallet_name
+    ON locked_utxos(wallet_name);
+
+CREATE INDEX IF NOT EXISTS idx_locked_utxos_outpoint
+    ON locked_utxos(outpoint);
 ```
 
 ## Table: `address_book_entries`
@@ -268,6 +321,18 @@ CREATE INDEX IF NOT EXISTS idx_address_book_label
 `get_address_book_entry_by_address` selects one row by `(wallet_name, address)`.
 
 `delete_address_book_entry` deletes one row by `(wallet_name, address)` and returns `false` when no row matched.
+
+## Locked UTXO Queries
+
+`lock_utxo` inserts one wallet-scoped lock row and maps duplicate `(wallet_name, outpoint)` conflicts into a dedicated storage error.
+
+`list_locked_utxos` selects all lock rows for a wallet ordered by `created_at DESC`.
+
+`get_locked_utxo` selects one row by `(wallet_name, outpoint)`.
+
+`is_utxo_locked` resolves to `true` only when that wallet-scoped outpoint row exists.
+
+`unlock_utxo` deletes one row by `(wallet_name, outpoint)` and returns `false` when no row matched.
 
 ## Not Stored Here
 

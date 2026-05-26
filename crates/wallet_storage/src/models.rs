@@ -47,6 +47,17 @@ pub struct AddressBookEntryRecord {
     pub updated_at: Option<String>,
 }
 
+/// SQLite row model for a persisted locked UTXO entry.
+#[derive(Serialize, Deserialize, Debug, Clone, FromRow)]
+pub struct LockedUtxoRecord {
+    pub id: i64,
+    pub wallet_name: String,
+    pub outpoint: String,
+    pub reason: Option<String>,
+    pub created_at: String,
+    pub updated_at: Option<String>,
+}
+
 impl WalletRecord {
     pub fn parse_sync_backend(&self) -> Result<SyncBackendFile, serde_json::Error> {
         serde_json::from_str(&self.sync_backend)

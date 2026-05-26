@@ -13,6 +13,8 @@ export interface UtxoSelectionSummary {
   selectedValueSat: number;
   confirmedCount: number;
   unconfirmedCount: number;
+  lockedCount: number;
+  spendableCount: number;
 }
 
 export interface UtxoSelectionPreview {
@@ -30,6 +32,10 @@ export interface UtxosSummary {
   confirmedValue: number;
   pendingCount: number;
   pendingValue: number;
+  lockedCount: number;
+  lockedValue: number;
+  spendableCount: number;
+  spendableValue: number;
   keychains: string;
 }
 
@@ -45,11 +51,15 @@ export interface UtxosHeaderProps {
 export interface UtxoSelectionActionBarProps {
   selectedCount: number;
   selectedValueSat: number;
+  hasLockedSelection: boolean;
+  hasSpendableSelection: boolean;
   disabled?: boolean;
   onSendFixedSelected: () => void;
   onSendMaxSelected: () => void;
   onSweepSelected: () => void;
   onConsolidateSelected: () => void;
+  onLockSelected: () => void;
+  onUnlockSelected: () => void;
   onClearSelection: () => void;
 }
 
@@ -58,6 +68,8 @@ export interface UtxoSelectionSummaryProps {
   selectedValueSat: number;
   confirmedCount: number;
   unconfirmedCount: number;
+  lockedCount: number;
+  spendableCount: number;
   onClearSelection?: () => void;
 }
 
@@ -93,6 +105,7 @@ export interface UtxosStateViewProps {
   error: string | null;
   hasData: boolean;
   emptyMessage?: string;
+  emptyVariant?: "empty" | "locked" | "filtered";
 }
 
 export interface UtxosPageNavigationActionState {
@@ -100,7 +113,12 @@ export interface UtxosPageNavigationActionState {
   selectedOutpoints: UtxoOutpoint[];
 }
 
-export type UtxoFilterStatus = "all" | "confirmed" | "pending";
+export type UtxoFilterStatus =
+  | "all"
+  | "confirmed"
+  | "pending"
+  | "locked"
+  | "spendable";
 
 export interface UtxoFilterState {
   status: UtxoFilterStatus;
@@ -112,6 +130,7 @@ export type UtxoSortKey =
   | "outpoint"
   | "value_sat"
   | "status"
+  | "lock_state"
   | "height"
   | "keychain";
 

@@ -6,6 +6,7 @@ export function UtxosHeader({ walletName, summary }: UtxosHeaderProps) {
   const totalValueSat = summary.totalValue ?? 0;
   const formattedBtcValue = formatBtcFromSats(totalValueSat);
   const hasPending = summary.pendingCount > 0;
+  const hasLocked = summary.lockedCount > 0;
 
   return (
     <header className="utxos-header">
@@ -15,7 +16,7 @@ export function UtxosHeader({ walletName, summary }: UtxosHeaderProps) {
             <h2 className="utxos-header__title">UTXOs</h2>
 
             <p className="utxos-header__subtitle">
-              Inspect spendable outputs, confirmation state, wallet distribution, and coin selection readiness.
+              Inspect wallet outputs, confirmation state, lock state, wallet distribution, and coin selection readiness.
             </p>
           </div>
 
@@ -38,16 +39,28 @@ export function UtxosHeader({ walletName, summary }: UtxosHeaderProps) {
           </span>
 
           <span
-            className={`utxos-header__status ${hasPending ? "utxos-header__status--pending" : "utxos-header__status--ready"}`}
-            title={hasPending ? "Wallet contains pending UTXOs" : "All visible UTXOs are confirmed"}
+            className={`utxos-header__status ${(hasPending || hasLocked)
+              ? "utxos-header__status--pending"
+              : "utxos-header__status--ready"}`}
+            title={hasLocked
+              ? "Wallet contains locked UTXOs"
+              : hasPending
+                ? "Wallet contains pending UTXOs"
+                : "All visible UTXOs are confirmed and spendable"}
           >
-            {hasPending ? "Pending activity" : "Ready"}
+            {hasLocked
+              ? "Locked coins present"
+              : hasPending
+                ? "Pending activity"
+                : "Ready"}
           </span>
         </div>
       </div>
 
       <div className="utxos-header__hint">
-        Selected UTXOs can be forwarded directly into Send, Send Max, Sweep, Consolidation, RBF, and future CPFP flows.
+        {hasLocked
+          ? "Locked selections cannot currently be forwarded into spending flows."
+          : "Selected UTXOs can be forwarded directly into Send, Send Max, Sweep, Consolidation, RBF, and future CPFP flows."}
       </div>
 
       <UtxosSummaryCards summary={summary} />

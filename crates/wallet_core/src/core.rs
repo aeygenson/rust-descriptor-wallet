@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+
 use crate::model::PsbtSigningStatus;
-use crate::WalletCoreResult;
+use crate::types::WalletOutPoint;
+use crate::{WalletCoreError, WalletCoreResult};
 
 /// Core domain layer.
 ///
@@ -66,6 +69,60 @@ impl WalletCore {
             (true, false) => PsbtSigningStatus::PartiallySigned,
             (false, false) => PsbtSigningStatus::Unsigned,
         }
+    }
+
+    /// Returns the overlap between selected and locked outpoints.
+    ///
+    /// This helper is intentionally pure and deterministic. Storage/repository
+    /// layers are responsible for loading lock state before calling into core.
+    pub fn locked_outpoint_overlap(
+        &self,
+        selected: &[WalletOutPoint],
+        locked: &[WalletOutPoint],
+    ) -> Vec<WalletOutPoint> {
+        let locked_set: HashSet<_> = locked.iter().cloned().collect();
+
+        selected
+            .iter()
+            .filter(|outpoint| locked_set.contains(*outpoint))
+            .cloned()
+            .collect()
+    }
+
+    /// Validates that selected outpoints do not overlap locked outpoints.
+    ///
+    /// Intended for explicit/manual coin-control flows where spending a locked
+    /// coin should fail with a user-correctable selection error.
+    pub fn ensure_outpoints_unlocked(
+        &self,
+        selected: &[WalletOutPoint],
+        locked: &[WalletOutPoint],
+    ) -> WalletCoreResult<()> {
+        let overlap = self.locked_outpoint_overlap(selected, locked);
+
+        if let Some(first) = overlap.first() {
+            return Err(WalletCoreError::LockedUtxo(first.to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Returns a merged exclusion set containing explicit exclusions plus
+    /// implicitly excluded locked outpoints.
+    ///
+    /// Duplicates are automatically removed.
+    pub fn merge_locked_into_excluded(
+        &self,
+        excluded: &[WalletOutPoint],
+        locked: &[WalletOutPoint],
+    ) -> Vec<WalletOutPoint> {
+        let mut merged: HashSet<WalletOutPoint> = excluded.iter().cloned().collect();
+
+        merged.extend(locked.iter().cloned());
+
+        let mut result: Vec<_> = merged.into_iter().collect();
+        result.sort();
+        result
     }
 }
 
@@ -155,5 +212,106 @@ mod tests {
             core.classify_psbt_signing(false, true),
             PsbtSigningStatus::Finalized
         );
+    }
+
+    #[test]
+    fn locked_outpoint_overlap_detects_intersection() {
+        let core = WalletCore::new();
+
+        let selected = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000001:0",
+            )
+            .expect("valid selected outpoint"),
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000002:1",
+            )
+            .expect("valid selected outpoint"),
+        ];
+
+        let locked = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000002:1",
+            )
+            .expect("valid locked outpoint"),
+        ];
+
+        let overlap = core.locked_outpoint_overlap(&selected, &locked);
+
+        assert_eq!(overlap.len(), 1);
+        assert_eq!(overlap[0], locked[0]);
+    }
+
+    #[test]
+    fn ensure_outpoints_unlocked_accepts_non_locked_selection() {
+        let core = WalletCore::new();
+
+        let selected = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000003:0",
+            )
+            .expect("valid selected outpoint"),
+        ];
+
+        let locked = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000004:1",
+            )
+            .expect("valid locked outpoint"),
+        ];
+
+        let result = core.ensure_outpoints_unlocked(&selected, &locked);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ensure_outpoints_unlocked_rejects_locked_selection() {
+        let core = WalletCore::new();
+
+        let locked_outpoint = WalletOutPoint::parse(
+            "0000000000000000000000000000000000000000000000000000000000000005:2",
+        )
+        .expect("valid locked outpoint");
+
+        let selected = vec![locked_outpoint.clone()];
+        let locked = vec![locked_outpoint.clone()];
+
+        let result = core.ensure_outpoints_unlocked(&selected, &locked);
+
+        assert!(matches!(
+            result,
+            Err(WalletCoreError::LockedUtxo(message))
+                if message == locked_outpoint.to_string()
+        ));
+    }
+
+    #[test]
+    fn merge_locked_into_excluded_deduplicates_and_sorts() {
+        let core = WalletCore::new();
+
+        let excluded = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000007:1",
+            )
+            .expect("valid excluded outpoint"),
+        ];
+
+        let locked = vec![
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000006:0",
+            )
+            .expect("valid locked outpoint"),
+            WalletOutPoint::parse(
+                "0000000000000000000000000000000000000000000000000000000000000007:1",
+            )
+            .expect("duplicate locked outpoint"),
+        ];
+
+        let merged = core.merge_locked_into_excluded(&excluded, &locked);
+
+        assert_eq!(merged.len(), 2);
+        assert!(merged.contains(&excluded[0]));
+        assert!(merged.contains(&locked[0]));
     }
 }

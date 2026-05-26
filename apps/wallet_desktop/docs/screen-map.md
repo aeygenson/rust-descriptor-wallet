@@ -40,11 +40,15 @@ Current responsibilities:
 
 - load wallet UTXOs
 - maintain local selection state
-- summarize confirmed and pending UTXO value
+- summarize confirmed, pending, locked, and spendable UTXO value
+- let the user filter rows by confirmation and lock state
+- show persisted lock reason and lock timestamp per row
 - forward selected outpoints into Send flows
 
 Current actions:
 
+- lock selected spendable UTXOs
+- unlock selected locked UTXOs
 - send fixed amount with selected UTXOs
 - send max with selected UTXOs
 - sweep selected UTXOs

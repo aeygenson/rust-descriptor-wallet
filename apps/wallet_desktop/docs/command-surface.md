@@ -25,6 +25,9 @@ Registered commands:
 - `list_address_book_entries`
 - `get_address_book_entry`
 - `delete_address_book_entry`
+- `lock_utxo`
+- `unlock_utxo`
+- `list_locked_utxos`
 
 Frontend wrappers:
 
@@ -130,6 +133,12 @@ The address-book commands follow the same flat-argument style:
 - `get_address_book_entry(walletName, address)` -> `AddressBookEntryDto | null`
 - `delete_address_book_entry(walletName, address)` -> `boolean`
 
+Locked-UTXO commands follow the same flat-argument style:
+
+- `lock_utxo(walletName, outpoint, reason)` -> `WalletLockedUtxoDto[]`
+- `unlock_utxo(walletName, outpoint)` -> `WalletLockedUtxoDto[]`
+- `list_locked_utxos(walletName)` -> `WalletLockedUtxoDto[]`
+
 Receive DTOs now carry:
 
 - `address`
@@ -150,6 +159,12 @@ Address-book DTOs carry:
 - optional `notes`
 - `created_at`
 - optional `updated_at`
+
+UTXO DTOs now also carry:
+
+- `is_locked`
+- optional `lock_reason`
+- optional `locked_at`
 
 ## Important Boundary Rules
 

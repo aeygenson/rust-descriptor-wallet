@@ -98,8 +98,9 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
     }
 
     info!(
-        "cli inspect: utxos fetched count={} with_derivation_index={} for wallet {}",
+        "cli inspect: utxos fetched count={} locked_count={} with_derivation_index={} for wallet {}",
         utxos.len(),
+        utxos.iter().filter(|utxo| utxo.is_locked).count(),
         utxos.iter().filter(|utxo| utxo.derivation_index.is_some()).count(),
         name
     );
@@ -112,14 +113,21 @@ pub async fn utxos(api: &WalletApi, name: &str) -> Result<()> {
             .map(|index| index.to_string())
             .unwrap_or_else(|| "n/a".to_string());
 
+        let lock_state = if utxo.is_locked { "locked" } else { "spendable" };
+        let lock_reason = utxo.lock_reason.as_deref().unwrap_or("n/a");
+        let locked_at = utxo.locked_at.as_deref().unwrap_or("n/a");
+
         println!(
-            "outpoint={} | value={} sats | confirmed={} | keychain={} | index={} | address={}",
+            "outpoint={} | value={} sats | confirmed={} | state={} | keychain={} | index={} | address={} | lock_reason={} | locked_at={}",
             utxo.outpoint,
             utxo.value,
             utxo.confirmed,
+            lock_state,
             utxo.keychain,
             derivation_index,
-            address
+            address,
+            lock_reason,
+            locked_at
         );
     }
 

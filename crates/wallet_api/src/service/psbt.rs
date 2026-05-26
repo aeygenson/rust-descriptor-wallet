@@ -6,7 +6,7 @@ use crate::model::{
 use crate::WalletApiResult;
 
 use wallet_core::types::{AmountSat, FeeRateSatPerVb, PsbtBase64, WalletOutPoint};
-use wallet_core::WalletService;
+use wallet_core::{WalletCore, WalletService};
 use wallet_storage::WalletStorage;
 use wallet_sync::{WalletSyncError, WalletSyncService};
 
@@ -77,6 +77,79 @@ fn log_publish_error(name: &str, error: &WalletSyncError) {
     }
 }
 
+async fn load_locked_outpoints(
+    storage: &WalletStorage,
+    name: &str,
+) -> WalletApiResult<Vec<WalletOutPoint>> {
+    storage
+        .list_locked_utxos(name)
+        .await?
+        .into_iter()
+        .map(|record| {
+            WalletOutPoint::parse(&record.outpoint).map_err(|e| {
+                crate::WalletApiError::InvalidInput(format!(
+                    "invalid locked utxo outpoint '{}' for wallet '{}': {}",
+                    record.outpoint, name, e
+                ))
+            })
+        })
+        .collect()
+}
+
+fn apply_locked_outpoints_to_coin_control(
+    coin_control: Option<wallet_core::model::WalletCoinControlInfo>,
+    locked_outpoints: &[WalletOutPoint],
+) -> WalletApiResult<Option<wallet_core::model::WalletCoinControlInfo>> {
+    let Some(mut coin_control) = coin_control else {
+        if locked_outpoints.is_empty() {
+            return Ok(None);
+        }
+
+        let core = WalletCore::new();
+        return Ok(Some(wallet_core::model::WalletCoinControlInfo {
+            selection: wallet_core::model::WalletInputSelectionConfig {
+                exclude_outpoints: core.merge_locked_into_excluded(&[], locked_outpoints),
+                ..Default::default()
+            },
+        }));
+    };
+
+    let core = WalletCore::new();
+    core.ensure_outpoints_unlocked(&coin_control.selection.include_outpoints, locked_outpoints)?;
+    coin_control.selection.exclude_outpoints = core.merge_locked_into_excluded(
+        &coin_control.selection.exclude_outpoints,
+        locked_outpoints,
+    );
+
+    Ok(Some(coin_control))
+}
+
+fn apply_locked_outpoints_to_consolidation(
+    mut consolidation: wallet_core::model::WalletConsolidationInfo,
+    locked_outpoints: &[WalletOutPoint],
+) -> WalletApiResult<wallet_core::model::WalletConsolidationInfo> {
+    let core = WalletCore::new();
+    core.ensure_outpoints_unlocked(&consolidation.selection.include_outpoints, locked_outpoints)?;
+    consolidation.selection.exclude_outpoints = core.merge_locked_into_excluded(
+        &consolidation.selection.exclude_outpoints,
+        locked_outpoints,
+    );
+
+    Ok(consolidation)
+}
+
+fn ensure_selected_outpoint_unlocked(
+    selected_outpoint: &WalletOutPoint,
+    locked_outpoints: &[WalletOutPoint],
+) -> WalletApiResult<()> {
+    WalletCore::new().ensure_outpoints_unlocked(
+        std::slice::from_ref(selected_outpoint),
+        locked_outpoints,
+    )?;
+
+    Ok(())
+}
+
 /// Create an unsigned PSBT for a send flow.
 ///
 /// This is the first API orchestration step in the PSBT transaction pipeline.
@@ -105,8 +178,10 @@ pub async fn create(
     let config = load_wallet_config(storage, &name).await?;
     let amount_sat = AmountSat::new(amount_sat)?;
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
-
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
     let coin_control = coin_control.map(|dto| dto.try_into_core()).transpose()?;
+    let coin_control = apply_locked_outpoints_to_coin_control(coin_control, &locked_outpoints)?;
+    let locked_count = locked_outpoints.len();
     let name_for_error = name.clone();
 
     let to_address = to_address.to_string();
@@ -139,7 +214,7 @@ pub async fn create(
     .await?;
 
     info!(
-        "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} locked_exclusions={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -149,6 +224,7 @@ pub async fn create(
         psbt.replaceable,
         psbt.selected_utxo_count,
         psbt.selected_inputs.len(),
+        locked_count,
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -181,8 +257,10 @@ pub async fn create_send_max(
 
     let config = load_wallet_config(storage, &name).await?;
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
-
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
     let coin_control = coin_control.map(|dto| dto.try_into_core()).transpose()?;
+    let coin_control = apply_locked_outpoints_to_coin_control(coin_control, &locked_outpoints)?;
+    let locked_count = locked_outpoints.len();
     let name_for_error = name.clone();
 
     let to_address = to_address.to_string();
@@ -213,7 +291,7 @@ pub async fn create_send_max(
     .await?;
 
     info!(
-        "api psbt: create_send_max success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create_send_max success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} locked_exclusions={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -223,6 +301,7 @@ pub async fn create_send_max(
         psbt.replaceable,
         psbt.selected_utxo_count,
         psbt.selected_inputs.len(),
+        locked_count,
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -262,9 +341,13 @@ pub async fn create_sweep(
 
     let config = load_wallet_config(storage, &name).await?;
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
-
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
     let to_address = to_address.to_string();
     let coin_control = coin_control.try_into_core()?;
+    let coin_control =
+        apply_locked_outpoints_to_coin_control(Some(coin_control), &locked_outpoints)?
+            .expect("sweep coin control should remain present");
+    let locked_count = locked_outpoints.len();
     let name_for_error = name.clone();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -293,7 +376,7 @@ pub async fn create_sweep(
     .await?;
 
     info!(
-        "api psbt: create_sweep success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create_sweep success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} locked_exclusions={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -303,6 +386,7 @@ pub async fn create_sweep(
         psbt.replaceable,
         psbt.selected_utxo_count,
         psbt.selected_inputs.len(),
+        locked_count,
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -346,8 +430,10 @@ pub async fn create_consolidation(
 
     let config = load_wallet_config(storage, &name).await?;
     let fee_rate_sat_per_vb = FeeRateSatPerVb::new(fee_rate_sat_per_vb)?;
-
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
     let consolidation = consolidation.try_into_core()?;
+    let consolidation = apply_locked_outpoints_to_consolidation(consolidation, &locked_outpoints)?;
+    let locked_count = locked_outpoints.len();
     let name_for_error = name.clone();
 
     let psbt = spawn_wallet_blocking(move || {
@@ -369,7 +455,7 @@ pub async fn create_consolidation(
     .await?;
 
     info!(
-        "api psbt: create_consolidation success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
+        "api psbt: create_consolidation success name={} txid={} to={} amount_sat={} fee_sat={} fee_rate_sat_per_vb={} replaceable={} selected_utxos={} selected_inputs={} locked_exclusions={} inputs={} outputs={} recipients={} estimated_vsize={} psbt_len={}",
         name,
         psbt.txid,
         psbt.to_address,
@@ -379,6 +465,7 @@ pub async fn create_consolidation(
         psbt.replaceable,
         psbt.selected_utxo_count,
         psbt.selected_inputs.len(),
+        locked_count,
         psbt.input_count,
         psbt.output_count,
         psbt.recipient_count,
@@ -641,6 +728,8 @@ pub async fn cpfp_psbt(
             selected_outpoint_str, e
         ))
     })?;
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
+    ensure_selected_outpoint_unlocked(&selected_outpoint, &locked_outpoints)?;
     let name_for_error = name.clone();
 
     let handle = Handle::current();
@@ -795,6 +884,8 @@ pub async fn cpfp(
             selected_outpoint_str, e
         ))
     })?;
+    let locked_outpoints = load_locked_outpoints(storage, &name).await?;
+    ensure_selected_outpoint_unlocked(&selected_outpoint, &locked_outpoints)?;
     let parent_txid_for_log = parent_txid.clone();
     let selected_outpoint_for_log = selected_outpoint_str.clone();
     let fee_rate_sat_per_vb_for_log = fee_rate_sat_per_vb.as_u64();
@@ -1197,7 +1288,6 @@ mod tests {
 
         assert_eq!(estimated_fee_sat, 2_466);
     }
-}
 
     #[test]
     fn sign_publish_bump_and_cpfp_requests_carry_required_fields() {
@@ -1236,3 +1326,4 @@ mod tests {
         assert!(cpfp.selected_outpoint.ends_with(":0"));
         assert_eq!(cpfp.fee_rate_sat_per_vb, 8);
     }
+}

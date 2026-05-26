@@ -1,9 +1,7 @@
-
-
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use wallet_storage::{
-    clear_receive_address_label, label_receive_address, list_receive_addresses,
-    record_receive_address,
+    clear_receive_address_label, is_utxo_locked, label_receive_address, list_locked_utxos,
+    list_receive_addresses, lock_utxo, record_receive_address, unlock_utxo,
 };
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
@@ -336,4 +334,210 @@ async fn receive_history_storage_end_to_end_flow() {
         .expect("list receive addresses after delete");
 
     assert!(after_delete.is_empty());
+}
+
+#[tokio::test]
+async fn lock_utxo_persists_record() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    let record = lock_utxo(
+        &pool,
+        "regtest-local",
+        "0000000000000000000000000000000000000000000000000000000000000001:0",
+        Some("do not spend"),
+    )
+    .await
+    .expect("lock utxo");
+
+    assert_eq!(record.wallet_name, "regtest-local");
+    assert_eq!(
+        record.outpoint,
+        "0000000000000000000000000000000000000000000000000000000000000001:0"
+    );
+    assert_eq!(record.reason.as_deref(), Some("do not spend"));
+    assert!(record.updated_at.is_none());
+}
+
+#[tokio::test]
+async fn list_locked_utxos_is_wallet_scoped() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "wallet-a", "regtest").await;
+    insert_wallet(&pool, "wallet-b", "regtest").await;
+
+    lock_utxo(
+        &pool,
+        "wallet-a",
+        "000000000000000000000000000000000000000000000000000000000000000a:0",
+        Some("wallet-a lock"),
+    )
+    .await
+    .expect("lock wallet-a utxo");
+
+    lock_utxo(
+        &pool,
+        "wallet-b",
+        "000000000000000000000000000000000000000000000000000000000000000b:0",
+        Some("wallet-b lock"),
+    )
+    .await
+    .expect("lock wallet-b utxo");
+
+    let wallet_a_records = list_locked_utxos(&pool, "wallet-a")
+        .await
+        .expect("list wallet-a locked utxos");
+
+    assert_eq!(wallet_a_records.len(), 1);
+    assert_eq!(wallet_a_records[0].wallet_name, "wallet-a");
+    assert_eq!(
+        wallet_a_records[0].outpoint,
+        "000000000000000000000000000000000000000000000000000000000000000a:0"
+    );
+}
+
+#[tokio::test]
+async fn is_utxo_locked_returns_true_only_for_locked_outpoint() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    let locked_outpoint =
+        "0000000000000000000000000000000000000000000000000000000000000002:1";
+    let unlocked_outpoint =
+        "0000000000000000000000000000000000000000000000000000000000000003:1";
+
+    lock_utxo(&pool, "regtest-local", locked_outpoint, None)
+        .await
+        .expect("lock utxo");
+
+    assert!(
+        is_utxo_locked(&pool, "regtest-local", locked_outpoint)
+            .await
+            .expect("check locked outpoint")
+    );
+
+    assert!(
+        !is_utxo_locked(&pool, "regtest-local", unlocked_outpoint)
+            .await
+            .expect("check unlocked outpoint")
+    );
+}
+
+#[tokio::test]
+async fn unlock_utxo_removes_record() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    let outpoint = "0000000000000000000000000000000000000000000000000000000000000004:2";
+
+    lock_utxo(&pool, "regtest-local", outpoint, Some("temporary lock"))
+        .await
+        .expect("lock utxo");
+
+    let removed = unlock_utxo(&pool, "regtest-local", outpoint)
+        .await
+        .expect("unlock utxo");
+
+    assert!(removed);
+    assert!(
+        !is_utxo_locked(&pool, "regtest-local", outpoint)
+            .await
+            .expect("check unlocked utxo")
+    );
+}
+
+#[tokio::test]
+async fn unlock_utxo_returns_false_for_missing_record() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    let removed = unlock_utxo(
+        &pool,
+        "regtest-local",
+        "0000000000000000000000000000000000000000000000000000000000000005:3",
+    )
+    .await
+    .expect("unlock missing utxo");
+
+    assert!(!removed);
+}
+
+#[tokio::test]
+async fn lock_utxo_rejects_duplicate_outpoint_for_same_wallet() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    let outpoint = "0000000000000000000000000000000000000000000000000000000000000006:0";
+
+    lock_utxo(&pool, "regtest-local", outpoint, Some("first lock"))
+        .await
+        .expect("lock first utxo");
+
+    let duplicate = lock_utxo(&pool, "regtest-local", outpoint, Some("duplicate lock")).await;
+
+    assert!(duplicate.is_err());
+
+    let records = list_locked_utxos(&pool, "regtest-local")
+        .await
+        .expect("list locked utxos");
+
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0].reason.as_deref(), Some("first lock"));
+}
+
+#[tokio::test]
+async fn same_outpoint_can_be_locked_in_different_wallets() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "wallet-a", "regtest").await;
+    insert_wallet(&pool, "wallet-b", "regtest").await;
+
+    let outpoint = "0000000000000000000000000000000000000000000000000000000000000007:0";
+
+    lock_utxo(&pool, "wallet-a", outpoint, Some("wallet-a lock"))
+        .await
+        .expect("lock wallet-a outpoint");
+    lock_utxo(&pool, "wallet-b", outpoint, Some("wallet-b lock"))
+        .await
+        .expect("lock wallet-b outpoint");
+
+    assert_eq!(
+        list_locked_utxos(&pool, "wallet-a")
+            .await
+            .expect("list wallet-a locks")
+            .len(),
+        1
+    );
+    assert_eq!(
+        list_locked_utxos(&pool, "wallet-b")
+            .await
+            .expect("list wallet-b locks")
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn delete_wallet_cascades_locked_utxos() {
+    let pool = test_pool().await;
+    insert_wallet(&pool, "regtest-local", "regtest").await;
+
+    lock_utxo(
+        &pool,
+        "regtest-local",
+        "0000000000000000000000000000000000000000000000000000000000000008:0",
+        Some("cascade test"),
+    )
+    .await
+    .expect("lock utxo");
+
+    sqlx::query("DELETE FROM wallets WHERE name = ?1")
+        .bind("regtest-local")
+        .execute(&pool)
+        .await
+        .expect("delete wallet");
+
+    let records = list_locked_utxos(&pool, "regtest-local")
+        .await
+        .expect("list locked utxos after wallet delete");
+
+    assert!(records.is_empty());
 }

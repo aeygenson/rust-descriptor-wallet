@@ -183,14 +183,53 @@ Address-book output is structured per persisted entry:
 - `created_at=<timestamp>`
 - optional `updated_at=<timestamp>`
 
+## Locked UTXOs
+
+### Lock one wallet UTXO
+
+```bash
+cargo run -p wallet_cli -- lock-utxo \
+  --name <wallet> \
+  --outpoint <txid:vout> \
+  --reason "Reserve for CPFP"
+```
+
+### Unlock one wallet UTXO
+
+```bash
+cargo run -p wallet_cli -- unlock-utxo \
+  --name <wallet> \
+  --outpoint <txid:vout>
+```
+
+### List locked wallet UTXOs
+
+```bash
+cargo run -p wallet_cli -- locked-utxos --name <wallet>
+```
+
+Locked-UTXO output is structured per persisted entry:
+
+- `wallet_name=<wallet>`
+- `outpoint=<txid:vout>`
+- optional `reason=<text>`
+- `locked_at=<timestamp>`
+- optional `updated_at=<timestamp>`
+
+Locked UTXOs are enforced by the backend. Automatic selection paths treat them as excluded, and explicit include requests fail if they reference a locked outpoint.
+
 ### List UTXOs
 
 ```bash
 cargo run -p wallet_cli -- utxos --name <wallet>
 ```
 
-UTXO output includes outpoint, value, confirmation state, address when available, and keychain.
-When derivation metadata is known, the CLI also prints `index=<derivation-index>`.
+UTXO output includes outpoint, value, confirmation state, lock state, address when available, and keychain.
+When derivation metadata is known, the CLI also prints `index=<derivation-index>`. Locked rows also print:
+
+- `state=locked|spendable`
+- `lock_reason=<text|n/a>`
+- `locked_at=<timestamp|n/a>`
 
 ### List transactions
 

@@ -151,6 +151,33 @@ export interface WalletUtxoDto {
     confirmation_height: number | null;
     address: string | null;
     keychain: string;
+
+    is_locked: boolean;
+    lock_reason: string | null;
+    locked_at: string | null;
+}
+
+export interface WalletLockedUtxoDto {
+    wallet_name: string;
+    outpoint: string;
+    reason: string | null;
+    locked_at: string;
+    updated_at: string | null;
+}
+
+export interface WalletLockUtxosRequestDto {
+    name: string;
+    outpoints: string[];
+    reason: string | null;
+}
+
+export interface WalletUnlockUtxosRequestDto {
+    name: string;
+    outpoints: string[];
+}
+
+export interface WalletLockedUtxosRequestDto {
+    name: string;
 }
 
 // === Coin Control ===

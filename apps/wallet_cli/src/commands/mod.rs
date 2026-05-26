@@ -67,6 +67,19 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::AddressBookDelete { name, address } => {
             wallet::delete_address_book_entry(api, &name, &address).await?;
         }
+        Commands::LockUtxo {
+            name,
+            outpoint,
+            reason,
+        } => {
+            wallet::lock_utxo(api, &name, &outpoint, reason).await?;
+        }
+        Commands::UnlockUtxo { name, outpoint } => {
+            wallet::unlock_utxo(api, &name, &outpoint).await?;
+        }
+        Commands::LockedUtxos { name } => {
+            wallet::list_locked_utxos(api, &name).await?;
+        }
         Commands::Sync { name } => {
             wallet::sync_wallet(api, &name).await?;
         }

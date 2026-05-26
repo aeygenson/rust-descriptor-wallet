@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::model::{
     WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
 };
@@ -66,7 +68,14 @@ pub async fn utxos(
 
     let config = load_wallet_config(storage, &name).await?;
 
-    let utxos: Vec<WalletUtxoDto> = spawn_wallet_blocking(move || {
+    let locked_by_outpoint: HashMap<String, _> = storage
+        .list_locked_utxos(&name)
+        .await?
+        .into_iter()
+        .map(|record| (record.outpoint.clone(), record))
+        .collect();
+
+    let mut utxos: Vec<WalletUtxoDto> = spawn_wallet_blocking(move || {
         let wallet = WalletService::load_or_create(&config)?;
 
         let utxos: Vec<WalletUtxoDto> = wallet.utxos().into_iter().map(Into::into).collect();
@@ -75,10 +84,19 @@ pub async fn utxos(
     })
     .await?;
 
+    for utxo in &mut utxos {
+        if let Some(lock) = locked_by_outpoint.get(&utxo.outpoint) {
+            utxo.is_locked = true;
+            utxo.lock_reason = lock.reason.clone();
+            utxo.locked_at = Some(lock.created_at.clone());
+        }
+    }
+
     info!(
-        "api inspect: utxos success name={} count={} with_derivation_index={}",
+        "api inspect: utxos success name={} count={} locked_count={} with_derivation_index={}",
         name,
         utxos.len(),
+        utxos.iter().filter(|utxo| utxo.is_locked).count(),
         utxos
             .iter()
             .filter(|utxo| utxo.derivation_index.is_some())

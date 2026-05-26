@@ -26,8 +26,18 @@ pub enum WalletStorageError {
     #[error("address book label already exists: {0}")]
     DuplicateAddressBookLabel(String),
 
+
     #[error("address book address already exists: {0}")]
     DuplicateAddressBookAddress(String),
+
+    #[error("locked utxo already exists: {0}")]
+    DuplicateLockedUtxo(String),
+
+    #[error("locked utxo not found: {0}")]
+    LockedUtxoNotFound(String),
+
+    #[error("utxo is locked and cannot be spent: {0}")]
+    LockedUtxo(String),
 
     #[error("invalid address book address: {0}")]
     InvalidAddressBookAddress(String),

@@ -133,6 +133,36 @@ pub enum Commands {
         /// Address book address to delete.
         address: String,
     },
+    /// Lock/freeze a wallet UTXO so it is excluded from spending.
+    LockUtxo {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Outpoint to lock in txid:vout format.
+        outpoint: String,
+
+        #[arg(long)]
+        /// Optional reason for locking this UTXO.
+        reason: Option<String>,
+    },
+    /// Unlock a previously locked wallet UTXO.
+    UnlockUtxo {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+
+        #[arg(long)]
+        /// Outpoint to unlock in txid:vout format.
+        outpoint: String,
+    },
+    /// List wallet-scoped locked UTXOs.
+    LockedUtxos {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+    },
     /// Synchronize wallet state with the configured backend.
     Sync {
         #[arg(long)]

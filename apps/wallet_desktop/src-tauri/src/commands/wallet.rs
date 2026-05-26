@@ -3,6 +3,7 @@ use wallet_api::{
     model::{
         AddressBookEntryDto,
         WalletBackendHealthDto,
+        WalletLockedUtxoDto,
         WalletReceiveAddressHistoryDto,
         WalletStatusDto,
         WalletSummaryDto,
@@ -155,6 +156,44 @@ pub async fn delete_address_book_entry(
     address: String,
 ) -> Result<bool, String> {
     api.delete_address_book_entry(&walletName, &address)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn lock_utxo(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    outpoint: String,
+    reason: Option<String>,
+) -> Result<Vec<WalletLockedUtxoDto>, String> {
+    api.lock_utxo(&walletName, &outpoint, reason)
+        .await
+        .map(|result| result.locked_utxos)
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn unlock_utxo(
+    api: State<'_, WalletApi>,
+    walletName: String,
+    outpoint: String,
+) -> Result<Vec<WalletLockedUtxoDto>, String> {
+    api.unlock_utxo(&walletName, &outpoint)
+        .await
+        .map(|result| result.locked_utxos)
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn list_locked_utxos(
+    api: State<'_, WalletApi>,
+    walletName: String,
+) -> Result<Vec<WalletLockedUtxoDto>, String> {
+    api.locked_utxos(&walletName)
         .await
         .map_err(tauri_error)
 }

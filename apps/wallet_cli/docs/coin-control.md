@@ -98,6 +98,20 @@ Excluded inputs should never be selected by the backend for that transaction.
 
 ---
 
+### Locked UTXOs
+
+Locked UTXOs are stronger than a caller-provided exclude list.
+
+They are persisted wallet metadata, not one-off request flags. Once a UTXO is locked:
+
+- automatic spend paths treat it as excluded
+- send-max, sweep, and consolidation builders avoid it unless the caller unlocks it first
+- explicit manual selection fails if the request includes that outpoint
+
+This lets operators reserve coins for later use without trusting every caller to remember the same exclude set.
+
+---
+
 ### Confirmed-Only
 
 Confirmed-only selection restricts eligible inputs to confirmed UTXOs.
@@ -204,6 +218,7 @@ These may differ when:
 - selection mode is `manual-with-auto-completion`
 - selection mode is `automatic-only`
 - some requested inputs are ineligible
+- some requested inputs are locked
 - fee or amount requirements require broader selection
 
 This is why preview data is so important.

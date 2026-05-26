@@ -4,13 +4,14 @@ pub mod models;
 pub mod repository;
 
 
-use repository::{address_book, receive_history, wallets};
+use repository::{address_book, locked_utxos, receive_history, wallets};
 use sqlx::SqlitePool;
 
 pub use error::WalletStorageError;
 pub use models::{
     AddressBookEntryRecord,
     ImportWalletFile,
+    LockedUtxoRecord,
     ReceiveAddressHistoryRecord,
     WalletRecord,
 };
@@ -199,6 +200,70 @@ impl WalletStorage {
         .await
     }
 
+    // ---------------------------------------------------------------------
+    // Locked UTXOs
+    // ---------------------------------------------------------------------
+    pub async fn lock_utxo(
+        &self,
+        wallet_name: &str,
+        outpoint: &str,
+        reason: Option<&str>,
+    ) -> WalletStorageResult<LockedUtxoRecord> {
+        locked_utxos::lock_utxo(
+            &self.pool,
+            wallet_name,
+            outpoint,
+            reason,
+        )
+        .await
+    }
+
+    pub async fn list_locked_utxos(
+        &self,
+        wallet_name: &str,
+    ) -> WalletStorageResult<Vec<LockedUtxoRecord>> {
+        locked_utxos::list_locked_utxos(&self.pool, wallet_name).await
+    }
+
+    pub async fn get_locked_utxo(
+        &self,
+        wallet_name: &str,
+        outpoint: &str,
+    ) -> WalletStorageResult<Option<LockedUtxoRecord>> {
+        locked_utxos::get_locked_utxo(
+            &self.pool,
+            wallet_name,
+            outpoint,
+        )
+        .await
+    }
+
+    pub async fn is_utxo_locked(
+        &self,
+        wallet_name: &str,
+        outpoint: &str,
+    ) -> WalletStorageResult<bool> {
+        locked_utxos::is_locked(
+            &self.pool,
+            wallet_name,
+            outpoint,
+        )
+        .await
+    }
+
+    pub async fn unlock_utxo(
+        &self,
+        wallet_name: &str,
+        outpoint: &str,
+    ) -> WalletStorageResult<bool> {
+        locked_utxos::unlock_utxo(
+            &self.pool,
+            wallet_name,
+            outpoint,
+        )
+        .await
+    }
+
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
     }
@@ -226,4 +291,12 @@ pub use address_book::{
     delete_entry as delete_address_book_entry,
     get_entry_by_address as get_address_book_entry_by_address,
     list_entries as list_address_book_entries,
+};
+
+pub use locked_utxos::{
+    get_locked_utxo,
+    is_locked as is_utxo_locked,
+    list_locked_utxos,
+    lock_utxo,
+    unlock_utxo,
 };

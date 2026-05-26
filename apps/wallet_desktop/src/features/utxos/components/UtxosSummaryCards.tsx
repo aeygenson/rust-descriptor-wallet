@@ -16,6 +16,16 @@ export function UtxosSummaryCards({ summary }: UtxosSummaryCardsProps) {
     summary.totalCount > 0
       ? Math.round((summary.pendingCount / summary.totalCount) * 100)
       : 0;
+
+  const lockedRatio =
+    summary.totalCount > 0
+      ? Math.round((summary.lockedCount / summary.totalCount) * 100)
+      : 0;
+
+  const spendableRatio =
+    summary.totalCount > 0
+      ? Math.round((summary.spendableCount / summary.totalCount) * 100)
+      : 0;
   const keychainCount = summary.keychains.toLocaleString();
 
   return (
@@ -71,6 +81,36 @@ export function UtxosSummaryCards({ summary }: UtxosSummaryCardsProps) {
               : "No pending wallet activity"
           }
           progress={pendingRatio}
+        />
+
+        <SummaryCard
+          tone="amber"
+          label="Locked"
+          value={[
+            summary.lockedCount.toLocaleString(),
+            formatSats(summary.lockedValue),
+          ].join(" / ")}
+          subvalue={
+            summary.lockedCount > 0
+              ? `${lockedRatio}% currently unavailable for spending`
+              : "No locked wallet outputs"
+          }
+          progress={lockedRatio}
+        />
+
+        <SummaryCard
+          tone="green"
+          label="Spendable"
+          value={[
+            summary.spendableCount.toLocaleString(),
+            formatSats(summary.spendableValue),
+          ].join(" / ")}
+          subvalue={
+            summary.spendableCount > 0
+              ? `${spendableRatio}% available for spending flows`
+              : "No spendable wallet outputs"
+          }
+          progress={spendableRatio}
         />
 
         <SummaryCard

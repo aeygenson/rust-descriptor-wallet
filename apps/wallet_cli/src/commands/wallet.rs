@@ -1,8 +1,8 @@
 use anyhow::Result;
 use std::path::Path;
 use wallet_api::model::{
-    AddressBookEntryDto, WalletBackendHealthDto, WalletDetailsDto, WalletReceiveAddressHistoryDto,
-    WalletStatusDto, WalletSummaryDto,
+    AddressBookEntryDto, WalletBackendHealthDto, WalletDetailsDto, WalletLockedUtxoDto,
+    WalletReceiveAddressHistoryDto, WalletStatusDto, WalletSummaryDto,
 };
 use wallet_api::WalletApi;
 
@@ -209,6 +209,60 @@ pub async fn delete_address_book_entry(api: &WalletApi, name: &str, address: &st
         println!("Deleted address book entry for wallet {name} address {address}.");
     } else {
         println!("No address book entry found for wallet {name} address {address}.");
+    }
+
+    Ok(())
+}
+
+fn print_locked_utxo(entry: &WalletLockedUtxoDto) {
+    println!("wallet={}", entry.wallet_name);
+    println!("outpoint={}", entry.outpoint);
+
+    if let Some(reason) = &entry.reason {
+        println!("reason={reason}");
+    }
+
+    println!("locked_at={}", entry.locked_at);
+
+    if let Some(updated_at) = &entry.updated_at {
+        println!("updated_at={updated_at}");
+    }
+}
+
+pub async fn lock_utxo(
+    api: &WalletApi,
+    name: &str,
+    outpoint: &str,
+    reason: Option<String>,
+) -> Result<()> {
+    let locked = api.lock_utxo(name, outpoint, reason).await?;
+
+    if let Some(entry) = locked.locked_utxos.iter().find(|entry| entry.outpoint == outpoint) {
+        print_locked_utxo(entry);
+    } else {
+        println!("Locked UTXO {outpoint} for wallet {name}.");
+    }
+
+    Ok(())
+}
+
+pub async fn unlock_utxo(api: &WalletApi, name: &str, outpoint: &str) -> Result<()> {
+    api.unlock_utxo(name, outpoint).await?;
+    println!("Unlocked UTXO {outpoint} for wallet {name}.");
+
+    Ok(())
+}
+
+pub async fn list_locked_utxos(api: &WalletApi, name: &str) -> Result<()> {
+    let locked = api.locked_utxos(name).await?;
+
+    if locked.is_empty() {
+        println!("No locked UTXOs found for wallet {name}.");
+    } else {
+        for entry in locked {
+            print_locked_utxo(&entry);
+            println!("---");
+        }
     }
 
     Ok(())

@@ -37,6 +37,12 @@ Wallet state methods use `service/wallet.rs` and `service/addresses.rs`.
 
 `delete_address_book_entry(name, address)` removes one persisted address-book row through `DeleteAddressBookEntryRequestDto` and returns a `bool` indicating whether a row was deleted.
 
+`lock_utxos(name, outpoints, reason)` persists wallet-scoped spend locks through `WalletLockUtxosRequestDto` and returns the affected locked rows.
+
+`unlock_utxos(name, outpoints)` removes persisted wallet-scoped spend locks through `WalletUnlockUtxosRequestDto` and returns the remaining locked rows.
+
+`list_locked_utxos(name)` reads persisted wallet-scoped locked-outpoint rows through `WalletLockedUtxosRequestDto`.
+
 `backend_health(name)` checks configured backend reachability and reports tip visibility without mutating wallet state.
 
 `balance(name)` returns the current persisted wallet balance in satoshis. It does not perform a network sync.
@@ -50,6 +56,12 @@ Inspection methods use `service/inspect.rs`.
 `txs(name)` returns `Vec<WalletTxDto>` from current synced wallet state via `WalletTransactionsRequestDto`.
 
 `utxos(name)` returns `Vec<WalletUtxoDto>` from current synced wallet state via `WalletUtxosRequestDto`.
+
+UTXO inspection is enriched with persisted lock state. `WalletUtxoDto` now includes:
+
+- `is_locked`
+- `lock_reason`
+- `locked_at`
 
 These methods intentionally avoid network calls. Run `sync(name)` first when the caller needs fresh chain state.
 
@@ -121,6 +133,12 @@ Selection modes:
 - `automatic-only`: ignore manual include sets and let the backend select.
 
 Invalid outpoint strings are converted into `WalletApiError::InvalidInput`.
+
+Locked outpoints are enforced below the DTO layer:
+
+- explicit include/select requests fail with `WalletApiError::LockedUtxo`
+- automatic selection paths merge locked outpoints into the effective exclude set
+- this applies to fixed sends, send-max, sweep, consolidation, and CPFP input selection
 
 ## Consolidation
 

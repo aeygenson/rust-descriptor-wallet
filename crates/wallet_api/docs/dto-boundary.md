@@ -25,6 +25,8 @@ Wallet metadata and state:
 - `WalletStatusDto`
 - `WalletReceiveAddressHistoryDto`
 - `AddressBookEntryDto`
+- `WalletLockedUtxoDto`
+- `WalletLockedUtxosDto`
 - `WalletTxDto`
 - `WalletUtxoDto`
 
@@ -60,6 +62,9 @@ Request DTOs:
 - `ListAddressBookEntriesRequestDto`
 - `GetAddressBookEntryRequestDto`
 - `DeleteAddressBookEntryRequestDto`
+- `WalletLockUtxosRequestDto`
+- `WalletUnlockUtxosRequestDto`
+- `WalletLockedUtxosRequestDto`
 - `ImportWalletRequestDto`
 - `DeleteWalletRequestDto`
 - `GetWalletRequestDto`
@@ -143,11 +148,22 @@ This keeps consolidation policy parsing outside the CLI and UI layers.
 - `created_at`
 - `updated_at`
 
+`WalletLockedUtxoDto` returns:
+
+- `wallet_name`
+- `outpoint`
+- `reason`
+- `locked_at`
+- `updated_at`
+
 `WalletUtxoDto` now also carries:
 
 - `derivation_index`
+- `is_locked`
+- `lock_reason`
+- `locked_at`
 
-This lets callers render wallet-owned address metadata and persisted receive-history rows without reaching into `wallet_core` or `wallet_storage`.
+This lets callers render wallet-owned address metadata, persisted receive-history rows, and lock state without reaching into `wallet_core` or `wallet_storage`.
 
 ## Preview DTOs
 
@@ -186,5 +202,6 @@ Examples:
 - invalid txids become transaction or input errors at the API layer
 - invalid destination addresses become `WalletApiError::InvalidDestinationAddress`
 - malformed PSBT base64 becomes a PSBT encoding or structure error
+- attempts to spend a locked outpoint become `WalletApiError::LockedUtxo`
 
 The regtest integration suite asserts this caller-visible behavior, including invalid coin-control outpoint handling, replacement metadata, and consolidation selection behavior.

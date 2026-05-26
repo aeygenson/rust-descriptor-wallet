@@ -2,7 +2,7 @@
 
 `wallet_storage` is the SQLite-backed wallet registry and lightweight wallet metadata store for the project.
 
-It stores wallet metadata, descriptors, backend configuration, watch-only state, the per-wallet BDK database path, persisted receive-address history rows with optional labels, and wallet-scoped address-book entries for external recipients. It does not store synced transaction history or UTXO state; those live in the BDK wallet store referenced by each wallet record.
+It stores wallet metadata, descriptors, backend configuration, watch-only state, the per-wallet BDK database path, persisted receive-address history rows with optional labels, wallet-scoped address-book entries for external recipients, and wallet-scoped locked UTXO rows. It does not store synced transaction history or live UTXO state; those live in the BDK wallet store referenced by each wallet record.
 
 ## What The Crate Exposes
 
@@ -26,6 +26,11 @@ Public methods:
 - `list_address_book_entries(wallet_name)`: list persisted address-book rows for a wallet.
 - `get_address_book_entry_by_address(wallet_name, address)`: fetch one persisted address-book row.
 - `delete_address_book_entry(wallet_name, address)`: remove one persisted address-book row.
+- `lock_utxo(wallet_name, outpoint, reason)`: persist one wallet-scoped locked-UTXO row.
+- `list_locked_utxos(wallet_name)`: list persisted locked-UTXO rows for a wallet.
+- `get_locked_utxo(wallet_name, outpoint)`: fetch one persisted locked-UTXO row.
+- `is_utxo_locked(wallet_name, outpoint)`: check whether one outpoint is locked.
+- `unlock_utxo(wallet_name, outpoint)`: remove one persisted locked-UTXO row.
 - `pool()`: expose the underlying `SqlitePool`.
 
 The crate also re-exports repository functions for direct use where needed.
@@ -48,6 +53,8 @@ The crate also re-exports repository functions for direct use where needed.
 `repository/receive_history.rs` owns SQL queries for persisted receive-address history and label updates.
 
 `repository/address_book.rs` owns SQL queries for wallet-scoped address-book rows.
+
+`repository/locked_utxos.rs` owns SQL queries for wallet-scoped locked-UTXO rows.
 
 `error.rs` owns `WalletStorageError`.
 
@@ -142,6 +149,18 @@ Persisted address-book rows store:
 
 Address-book rows are wallet-scoped. Both `(wallet_name, label)` and `(wallet_name, address)` are unique.
 
+## Locked UTXO Model
+
+Persisted locked-UTXO rows store:
+
+- `wallet_name`
+- `outpoint`
+- optional `reason`
+- `created_at`
+- optional `updated_at`
+
+Locked UTXO rows are wallet-scoped. `(wallet_name, outpoint)` is unique.
+
 ## Storage Boundary
 
 `wallet_storage` does not validate descriptor semantics, network compatibility, wallet signing policy, or backend reachability. It stores and retrieves records.
@@ -170,3 +189,5 @@ It also defines domain storage errors:
 For receive-address history, duplicate `(wallet_name, address)` inserts are treated as an existing-row lookup rather than a hard failure.
 
 For address-book entries, duplicate wallet-local labels and duplicate wallet-local addresses are surfaced as explicit storage errors so callers can render a precise user-facing validation message.
+
+For locked UTXOs, duplicate wallet-local outpoints and missing unlock targets are surfaced as explicit storage errors so callers can render deterministic coin-control feedback.

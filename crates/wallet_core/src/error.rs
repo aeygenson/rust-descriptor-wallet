@@ -125,6 +125,9 @@ pub enum WalletCoreError {
     #[error("coin control conflict: outpoint present in both include and exclude: {0}")]
     CoinControlConflict(String),
 
+    #[error("utxo is locked and cannot be spent: {0}")]
+    LockedUtxo(String),
+
     #[error("coin control include set is empty while exact selection is required")]
     CoinControlEmptySelection,
 
@@ -370,6 +373,7 @@ impl WalletCoreError {
             | Self::CoinControlOutpointNotSpendable(_)
             | Self::CoinControlOutpointNotConfirmed(_)
             | Self::CoinControlConflict(_)
+            | Self::LockedUtxo(_)
             | Self::CoinControlEmptySelection
             | Self::CoinControlStrictModeViolation
             | Self::SelectionFailed(_)
@@ -421,6 +425,7 @@ impl WalletCoreError {
             | Self::CoinControlOutpointNotSpendable(_)
             | Self::CoinControlOutpointNotConfirmed(_)
             | Self::CoinControlConflict(_)
+            | Self::LockedUtxo(_)
             | Self::CoinControlEmptySelection
             | Self::CoinControlStrictModeViolation
             | Self::SelectionFailed(_)
@@ -587,6 +592,17 @@ mod tests {
         assert_eq!(err.recovery(), WalletCoreErrorRecovery::FixConfiguration);
         assert!(err.requires_configuration_change());
         assert_eq!(err.severity(), WalletCoreErrorSeverity::Error);
+    }
+
+    #[test]
+    fn locked_utxo_is_user_correctable_selection_error() {
+        let err = WalletCoreError::LockedUtxo("txid:0".to_string());
+
+        assert_eq!(err.category(), WalletCoreErrorCategory::Selection);
+        assert_eq!(err.recovery(), WalletCoreErrorRecovery::UserAction);
+        assert!(err.is_user_correctable());
+        assert!(!err.is_retryable());
+        assert_eq!(err.severity(), WalletCoreErrorSeverity::Info);
     }
 
     #[test]

@@ -5,10 +5,13 @@ import {
   areSomeVisibleUtxosSelected,
   getUtxoOutpoint,
   getUtxoValueSat,
+  isUtxoLocked,
 } from "../lib";
 import {
   formatBtcFromSats,
   formatConfirmations,
+  formatLockBadge,
+  formatLockReason,
   formatOutpointFull,
   formatOutpointShort,
   formatSats,
@@ -75,6 +78,8 @@ export function UtxosTable({
           return (getUtxoValueSat(a) - getUtxoValueSat(b)) * directionMultiplier;
         case "status":
           return (Number(a.confirmed) - Number(b.confirmed)) * directionMultiplier;
+        case "lock_state":
+          return (Number(isUtxoLocked(a)) - Number(isUtxoLocked(b))) * directionMultiplier;
         case "height": {
           const aHeight = a.confirmation_height ?? -1;
           const bHeight = b.confirmation_height ?? -1;
@@ -137,6 +142,15 @@ export function UtxosTable({
               <button
                 type="button"
                 className="utxos-table__sort"
+                onClick={() => handleSort("lock_state")}
+              >
+                Lock{sortLabel("lock_state")}
+              </button>
+            </th>
+            <th>
+              <button
+                type="button"
+                className="utxos-table__sort"
                 onClick={() => handleSort("height")}
               >
                 Height{sortLabel("height")}
@@ -161,13 +175,21 @@ export function UtxosTable({
             const confirmations = utxo.confirmed ? 6 : 0;
             const confirmationLabel = utxo.confirmed ? "Confirmed" : "Pending";
             const valueSat = getUtxoValueSat(utxo);
+            const isLocked = isUtxoLocked(utxo);
+            const lockReason = formatLockReason(utxo.lock_reason);
+            const lockTitle = isLocked
+              ? `${lockReason} · locked at ${utxo.locked_at ?? "unknown"}`
+              : "Available for spending";
 
             return (
               <tr
                 key={outpoint}
-                className={isSelected ? "is-selected" : undefined}
+                className={[isSelected ? "is-selected" : "", isLocked ? "is-locked" : ""]
+                  .filter(Boolean)
+                  .join(" ") || undefined}
                 data-outpoint={outpoint}
                 data-confirmed={Boolean(utxo.confirmed)}
+                data-locked={isLocked}
               >
                 {selectionEnabled && (
                   <td className="utxos-table__checkbox-cell">
@@ -207,6 +229,19 @@ export function UtxosTable({
                     </span>
                     <span className="utxos-table__status-subvalue">
                       {confirmationLabel}
+                    </span>
+                  </div>
+                </td>
+                <td>
+                  <div className="utxos-table__status-cell">
+                    <span
+                      className={`utxo-status ${isLocked ? "is-locked" : "is-spendable"}`}
+                      title={lockTitle}
+                    >
+                      {formatLockBadge(isLocked)}
+                    </span>
+                    <span className="utxos-table__status-subvalue">
+                      {isLocked ? lockReason : "Ready"}
                     </span>
                   </div>
                 </td>

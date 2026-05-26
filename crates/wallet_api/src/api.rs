@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 use crate::factory::build_default_api;
-use crate::service::{addresses, inspect, psbt, registry, wallet};
+use crate::service::{addresses, inspect, locked_utxos, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
@@ -10,13 +10,15 @@ use crate::model::{
     ConsolidationRequestDto, CpfpRequestDto, CreateAddressBookEntryRequestDto,
     CreatePsbtRequestDto, DeleteAddressBookEntryRequestDto, DeleteWalletRequestDto,
     GetAddressBookEntryRequestDto, GetWalletRequestDto, ImportWalletRequestDto,
-    LabelReceiveAddressRequestDto, ListAddressBookEntriesRequestDto, PublishPsbtRequestDto,
-    SendMaxRequestDto, SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto,
-    WalletAddressRequestDto, WalletBackendHealthDto, WalletCoinControlDto,
-    WalletConsolidationDto, WalletCpfpPsbtDto, WalletDetailsDto, WalletPsbtDto,
-    WalletReceiveAddressHistoryDto, WalletReceiveAddressesRequestDto, WalletSignedPsbtDto,
-    WalletStatusDto, WalletSummaryDto, WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto,
-    WalletUtxosRequestDto,
+    LabelReceiveAddressRequestDto,
+    WalletLockedUtxoDto, WalletLockedUtxosDto, WalletLockedUtxosRequestDto,
+    WalletLockUtxosRequestDto, WalletUnlockUtxosRequestDto,
+    ListAddressBookEntriesRequestDto, PublishPsbtRequestDto, SendMaxRequestDto,
+    SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto, WalletAddressRequestDto,
+    WalletBackendHealthDto, WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto,
+    WalletDetailsDto, WalletPsbtDto, WalletReceiveAddressHistoryDto,
+    WalletReceiveAddressesRequestDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
+    WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
 };
 
 use wallet_core::WalletCore;
@@ -200,6 +202,75 @@ impl WalletApi {
             },
         )
         .await
+    }
+
+    pub async fn lock_utxos(
+        &self,
+        name: &str,
+        outpoints: Vec<String>,
+        reason: Option<String>,
+    ) -> WalletApiResult<WalletLockedUtxosDto> {
+        locked_utxos::lock_utxos(
+            &self.storage,
+            WalletLockUtxosRequestDto {
+                name: name.to_string(),
+                outpoints,
+                reason,
+            },
+        )
+        .await
+    }
+
+    pub async fn lock_utxo(
+        &self,
+        name: &str,
+        outpoint: &str,
+        reason: Option<String>,
+    ) -> WalletApiResult<WalletLockedUtxosDto> {
+        self.lock_utxos(name, vec![outpoint.to_string()], reason).await
+    }
+
+    pub async fn unlock_utxos(
+        &self,
+        name: &str,
+        outpoints: Vec<String>,
+    ) -> WalletApiResult<WalletLockedUtxosDto> {
+        locked_utxos::unlock_utxos(
+            &self.storage,
+            WalletUnlockUtxosRequestDto {
+                name: name.to_string(),
+                outpoints,
+            },
+        )
+        .await
+    }
+
+    pub async fn unlock_utxo(
+        &self,
+        name: &str,
+        outpoint: &str,
+    ) -> WalletApiResult<WalletLockedUtxosDto> {
+        self.unlock_utxos(name, vec![outpoint.to_string()]).await
+    }
+
+    pub async fn list_locked_utxos(
+        &self,
+        name: &str,
+    ) -> WalletApiResult<WalletLockedUtxosDto> {
+        locked_utxos::list_locked_utxos(
+            &self.storage,
+            WalletLockedUtxosRequestDto {
+                name: name.to_string(),
+            },
+        )
+        .await
+    }
+
+    pub async fn locked_utxos(
+        &self,
+        name: &str,
+    ) -> WalletApiResult<Vec<WalletLockedUtxoDto>> {
+        Ok(self.list_locked_utxos(name).await?.locked_utxos)
     }
 
     pub async fn sync(&self, name: &str) -> WalletApiResult<()> {

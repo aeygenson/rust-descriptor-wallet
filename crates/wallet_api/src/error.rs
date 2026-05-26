@@ -38,6 +38,15 @@ pub enum WalletApiError {
     #[error("address book address already exists: {0}")]
     DuplicateAddressBookAddress(String),
 
+    #[error("locked utxo already exists: {0}")]
+    DuplicateLockedUtxo(String),
+
+    #[error("locked utxo not found: {0}")]
+    LockedUtxoNotFound(String),
+
+    #[error("utxo is locked and cannot be spent: {0}")]
+    LockedUtxo(String),
+
     #[error("invalid address book address: {0}")]
     InvalidAddressBookAddress(String),
 
@@ -145,6 +154,15 @@ impl From<WalletStorageError> for WalletApiError {
             }
             WalletStorageError::DuplicateAddressBookAddress(message) => {
                 Self::DuplicateAddressBookAddress(message)
+            }
+            WalletStorageError::DuplicateLockedUtxo(message) => {
+                Self::DuplicateLockedUtxo(message)
+            }
+            WalletStorageError::LockedUtxoNotFound(message) => {
+                Self::LockedUtxoNotFound(message)
+            }
+            WalletStorageError::LockedUtxo(message) => {
+                Self::LockedUtxo(message)
             }
             WalletStorageError::InvalidAddressBookAddress(message) => {
                 Self::InvalidAddressBookAddress(message)
@@ -291,6 +309,9 @@ impl From<WalletCoreError> for WalletApiError {
             WalletCoreError::CoinControlConflict(s) => {
                 WalletApiError::InvalidInput(format!("coin control conflict: {}", s))
             }
+            WalletCoreError::LockedUtxo(s) => {
+                WalletApiError::LockedUtxo(s)
+            }
             WalletCoreError::CoinControlEmptySelection => {
                 WalletApiError::InvalidInput("coin control selection is empty".to_string())
             }
@@ -429,6 +450,9 @@ impl WalletApiError {
             Self::DuplicateAddressBookLabel(_)
             | Self::DuplicateAddressBookAddress(_)
             | Self::InvalidAddressBookAddress(_) => "address-book",
+            Self::DuplicateLockedUtxo(_)
+            | Self::LockedUtxoNotFound(_)
+            | Self::LockedUtxo(_) => "coin-control",
             Self::TransactionNotFound(_)
             | Self::TransactionAlreadyConfirmed(_)
             | Self::TransactionNotReplaceable(_) => "transaction",
@@ -476,7 +500,10 @@ impl WalletApiError {
             | Self::SelectionFailed(_)
             | Self::DuplicateAddressBookLabel(_)
             | Self::DuplicateAddressBookAddress(_)
-            | Self::InvalidAddressBookAddress(_) => "user-action",
+            | Self::InvalidAddressBookAddress(_)
+            | Self::DuplicateLockedUtxo(_)
+            | Self::LockedUtxoNotFound(_)
+            | Self::LockedUtxo(_) => "user-action",
             Self::WatchOnlyCannotSign | Self::InvalidBackend(_) => "fix-configuration",
             Self::NotImplemented(_) => "unsupported",
             _ => "fatal",
@@ -495,6 +522,9 @@ impl WalletApiError {
             | Self::DuplicateAddressBookLabel(_)
             | Self::DuplicateAddressBookAddress(_)
             | Self::InvalidAddressBookAddress(_)
+            | Self::DuplicateLockedUtxo(_)
+            | Self::LockedUtxoNotFound(_)
+            | Self::LockedUtxo(_)
             | Self::NotImplemented(_) => "info",
             Self::BroadcastTransport(_)
             | Self::Sync(_)
