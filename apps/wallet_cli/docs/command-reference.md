@@ -42,6 +42,25 @@ cargo run -p wallet_cli -- import-wallet --file wallet-regtest-local.json
 cargo run -p wallet_cli -- get-wallet --name <wallet>
 ```
 
+### Show redacted descriptor inspection
+
+```bash
+cargo run -p wallet_cli -- descriptor-info --name <wallet>
+```
+
+This command is intentionally different from `get-wallet`. It returns a safe, redacted descriptor view for CLI and UI inspection.
+
+Output includes:
+
+- `wallet=<wallet>`
+- `network=<bitcoin|testnet|signet|regtest>`
+- `watch_only=<true|false>`
+- `contains_private_data=<true|false>`
+- external branch metadata such as `external_script_type`, `external_has_private_keys`, `external_is_multisig`, and `external_derivation_path`
+- the same fields for `internal_*` when a change descriptor exists
+
+The rendered descriptor strings are redacted. This command must not expose raw private keys, RPC credentials, or wallet database paths.
+
 ### Delete wallet
 
 ```bash

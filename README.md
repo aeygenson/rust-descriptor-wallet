@@ -189,6 +189,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - wallet import, listing, lookup, and deletion through `wallet_api`
 - CLI commands for wallet metadata management
 - runtime wallet loading and creation backed by per-wallet BDK file stores
+- safe descriptor inspection with redacted branch metadata for CLI and desktop
 - receive-address generation plus persisted receive-history rows for stored wallets
 - wallet-scoped address-book persistence for external recipients
 - wallet-scoped locked-UTXO persistence with optional operator reason
@@ -219,6 +220,7 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 - one-shot CPFP flow through build, sign, publish, and confirmation in integration tests
 - transaction inspection now surfaces fee rate and replaceability metadata
 - first Tauri desktop UI with Overview, Receive, Address Book, UTXOs, Send, and Transactions screens
+- desktop Overview descriptor card with redacted external/internal branch metadata
 - first Tauri desktop address-book screen for external recipient management
 - desktop PSBT preview/sign/publish flows for fixed send, send-max, sweep, and consolidation
 - desktop transaction actions for RBF and CPFP

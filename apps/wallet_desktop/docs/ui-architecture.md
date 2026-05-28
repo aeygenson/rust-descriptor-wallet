@@ -74,7 +74,14 @@ This is the one real global state boundary in the current app.
 
 ### Wallet
 
-[src/features/wallet/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/wallet/api.ts) wraps app-info, wallet listing, status, sync, and backend health commands.
+[src/features/wallet/api.ts](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src/features/wallet/api.ts) wraps app-info, wallet listing, status, sync, backend health, and descriptor inspection commands.
+
+This feature now also owns descriptor-only presentation helpers under `src/features/wallet/*`:
+
+- redacted descriptor formatting
+- security-variant inference
+- descriptor branch-count and warning helpers
+- descriptor card and branch-panel rendering
 
 ### Receive
 
@@ -205,6 +212,8 @@ Rust commands are grouped under:
 - request DTO decoding in [src-tauri/src/commands/send_model.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/commands/send_model.rs)
 
 The receive flow lives in the wallet command module through `get_receive_address`, `list_receive_addresses`, `label_receive_address`, and `clear_receive_address_label`. Those commands now return `WalletReceiveAddressHistoryDto` rows that include the canonical Bitcoin URI and an optional QR SVG payload. Send-related Tauri commands normalize frontend request objects into the canonical `wallet_api` request DTOs before calling into Rust service functions.
+
+Descriptor inspection also lives in the wallet command module through `descriptor_info(walletName)`. That command returns a `WalletDescriptorInfoDto` with redacted descriptor text plus derived metadata for external and internal branches.
 
 The address-book flow also lives in the wallet command module through `create_address_book_entry`, `list_address_book_entries`, `get_address_book_entry`, and `delete_address_book_entry`. Those commands return `AddressBookEntryDto` rows and map directly onto `wallet_api` address-book service calls.
 

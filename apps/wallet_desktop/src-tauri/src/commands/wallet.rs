@@ -3,6 +3,7 @@ use wallet_api::{
     model::{
         AddressBookEntryDto,
         WalletBackendHealthDto,
+        WalletDescriptorInfoDto,
         WalletLockedUtxoDto,
         WalletReceiveAddressHistoryDto,
         WalletStatusDto,
@@ -60,6 +61,17 @@ pub async fn backend_health(
     walletName: String,
 ) -> Result<WalletBackendHealthDto, String> {
     api.backend_health(&walletName)
+        .await
+        .map_err(tauri_error)
+}
+
+#[allow(non_snake_case)]
+#[command]
+pub async fn descriptor_info(
+    api: State<'_, WalletApi>,
+    walletName: String,
+) -> Result<WalletDescriptorInfoDto, String> {
+    api.descriptor_info(&walletName)
         .await
         .map_err(tauri_error)
 }

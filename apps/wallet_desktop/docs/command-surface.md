@@ -17,6 +17,7 @@ Registered commands:
 - `get_wallet_status`
 - `sync_wallet`
 - `backend_health`
+- `descriptor_info`
 - `get_receive_address`
 - `list_receive_addresses`
 - `label_receive_address`
@@ -121,6 +122,8 @@ Examples:
 
 The receive-address commands are the main exception here. They take flat arguments rather than a nested `request` object:
 
+- `descriptor_info(walletName)` -> `WalletDescriptorInfoDto`
+
 - `get_receive_address(walletName)` -> `WalletReceiveAddressHistoryDto`
 - `list_receive_addresses(walletName)` -> `WalletReceiveAddressHistoryDto[]`
 - `label_receive_address(walletName, address, label)` -> `WalletReceiveAddressHistoryDto`
@@ -138,6 +141,27 @@ Locked-UTXO commands follow the same flat-argument style:
 - `lock_utxo(walletName, outpoint, reason)` -> `WalletLockedUtxoDto[]`
 - `unlock_utxo(walletName, outpoint)` -> `WalletLockedUtxoDto[]`
 - `list_locked_utxos(walletName)` -> `WalletLockedUtxoDto[]`
+
+Descriptor DTOs carry:
+
+- `wallet_name`
+- `network`
+- `is_watch_only`
+- `contains_private_data`
+- `external`
+- optional `internal`
+
+Each branch descriptor view carries:
+
+- `descriptor_redacted`
+- optional `script_type`
+- `has_private_keys`
+- `has_wildcards`
+- `has_origin_info`
+- `is_multisig`
+- optional `threshold`
+- optional `participant_count`
+- optional `derivation_path`
 
 Receive DTOs now carry:
 

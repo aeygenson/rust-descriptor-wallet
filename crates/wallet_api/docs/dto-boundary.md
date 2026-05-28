@@ -19,6 +19,8 @@ Wallet metadata and state:
 - `WalletSummaryDto`
 - `WalletDetailsDto`
 - `WalletDescriptorsDto`
+- `WalletDescriptorInfoDto`
+- `DescriptorViewDto`
 - `WalletBackendDto`
 - `SyncBackendDto`
 - `BroadcastBackendDto`
@@ -164,6 +166,29 @@ This keeps consolidation policy parsing outside the CLI and UI layers.
 - `locked_at`
 
 This lets callers render wallet-owned address metadata, persisted receive-history rows, and lock state without reaching into `wallet_core` or `wallet_storage`.
+
+`WalletDescriptorInfoDto` returns:
+
+- `wallet_name`
+- `network`
+- `is_watch_only`
+- `contains_private_data`
+- `external`
+- optional `internal`
+
+Each `DescriptorViewDto` returns:
+
+- `descriptor_redacted`
+- `script_type`
+- `has_private_keys`
+- `has_wildcards`
+- `has_origin_info`
+- `is_multisig`
+- `threshold`
+- `participant_count`
+- `derivation_path`
+
+This gives CLI and desktop callers a safe inspection surface without exposing raw stored descriptor secrets.
 
 ## Preview DTOs
 

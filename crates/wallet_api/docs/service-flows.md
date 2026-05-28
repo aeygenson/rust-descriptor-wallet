@@ -11,6 +11,7 @@ Registry methods use `service/registry.rs` and `wallet_storage`:
 - `import_wallet(file_path)` imports a wallet JSON file into storage via `ImportWalletRequestDto`.
 - `list_wallets()` returns wallet names, networks, and watch-only flags.
 - `get_wallet(name)` returns descriptors, sync backend, broadcast backend, and watch-only status via `GetWalletRequestDto`.
+- `descriptor_info(name)` returns a safe redacted descriptor inspection DTO for external and internal branches. It intentionally avoids returning raw private descriptor material, backend credentials, or wallet database paths.
 - `delete_wallet(name)` removes the stored wallet record via `DeleteWalletRequestDto`.
 
 Backend configuration is parsed when a wallet is loaded. Invalid stored backend metadata is surfaced as `WalletApiError::InvalidInput`.

@@ -21,6 +21,9 @@ pub async fn handle_command(api: &WalletApi, cmd: Commands) -> Result<()> {
         Commands::GetWallet { name } => {
             wallet::get_wallet(api, &name).await?;
         }
+        Commands::DescriptorInfo { name } => {
+            wallet::descriptor_info(api, &name).await?;
+        }
         Commands::ImportWallet { file } => {
             wallet::import_wallet(api, file.as_path()).await?;
         }

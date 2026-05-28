@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tracing::debug;
 
 use crate::factory::build_default_api;
-use crate::service::{addresses, inspect, locked_utxos, psbt, registry, wallet};
+use crate::service::{addresses, descriptor, inspect, locked_utxos, psbt, registry, wallet};
 use crate::WalletApiResult;
 
 use crate::model::{
@@ -16,7 +16,7 @@ use crate::model::{
     ListAddressBookEntriesRequestDto, PublishPsbtRequestDto, SendMaxRequestDto,
     SignPsbtRequestDto, SweepRequestDto, TxBroadcastResultDto, WalletAddressRequestDto,
     WalletBackendHealthDto, WalletCoinControlDto, WalletConsolidationDto, WalletCpfpPsbtDto,
-    WalletDetailsDto, WalletPsbtDto, WalletReceiveAddressHistoryDto,
+    WalletDescriptorInfoDto, WalletDetailsDto, WalletPsbtDto, WalletReceiveAddressHistoryDto,
     WalletReceiveAddressesRequestDto, WalletSignedPsbtDto, WalletStatusDto, WalletSummaryDto,
     WalletTransactionsRequestDto, WalletTxDto, WalletUtxoDto, WalletUtxosRequestDto,
 };
@@ -65,6 +65,14 @@ impl WalletApi {
             },
         )
         .await
+    }
+
+    /// Return a UI/CLI-safe descriptor inspection view for a wallet.
+    ///
+    /// Unlike `get_wallet`, this method must not expose raw descriptors,
+    /// backend credentials, or runtime wallet configuration.
+    pub async fn descriptor_info(&self, name: &str) -> WalletApiResult<WalletDescriptorInfoDto> {
+        descriptor::get_wallet_descriptor_info(&self.storage, name).await
     }
 
     pub async fn import_wallet(&self, file_path: &str) -> WalletApiResult<()> {

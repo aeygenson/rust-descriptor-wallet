@@ -33,6 +33,12 @@ pub enum Commands {
         /// Wallet name.
         name: String,
     },
+    /// Show a safe, redacted descriptor inspection view.
+    DescriptorInfo {
+        #[arg(long)]
+        /// Wallet name.
+        name: String,
+    },
     /// Import a wallet definition from a JSON file.
     ImportWallet {
         #[arg(long)]

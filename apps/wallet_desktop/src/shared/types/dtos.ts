@@ -11,6 +11,28 @@ export interface WalletDescriptorsDto {
     internal: string;
 }
 
+// === Descriptor Inspector ===
+export interface DescriptorViewDto {
+    descriptor_redacted: string;
+    script_type: string | null;
+    has_private_keys: boolean;
+    has_wildcards: boolean;
+    has_origin_info: boolean;
+    is_multisig: boolean;
+    threshold: number | null;
+    participant_count: number | null;
+    derivation_path: string | null;
+}
+
+export interface WalletDescriptorInfoDto {
+    wallet_name: string;
+    network: string;
+    is_watch_only: boolean;
+    external: DescriptorViewDto;
+    internal: DescriptorViewDto | null;
+    contains_private_data: boolean;
+}
+
 export type SyncBackendDto =
     | { kind: "esplora"; url: string }
     | { kind: "electrum"; url: string };

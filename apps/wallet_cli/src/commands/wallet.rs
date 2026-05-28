@@ -1,8 +1,9 @@
 use anyhow::Result;
 use std::path::Path;
 use wallet_api::model::{
-    AddressBookEntryDto, WalletBackendHealthDto, WalletDetailsDto, WalletLockedUtxoDto,
-    WalletReceiveAddressHistoryDto, WalletStatusDto, WalletSummaryDto,
+    AddressBookEntryDto, DescriptorViewDto, WalletBackendHealthDto, WalletDescriptorInfoDto,
+    WalletDetailsDto, WalletLockedUtxoDto, WalletReceiveAddressHistoryDto, WalletStatusDto,
+    WalletSummaryDto,
 };
 use wallet_api::WalletApi;
 
@@ -339,6 +340,67 @@ pub async fn get_wallet(api: &WalletApi, name: &str) -> Result<()> {
             println!("broadcast_backend=none");
         }
     }
+
+    Ok(())
+}
+
+fn print_descriptor_view(label: &str, descriptor: &DescriptorViewDto) {
+    println!("{label}_descriptor={}", descriptor.descriptor_redacted);
+    println!(
+        "{label}_script_type={}",
+        descriptor
+            .script_type
+            .as_deref()
+            .unwrap_or("unknown")
+    );
+    println!("{label}_has_private_keys={}", descriptor.has_private_keys);
+    println!("{label}_has_wildcards={}", descriptor.has_wildcards);
+    println!("{label}_has_origin_info={}", descriptor.has_origin_info);
+    println!("{label}_is_multisig={}", descriptor.is_multisig);
+    println!(
+        "{label}_threshold={}",
+        descriptor
+            .threshold
+            .map(|threshold| threshold.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+    println!(
+        "{label}_participant_count={}",
+        descriptor
+            .participant_count
+            .map(|count| count.to_string())
+            .unwrap_or_else(|| "n/a".to_string())
+    );
+    println!(
+        "{label}_derivation_path={}",
+        descriptor
+            .derivation_path
+            .as_deref()
+            .unwrap_or("n/a")
+    );
+}
+
+fn print_descriptor_info(info: &WalletDescriptorInfoDto) {
+    println!("wallet={}", info.wallet_name);
+    println!("network={}", info.network);
+    println!("watch_only={}", info.is_watch_only);
+    println!("contains_private_data={}", info.contains_private_data);
+    println!("---");
+    print_descriptor_view("external", &info.external);
+
+    if let Some(internal) = &info.internal {
+        println!("---");
+        print_descriptor_view("internal", internal);
+    } else {
+        println!("---");
+        println!("internal_descriptor=n/a");
+    }
+}
+
+pub async fn descriptor_info(api: &WalletApi, name: &str) -> Result<()> {
+    let info: WalletDescriptorInfoDto = api.descriptor_info(name).await?;
+
+    print_descriptor_info(&info);
 
     Ok(())
 }

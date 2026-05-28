@@ -33,6 +33,7 @@ All business logic lives in:
 The CLI exposes the following core concepts:
 
 - PSBT (Partially Signed Bitcoin Transaction)
+- safe descriptor inspection
 - coin control (explicit include/exclude inputs)
 - locked UTXOs (wallet-scoped spend suppression with optional reason)
 - persisted receive-address history
@@ -59,6 +60,8 @@ Transaction lifecycle:
 Caller-visible output is intentionally structured rather than prose-only. The CLI surfaces receive-address metadata, persisted receive history rows, optional QR SVG payloads, address labels, locked-UTXO metadata, transaction parent/output inspection data, and richer PSBT preview fields such as selected inputs and replacement lineage.
 
 The address-book commands follow the same pattern: create, list, get, and delete all return or render the persisted wallet-scoped entry shape instead of inventing a separate CLI-only format.
+
+The descriptor-inspection command follows the same principle: it renders a redacted backend-produced descriptor view instead of exposing raw private descriptor material or import/export payloads.
 
 ---
 

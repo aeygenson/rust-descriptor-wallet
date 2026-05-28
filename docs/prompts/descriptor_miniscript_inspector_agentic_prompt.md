@@ -48,6 +48,378 @@ Follow this pattern strictly.
 
 ---
 
+## Lessons learned from prior UTXO feature implementation
+
+These implementation rules are mandatory.
+
+### 1. Always update shared DTOs first
+
+When backend models evolve:
+
+```text
+wallet_api DTO
+→ shared/types/dtos.ts
+→ feature/types.ts
+→ component props
+→ pages
+```
+
+Do not update components before shared DTOs compile.
+
+Typical failure pattern:
+
+```text
+TS2739 missing props
+TS2339 property does not exist
+```
+
+Root cause is usually stale shared DTOs.
+
+---
+
+### 2. Update frontend prop interfaces together with components
+
+Whenever adding new component props:
+
+```text
+component implementation
+AND
+feature/types.ts interfaces
+```
+
+must be updated in the same step.
+
+Do not defer prop interface updates.
+
+Common failures:
+
+```text
+Property 'emptyVariant' does not exist
+Missing hasLockedSelection
+Missing lockedCount
+```
+
+---
+
+### 3. Never hallucinate existing helpers or functions
+
+Before adding imports:
+
+```text
+Read actual helpers file first.
+```
+
+Do not invent:
+
+```text
+setup_test_wallet
+fund_test_wallet
+helper modules
+```
+
+Always mirror existing project patterns.
+
+---
+
+### 4. Prefer extending existing architecture instead of parallel systems
+
+If wallet already has:
+
+```text
+wallet.rs
+utxos.rs
+send_model.rs
+shared DTOs
+summary cards
+state views
+```
+
+extend those instead of creating duplicate flows.
+
+Correct pattern:
+
+```text
+small targeted extensions
+```
+
+Avoid:
+
+```text
+new competing abstractions
+```
+
+---
+
+### 5. Keep orchestration only in pages
+
+Pages may:
+
+```text
+load data
+coordinate actions
+handle refresh
+compose components
+```
+
+Pages must NOT:
+
+```text
+format descriptors
+parse miniscript
+infer business rules
+```
+
+Use:
+
+```text
+lib.ts for pure logic
+format.ts for presentation
+api.ts for backend calls
+```
+
+strictly.
+
+---
+
+### 6. Keep Tauri commands extremely thin
+
+Correct:
+
+```text
+Tauri command
+→ wallet_api service
+→ wallet_core/storage
+```
+
+Wrong:
+
+```text
+descriptor parsing in Tauri
+policy inference in Tauri
+business logic in commands
+```
+
+---
+
+### 7. Add lock/state awareness consistently across all UI layers
+
+When introducing a new state:
+
+```text
+locked
+frozen
+watch-only
+offline
+hardware-required
+```
+
+update ALL:
+
+```text
+DTOs
+summary models
+filters
+selection logic
+header badges
+empty states
+summary cards
+CSS states
+button disabling
+navigation guards
+```
+
+Do not partially implement state handling.
+
+---
+
+### 8. Selection logic must remain workflow-aware
+
+Important UX lesson:
+
+```text
+Locked UTXOs still needed to remain selectable
+for unlock workflows.
+```
+
+Therefore:
+
+```text
+select-all may exclude locked items
+while manual selection still allows them.
+```
+
+Apply same principle to descriptor workflows.
+
+---
+
+### 9. Use defensive backend-driven architecture
+
+Preferred architecture:
+
+```text
+backend enforcement
++ frontend UX guidance
+```
+
+Never rely only on frontend filtering.
+
+Example:
+
+```text
+backend rejects locked UTXO spending
+frontend disables spend buttons additionally
+```
+
+Descriptor privacy enforcement must follow same rule.
+
+---
+
+### 10. Add compile checkpoints during implementation
+
+After every major phase run:
+
+```bash
+cargo check
+npm run typecheck
+```
+
+Do not implement the entire feature before compiling.
+
+Recommended checkpoints:
+
+```text
+DTO phase
+API phase
+types phase
+component phase
+page orchestration phase
+```
+
+---
+
+### 11. CSS and UI states are part of the feature, not polish
+
+When adding a new feature state:
+
+```text
+locked
+warning
+redacted
+unsafe
+watch-only
+```
+
+implement:
+
+```text
+CSS classes
+hover states
+disabled states
+badges
+summary indicators
+empty states
+```
+
+in the same implementation phase.
+
+---
+
+### 12. Security-sensitive features require explicit redaction rules
+
+Never assume frontend data is safe.
+
+Always add:
+
+```text
+redaction helpers
+safe copy behavior
+warning banners
+```
+
+before rendering potentially sensitive material.
+
+For descriptors:
+
+```text
+xprv
+seed
+mnemonic
+private derivation material
+```
+
+must never render.
+
+---
+
+### 13. Prefer incremental patches over massive rewrites
+
+Successful pattern:
+
+```text
+small targeted updates
+```
+
+Avoid:
+
+```text
+rewriting entire pages
+rewriting entire feature architecture
+```
+
+This project evolves feature-by-feature.
+
+---
+
+### 14. Read existing files before proposing changes
+
+Mandatory rule:
+
+```text
+Read actual file
+→ inspect existing patterns
+→ then update
+```
+
+Do not infer architecture from memory.
+
+Especially important for:
+
+```text
+Tauri commands
+feature/types.ts
+summary models
+selection helpers
+```
+
+---
+
+### 15. Feature completeness checklist
+
+A feature is NOT complete until all are updated:
+
+```text
+Backend DTOs
+Tauri registration
+shared frontend DTOs
+feature types
+API wrappers
+pure helpers
+formatters
+components
+page orchestration
+routing/sidebar
+CSS
+loading/error states
+empty states
+selection behavior
+summary cards
+button disabled states
+```
+
+Use this checklist explicitly during implementation.
+
+---
+
 ## Goal
 
 Implement a professional **Descriptor / Miniscript Inspector** in the GUI.

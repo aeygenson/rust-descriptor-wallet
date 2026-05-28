@@ -33,6 +33,7 @@ Current desktop capabilities:
 
 - load and switch wallets through a shared wallet provider
 - show wallet status and backend health
+- inspect safe redacted descriptor metadata for the active wallet
 - generate the next receive address for the active wallet
 - list persisted receive-address history for the active wallet
 - display receive-address keychain, derivation-index, timestamp, label, and QR metadata
@@ -133,13 +134,26 @@ Intent resolution is hybrid:
 
 This is a desktop presentation feature. It improves operator understanding without changing Rust-side transaction semantics.
 
+## Descriptor Inspection
+
+The Overview screen now also renders a descriptor inspection card for the active wallet.
+
+That card is intentionally safe-by-default:
+
+- it requests descriptor metadata through `wallet_api`
+- it shows redacted descriptor text, not raw stored descriptor material
+- it highlights whether private descriptor material exists in the stored wallet
+- it surfaces script type, multisig threshold/count, wildcard usage, origin info, and derivation path
+
+This is an operator-inspection feature, not a wallet export feature.
+
 ## What Is Actually Running
 
 The frontend is under [src](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src).
 
 The Tauri host is under [src-tauri](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri).
 
-The Rust side initializes `WalletApi` once at app startup in [src-tauri/src/lib.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/lib.rs) and exposes wallet, UTXO, transaction, send, RBF, and CPFP commands.
+The Rust side initializes `WalletApi` once at app startup in [src-tauri/src/lib.rs](/Users/alexandereygenson/MyRust/rust-descriptor-wallet/apps/wallet_desktop/src-tauri/src/lib.rs) and exposes wallet, descriptor, UTXO, transaction, send, RBF, and CPFP commands.
 
 ## Design Direction That Survived Contact With Code
 

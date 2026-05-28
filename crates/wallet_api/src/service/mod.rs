@@ -4,3 +4,4 @@ pub mod registry;
 pub mod wallet;
 pub mod addresses;
 pub mod locked_utxos;
+pub mod descriptor;

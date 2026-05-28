@@ -9,7 +9,7 @@ It gives callers a stable async facade over wallet storage, runtime wallet loadi
 `wallet_api` owns the caller-facing parts of wallet orchestration:
 
 - wallet registry operations: import, list, get, and delete wallets
-- runtime wallet operations: address generation, sync, balance, status, transaction listing, UTXO listing, and locked-UTXO management
+- runtime wallet operations: address generation, descriptor inspection, sync, balance, status, transaction listing, UTXO listing, and locked-UTXO management
 - address and inspection enrichment: persisted receive-address history, receive labels, wallet-scoped address-book entries, canonical Bitcoin URIs, QR SVG payloads, keychain/index metadata, transaction graph inputs/outputs, UTXO derivation metadata, and UTXO lock state
 - PSBT preview flows: fixed amount, coin control, send-max, sweep, consolidation, RBF, and CPFP
 - one-shot transaction flows: build, sign, publish, and return the broadcast result
@@ -26,6 +26,7 @@ Wallet metadata:
 
 - `list_wallets`
 - `get_wallet`
+- `descriptor_info`
 - `import_wallet`
 - `delete_wallet`
 
@@ -99,6 +100,7 @@ CLI and UI code should collect user intent, call `WalletApi`, and render DTOs or
 
 Important caller-facing DTOs include:
 
+- `WalletDescriptorInfoDto` with wallet-level safety flags plus redacted external and internal descriptor branch metadata
 - `WalletReceiveAddressHistoryDto` with `address`, `keychain`, optional `index`, `bitcoin_uri`, optional `qr_svg`, optional `label`, `created_at`, and optional `updated_at`
 - `AddressBookEntryDto` with `wallet_name`, `network`, `label`, `address`, optional `notes`, `created_at`, and optional `updated_at`
 - `WalletLockedUtxoDto` with `wallet_name`, `outpoint`, optional `reason`, `locked_at`, and optional `updated_at`

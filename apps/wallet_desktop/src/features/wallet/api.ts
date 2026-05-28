@@ -10,6 +10,7 @@ import type {
     SignPsbtRequestDto,
     SweepRequestDto,
     WalletBackendHealthDto,
+    WalletDescriptorInfoDto,
     WalletStatusDto,
     WalletSummaryDto,
 } from "../../shared/types/dtos";
@@ -36,6 +37,12 @@ export async function syncWallet(walletName: string): Promise<WalletStatusDto> {
 
 export async function getBackendHealth(walletName: string): Promise<WalletBackendHealthDto> {
     return invokeCommand<WalletBackendHealthDto>("backend_health", {
+        walletName,
+    });
+}
+
+export async function getDescriptorInfo(walletName: string): Promise<WalletDescriptorInfoDto> {
+    return invokeCommand<WalletDescriptorInfoDto>("descriptor_info", {
         walletName,
     });
 }

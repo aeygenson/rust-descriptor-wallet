@@ -839,6 +839,35 @@ pub struct WalletDescriptorsDto {
     pub internal: String,
 }
 
+/// UI-safe descriptor inspection DTO for CLI/Tauri/frontend presentation.
+///
+/// This DTO must contain only redacted descriptor text plus derived metadata.
+/// It must not expose raw xprv/tprv/private keys, RPC credentials, wallet DB paths,
+/// or other runtime/import-export secrets.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletDescriptorInfoDto {
+    pub wallet_name: String,
+    pub network: String,
+    pub is_watch_only: bool,
+    pub external: DescriptorViewDto,
+    pub internal: Option<DescriptorViewDto>,
+    pub contains_private_data: bool,
+}
+
+/// UI-safe view of one descriptor branch, such as external or internal/change.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DescriptorViewDto {
+    pub descriptor_redacted: String,
+    pub script_type: Option<String>,
+    pub has_private_keys: bool,
+    pub has_wildcards: bool,
+    pub has_origin_info: bool,
+    pub is_multisig: bool,
+    pub threshold: Option<u32>,
+    pub participant_count: Option<u32>,
+    pub derivation_path: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletBackendDto {
     pub sync: SyncBackendDto,

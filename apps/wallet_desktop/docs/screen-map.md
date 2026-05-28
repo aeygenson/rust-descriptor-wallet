@@ -26,7 +26,9 @@ Current responsibilities:
 - verify the Tauri backend connection
 - load wallet status for the selected wallet
 - load backend health for the selected wallet
+- load descriptor inspection metadata for the selected wallet
 - show balance, UTXO count, and last synced block height
+- show a safe redacted descriptor card with branch metadata
 
 This screen is operational status, not a marketing dashboard.
 

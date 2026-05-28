@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { getAppInfo, getBackendHealth, getWalletStatus } from "../features/wallet/api";
-import type { WalletBackendHealthDto, WalletStatusDto } from "../shared/types/dtos";
+import { getAppInfo, getBackendHealth, getDescriptorInfo, getWalletStatus } from "../features/wallet/api";
+import type { WalletBackendHealthDto, WalletDescriptorInfoDto, WalletStatusDto } from "../shared/types/dtos";
 import { useWallet } from "../app/providers/useWallet";
 import { formatOptionalSats } from "../features/send/format";
+import { DescriptorInfoCard } from "../features/wallet/components/DescriptorInfoCard";
 
 export function OverviewPage() {
   const [backendInfo, setBackendInfo] = useState("Connecting to backend...");
@@ -13,6 +14,10 @@ export function OverviewPage() {
   const [backendHealth, setBackendHealth] = useState<WalletBackendHealthDto | null>(null);
   const [backendHealthLoading, setBackendHealthLoading] = useState(false);
   const [backendHealthError, setBackendHealthError] = useState<string | null>(null);
+
+  const [descriptorInfo, setDescriptorInfo] = useState<WalletDescriptorInfoDto | null>(null);
+  const [descriptorInfoLoading, setDescriptorInfoLoading] = useState(false);
+  const [descriptorInfoError, setDescriptorInfoError] = useState<string | null>(null);
 
   const { selectedWalletName } = useWallet();
 
@@ -135,6 +140,73 @@ export function OverviewPage() {
     };
   }, [selectedWalletName]);
 
+  const loadDescriptorInfo = async () => {
+    if (!selectedWalletName) {
+      setDescriptorInfo(null);
+      setDescriptorInfoLoading(false);
+      setDescriptorInfoError(null);
+      return;
+    }
+
+    try {
+      setDescriptorInfoLoading(true);
+      setDescriptorInfoError(null);
+
+      const info = await getDescriptorInfo(selectedWalletName);
+      setDescriptorInfo(info);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setDescriptorInfo(null);
+      setDescriptorInfoError(msg);
+    } finally {
+      setDescriptorInfoLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const load = async () => {
+      if (!selectedWalletName) {
+        if (isMounted) {
+          setDescriptorInfo(null);
+          setDescriptorInfoLoading(false);
+          setDescriptorInfoError(null);
+        }
+        return;
+      }
+
+      try {
+        if (isMounted) {
+          setDescriptorInfoLoading(true);
+          setDescriptorInfoError(null);
+        }
+
+        const info = await getDescriptorInfo(selectedWalletName);
+
+        if (isMounted) {
+          setDescriptorInfo(info);
+        }
+      } catch (e: unknown) {
+        if (isMounted) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setDescriptorInfo(null);
+          setDescriptorInfoError(msg);
+        }
+      } finally {
+        if (isMounted) {
+          setDescriptorInfoLoading(false);
+        }
+      }
+    };
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedWalletName]);
+
   return (
     <section className="overview-page">
       <div className="overview-grid">
@@ -248,6 +320,15 @@ export function OverviewPage() {
             )}
           </div>
         </section>
+
+        <DescriptorInfoCard
+          error={descriptorInfoError}
+          info={descriptorInfo}
+          loading={descriptorInfoLoading}
+          onRefresh={() => {
+            void loadDescriptorInfo();
+          }}
+        />
       </div>
     </section>
   );
