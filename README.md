@@ -232,17 +232,17 @@ The repository's architecture decisions are tracked under [`docs/adrs`](docs/adr
 
 ### In Progress
 
-- descriptor validation and richer domain logic inside `wallet_core`
-- richer send controls and policy handling
-- richer command surface in `wallet_api`
-- richer desktop integration on top of the same runtime API
+- descriptor validation and richer policy analysis inside `wallet_core`
+- richer send-policy controls and safer default selection handling
+- wallet-management and settings flows across CLI, API, and desktop
+- deeper desktop integration on top of the same runtime API surface
 
 ### Expected Shortly
 
-- richer transaction policy controls around selection defaults, limits, and safety checks
-- hardware-signing flow on top of the same PSBT pipeline
-- receive/settings wallet-management screens on top of the same wallet API boundary
 - send-page address-book integration on top of the same wallet API boundary
+- additional descriptor diagnostics beyond redacted inspection metadata
+- richer transaction policy controls around limits, defaults, and safety checks
+- hardware-signing flow on top of the same PSBT pipeline
 
 ## Planned Capabilities
 
